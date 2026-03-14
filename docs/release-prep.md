@@ -84,7 +84,7 @@ trufflehog git file://$(pwd)
 
 ### 5. Verify Runtime Security Defaults
 
-Confirm that the runtime server listens only on localhost by default:
+Confirm that the runtime server listens only on 127.0.0.1 by default:
 
 - [runtime/server/index.js](/Users/yava/myspace/finpeak/skill-pack/runtime/server/index.js) should default to `127.0.0.1`
 - Documentation should state that API keys are only stored in runtime memory on the local machine

@@ -78,7 +78,7 @@ chmod +x start.sh && ./start.sh
 start.bat
 ```
 
-Then open [http://localhost:26313](http://localhost:26313), enter your API key, and start working and solving problems.
+Then open [http://127.0.0.1:26313](http://127.0.0.1:26313), enter your API key, and start working and solving problems.
 
 ## Development
 

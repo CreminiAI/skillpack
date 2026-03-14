@@ -45,4 +45,4 @@ PACK_ROOT=/path/to/your/pack-dir node index.js
 PACK_ROOT=../../output node index.js
 ```
 
-Open [http://localhost:26313](http://localhost:26313) in your browser to debug the web UI.
+Open [http://127.0.0.1:26313](http://127.0.0.1:26313) in your browser to debug the web UI.

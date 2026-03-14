@@ -17,7 +17,7 @@ Double-click `start.bat` or run:
 start.bat
 ```
 
-After the server starts, your browser opens [http://localhost:26313](http://localhost:26313) automatically.
+After the server starts, your browser opens [http://127.0.0.1:26313](http://127.0.0.1:26313) automatically.
 
 By default, the server only listens on `127.0.0.1` so the API key you enter stays on the local machine and is not exposed to your LAN.
 
@@ -33,9 +33,9 @@ By default, the server only listens on `127.0.0.1` so the API key you enter stay
 
 ## Environment Variables
 
-| Variable | Description |
-| -------- | ----------- |
-| `OPENAI_API_KEY` | OpenAI API key, optional if you set it in the web UI |
+| Variable            | Description                                             |
+| ------------------- | ------------------------------------------------------- |
+| `OPENAI_API_KEY`    | OpenAI API key, optional if you set it in the web UI    |
 | `ANTHROPIC_API_KEY` | Anthropic API key, optional if you set it in the web UI |
-| `HOST` | Bind address, defaults to `127.0.0.1` |
-| `PORT` | Server port, defaults to `26313` |
+| `HOST`              | Bind address, defaults to `127.0.0.1`                   |
+| `PORT`              | Server port, defaults to `26313`                        |
