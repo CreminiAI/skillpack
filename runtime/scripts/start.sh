@@ -14,7 +14,7 @@ echo ""
 # Install dependencies
 if [ ! -d "server/node_modules" ]; then
   echo "  Installing dependencies..."
-  cd server && npm ci --omit=dev && cd ..
+  cd server && npm install --omit=dev && cd ..
   echo ""
 fi
 
