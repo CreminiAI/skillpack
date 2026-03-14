@@ -1,0 +1,13 @@
+{
+  "name": "skillapp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "@mariozechner/pi-coding-agent": "^0.57.1",
+    "ws": "^8.19.0"
+  }
+}

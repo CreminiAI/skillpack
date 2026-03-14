@@ -1,0 +1,57 @@
+{
+  "name": "skillapp",
+  "version": "1.0.0",
+  "description": "Assemble, bundle, and run Agent Skills packs",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FinpeakInc/create-skill-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/FinpeakInc/create-skill-app/issues"
+  },
+  "homepage": "https://github.com/FinpeakInc/create-skill-app#readme",
+  "bin": {
+    "skillapp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "runtime",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "check": "tsc --noEmit",
+    "format": "prettier --write .",
+    "create": "node dist/cli.js create",
+    "verify-release": "npm run check && npm run build && npm pack --dry-run",
+    "prepublishOnly": "npm run verify-release"
+  },
+  "keywords": [
+    "skills",
+    "agent",
+    "ai",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "inquirer": "^13.3.0"
+  },
+  "devDependencies": {
+    "@types/archiver": "^7.0.0",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^25.5.0",
+    "prettier": "^3.8.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}

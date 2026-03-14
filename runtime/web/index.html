@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skills Pack Chat">
+  <title>Skills Pack</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h1 id="pack-name">Skills Pack</h1>
+        <p id="pack-desc">Loading...</p>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>Skills</h3>
+        <ul id="skills-list"></ul>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>API KEYS</h3>
+        <div class="provider-select-wrapper">
+          <select id="provider-select">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </div>
+        <div class="api-key-form">
+          <input type="password" id="api-key-input" placeholder="sk-...">
+        </div>
+        <div class="api-key-footer">
+          <p id="key-status" class="status-text"></p>
+          <button id="save-key-btn">Save</button>
+        </div>
+      </div>
+    </aside>
+
+    <main id="chat-area" class="mode-welcome">
+      <div id="welcome-view">
+        <div id="welcome-content"></div>
+      </div>
+      <div id="chat-view">
+        <div id="messages"></div>
+      </div>
+      <div id="input-area">
+        <div class="input-container">
+          <textarea id="user-input" placeholder="Type a message..." rows="1"></textarea>
+          <button id="send-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+          </button>
+        </div>
+        <p class="powered-by">
+          Powered by <a href="https://skillapp.sh" target="_blank" rel="noopener noreferrer">SkillApp.sh</a>
+        </p>
+      </div>
+    </main>
+  </div>
+  <script src="marked.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

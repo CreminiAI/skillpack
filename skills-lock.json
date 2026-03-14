@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "hackernews": {
+      "source": "vm0-ai/vm0-skills",
+      "sourceType": "github",
+      "computedHash": "2f4c6bab2bc4c1e2d544dd89fc858f2384967ba2a10486a0ac131fa7181a9155"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+    }
+  }
+}
