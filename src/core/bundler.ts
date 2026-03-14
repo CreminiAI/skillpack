@@ -41,7 +41,11 @@ export async function bundle(workDir: string): Promise<string> {
 
   return new Promise((resolve, reject) => {
     output.on("close", () => {
-      console.log(chalk.green(`Packaging complete: ${zipName} (${(archive.pointer() / 1024).toFixed(1)} KB)`));
+      console.log(
+        chalk.green(
+          `Packaging complete: ${zipName} (${(archive.pointer() / 1024).toFixed(1)} KB)`,
+        ),
+      );
       resolve(zipPath);
     });
 
@@ -51,7 +55,9 @@ export async function bundle(workDir: string): Promise<string> {
     const prefix = config.name;
 
     // 1. app.json
-    archive.file(path.join(workDir, "app.json"), { name: `${prefix}/app.json` });
+    archive.file(path.join(workDir, "app.json"), {
+      name: `${prefix}/app.json`,
+    });
 
     // 2. skills directory
     const skillsDir = path.join(workDir, "skills");
@@ -71,14 +77,22 @@ export async function bundle(workDir: string): Promise<string> {
  * server/ and web/ keep their structure, while launcher scripts from
  * scripts/ are placed at the archive root.
  */
-function addRuntimeFiles(archive: archiver.Archiver, runtimeDir: string, prefix: string): void {
+function addRuntimeFiles(
+  archive: archiver.Archiver,
+  runtimeDir: string,
+  prefix: string,
+): void {
   // server/ directory, excluding node_modules
   const serverDir = path.join(runtimeDir, "server");
   if (fs.existsSync(serverDir)) {
-    archive.glob("**/*", {
-      cwd: serverDir,
-      ignore: ["node_modules/**"],
-    }, { prefix: `${prefix}/server` });
+    archive.glob(
+      "**/*",
+      {
+        cwd: serverDir,
+        ignore: ["node_modules/**"],
+      },
+      { prefix: `${prefix}/server` },
+    );
   }
 
   // web/ directory

@@ -4,7 +4,9 @@ import { removeSkill } from "../core/skill-manager.js";
 import { loadConfig, saveConfig } from "../core/pack-config.js";
 
 export function registerSkillsCommand(program: Command): void {
-  const skills = program.command("skills").description("Manage skills in the app");
+  const skills = program
+    .command("skills")
+    .description("Manage skills in the app");
 
   skills
     .command("add <source>")
@@ -19,11 +21,16 @@ export function registerSkillsCommand(program: Command): void {
         source: source,
         description: "Pending installation",
         installSource: source,
-        specificSkills: opts.skill && opts.skill.length > 0 ? opts.skill : undefined,
+        specificSkills:
+          opts.skill && opts.skill.length > 0 ? opts.skill : undefined,
       });
 
       saveConfig(workDir, config);
-      console.log(chalk.green(`Skill list updated (${config.skills.length} total). Skills will be installed during build.`));
+      console.log(
+        chalk.green(
+          `Skill list updated (${config.skills.length} total). Skills will be installed during build.`,
+        ),
+      );
     });
 
   skills

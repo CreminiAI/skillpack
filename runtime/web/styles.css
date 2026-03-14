@@ -25,7 +25,11 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   height: 100vh;
@@ -99,7 +103,6 @@ body {
 .sidebar-section li:hover {
   background: var(--border-color);
 }
-
 
 .skill-name {
   font-weight: 500;
@@ -192,8 +195,12 @@ body {
   margin: 0;
 }
 
-.status-text.success { color: var(--success); }
-.status-text.error { color: var(--error); }
+.status-text.success {
+  color: var(--success);
+}
+.status-text.error {
+  color: var(--error);
+}
 
 /* Chat Area */
 #chat-area {
@@ -210,14 +217,19 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  transition: flex 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease, padding 0.6s ease;
+  transition:
+    flex 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.4s ease,
+    padding 0.6s ease;
 }
 
 #chat-view {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: flex 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease;
+  transition:
+    flex 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.6s ease;
 }
 
 .mode-welcome #welcome-view {
@@ -265,8 +277,14 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message.user {
@@ -398,14 +416,16 @@ body {
 
 .mode-welcome .input-container {
   border-radius: 24px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
   padding: 16px 20px;
   min-height: 64px;
 }
 
 .mode-welcome .input-container:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.06), 0 0 0 3px var(--accent-glow);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 0 0 3px var(--accent-glow);
 }
 
 .mode-chat .input-container {
@@ -516,7 +536,9 @@ body {
     z-index: 100;
     transition: left 0.3s;
   }
-  #sidebar.open { left: 0; }
+  #sidebar.open {
+    left: 0;
+  }
 }
 
 /* Tool Cards */
@@ -567,7 +589,7 @@ body {
 }
 
 .tool-name {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   font-weight: 500;
   color: var(--accent);
 }
@@ -577,7 +599,11 @@ body {
   font-size: 14px;
 }
 
-@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
 .tool-status.spinner {
   display: inline-block;
   width: 14px;
@@ -588,7 +614,8 @@ body {
   animation: spin 0.8s linear infinite;
 }
 
-.tool-input, .tool-result {
+.tool-input,
+.tool-result {
   padding: 0;
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -621,7 +648,7 @@ body {
   border: 1px solid var(--border-color);
 }
 .markdown-body code {
-  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-family: Menlo, Monaco, "Courier New", monospace;
   background: rgba(0, 0, 0, 0.05);
   padding: 2px 4px;
   border-radius: 4px;
@@ -632,8 +659,12 @@ body {
   padding: 0;
   font-size: 12px;
 }
-.markdown-body p { margin-bottom: 8px; }
-.markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body p {
+  margin-bottom: 8px;
+}
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,
@@ -642,10 +673,18 @@ body {
   margin: 20px 0 10px;
   font-weight: 700;
 }
-.markdown-body h1 { font-size: 28px; }
-.markdown-body h2 { font-size: 22px; }
-.markdown-body h3 { font-size: 18px; }
-.markdown-body h4 { font-size: 16px; }
+.markdown-body h1 {
+  font-size: 28px;
+}
+.markdown-body h2 {
+  font-size: 22px;
+}
+.markdown-body h3 {
+  font-size: 18px;
+}
+.markdown-body h4 {
+  font-size: 16px;
+}
 .markdown-body ul,
 .markdown-body ol {
   margin: 10px 0 14px;
@@ -700,12 +739,24 @@ body {
   animation: bounce 1.4s infinite ease-in-out both;
 }
 
-.loading-indicator span:nth-child(1) { animation-delay: -0.32s; }
-.loading-indicator span:nth-child(2) { animation-delay: -0.16s; }
+.loading-indicator span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+.loading-indicator span:nth-child(2) {
+  animation-delay: -0.16s;
+}
 
 @keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
-  40% { transform: scale(1); opacity: 1; }
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* Thinking Block */

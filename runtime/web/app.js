@@ -21,7 +21,7 @@ async function loadConfig() {
     skillsList.innerHTML = config.skills
       .map(
         (s) =>
-          `<li><div class="skill-name">${s.name}</div><div class="skill-desc">${s.description}</div></li>`
+          `<li><div class="skill-name">${s.name}</div><div class="skill-desc">${s.description}</div></li>`,
       )
       .join("");
 
@@ -48,12 +48,12 @@ async function loadConfig() {
     const updatePlaceholder = () => {
       const p = providerSelect.value;
       const input = document.getElementById("api-key-input");
-      if (p === 'openai') input.placeholder = 'sk-proj-...';
-      else if (p === 'anthropic') input.placeholder = 'sk-ant-api03-...';
-      else input.placeholder = 'sk-...';
+      if (p === "openai") input.placeholder = "sk-proj-...";
+      else if (p === "anthropic") input.placeholder = "sk-ant-api03-...";
+      else input.placeholder = "sk-...";
     };
 
-    providerSelect.addEventListener('change', updatePlaceholder);
+    providerSelect.addEventListener("change", updatePlaceholder);
     updatePlaceholder();
 
     // Show welcome view
@@ -66,15 +66,19 @@ async function loadConfig() {
 function showWelcome(config) {
   const welcomeContent = document.getElementById("welcome-content");
 
-  let promptsHtml = '';
+  let promptsHtml = "";
   if (config.prompts && config.prompts.length > 1) {
     promptsHtml = `
       <div class="prompt-cards">
-        ${config.prompts.map((u, i) => `
+        ${config.prompts
+          .map(
+            (u, i) => `
           <div class="prompt-card" data-index="${i}" title="${u}">
             ${u.length > 60 ? u.substring(0, 60) + "..." : u}
           </div>
-        `).join("")}
+        `,
+          )
+          .join("")}
       </div>
     `;
   }
@@ -109,9 +113,7 @@ function setupEventListeners() {
   });
 
   // Save API key
-  document
-    .getElementById("save-key-btn")
-    .addEventListener("click", saveApiKey);
+  document.getElementById("save-key-btn").addEventListener("click", saveApiKey);
 
   // Prompt click
   const welcomeContent = document.getElementById("welcome-content");
@@ -130,8 +132,7 @@ function setupEventListeners() {
             input.value = config.prompts[index];
             input.focus();
             input.style.height = "auto";
-            input.style.height =
-              Math.min(input.scrollHeight, 120) + "px";
+            input.style.height = Math.min(input.scrollHeight, 120) + "px";
           }
         });
     });
@@ -143,7 +144,7 @@ async function saveApiKey() {
   const providerSelect = document.getElementById("provider-select");
   const status = document.getElementById("key-status");
   const key = input.value.trim();
-  const provider = providerSelect ? providerSelect.value : 'openai';
+  const provider = providerSelect ? providerSelect.value : "openai";
 
   if (!key) {
     status.textContent = "Enter an API key";
@@ -176,7 +177,7 @@ let ws = null;
 let currentAssistantMsg = null;
 
 function renderMarkdown(mdText, { renderEmbeddedMarkdown = true } = {}) {
-  if (typeof marked === 'undefined') {
+  if (typeof marked === "undefined") {
     return escapeHtml(mdText);
   }
 
@@ -189,23 +190,25 @@ function renderMarkdown(mdText, { renderEmbeddedMarkdown = true } = {}) {
 }
 
 function renderEmbeddedMarkdownBlocks(html) {
-  const template = document.createElement('template');
+  const template = document.createElement("template");
   template.innerHTML = html;
 
-  const codeBlocks = template.content.querySelectorAll('pre > code');
+  const codeBlocks = template.content.querySelectorAll("pre > code");
   codeBlocks.forEach((codeEl) => {
     const languageClass = Array.from(codeEl.classList).find((className) =>
-      className.startsWith('language-')
+      className.startsWith("language-"),
     );
-    const language = languageClass ? languageClass.slice('language-'.length) : '';
+    const language = languageClass
+      ? languageClass.slice("language-".length)
+      : "";
 
     if (!/^(markdown|md)$/i.test(language)) {
       return;
     }
 
-    const preview = document.createElement('div');
-    preview.className = 'embedded-markdown-preview markdown-body';
-    preview.innerHTML = renderMarkdown(codeEl.textContent || '', {
+    const preview = document.createElement("div");
+    preview.className = "embedded-markdown-preview markdown-body";
+    preview.innerHTML = renderMarkdown(codeEl.textContent || "", {
       renderEmbeddedMarkdown: false,
     });
 
@@ -224,9 +227,9 @@ async function getOrCreateWs() {
   }
 
   return new Promise((resolve, reject) => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const providerSelect = document.getElementById("provider-select");
-    const provider = providerSelect ? providerSelect.value : 'openai';
+    const provider = providerSelect ? providerSelect.value : "openai";
 
     // URLSearchParams would be cleaner if more query params are added later
     const wsUrl = `${protocol}//${window.location.host}${API_BASE}/api/chat?provider=${provider}`;
@@ -265,8 +268,8 @@ function handleError(errorMsg) {
   if (!currentAssistantMsg) {
     appendMessage("assistant", "Error: " + errorMsg).classList.add("error");
   } else {
-    const errDiv = document.createElement('div');
-    errDiv.className = 'content error-text';
+    const errDiv = document.createElement("div");
+    errDiv.className = "content error-text";
     errDiv.textContent = "Error: " + errorMsg;
     currentAssistantMsg.appendChild(errDiv);
     currentAssistantMsg.classList.add("error");
@@ -277,8 +280,10 @@ function handleError(errorMsg) {
 function handleDone() {
   let fullText = "";
   if (currentAssistantMsg) {
-    const blocks = currentAssistantMsg.querySelectorAll('.text-block');
-    blocks.forEach(b => { fullText += b.dataset.mdContent + "\n"; });
+    const blocks = currentAssistantMsg.querySelectorAll(".text-block");
+    blocks.forEach((b) => {
+      fullText += b.dataset.mdContent + "\n";
+    });
   }
   chatHistory.push({ role: "assistant", content: fullText });
   enableInput();
@@ -286,48 +291,52 @@ function handleDone() {
 
 function showLoadingIndicator() {
   if (!currentAssistantMsg) return;
-  let indicator = currentAssistantMsg.querySelector('.loading-indicator');
+  let indicator = currentAssistantMsg.querySelector(".loading-indicator");
   if (!indicator) {
-    indicator = document.createElement('div');
-    indicator.className = 'loading-indicator';
+    indicator = document.createElement("div");
+    indicator.className = "loading-indicator";
     indicator.innerHTML = `<span></span><span></span><span></span>`;
     currentAssistantMsg.appendChild(indicator);
   }
-  indicator.style.display = 'flex';
+  indicator.style.display = "flex";
   scrollToBottom();
 }
 
 function hideLoadingIndicator() {
   if (!currentAssistantMsg) return;
-  const indicator = currentAssistantMsg.querySelector('.loading-indicator');
+  const indicator = currentAssistantMsg.querySelector(".loading-indicator");
   if (indicator) {
-    indicator.style.display = 'none';
+    indicator.style.display = "none";
   }
 }
 
 function handleAgentEvent(event) {
   if (!currentAssistantMsg) return;
 
-  if (['text_delta', 'thinking_delta', 'tool_start', 'tool_end'].includes(event.type)) {
+  if (
+    ["text_delta", "thinking_delta", "tool_start", "tool_end"].includes(
+      event.type,
+    )
+  ) {
     hideLoadingIndicator();
   }
 
   switch (event.type) {
-    case 'agent_start':
-    case 'message_start':
+    case "agent_start":
+    case "message_start":
       showLoadingIndicator();
       break;
 
-    case 'agent_end':
-    case 'message_end':
+    case "agent_end":
+    case "message_end":
       hideLoadingIndicator();
       break;
 
-    case 'thinking_delta':
+    case "thinking_delta":
       const thinkingBlock = getOrCreateThinkingBlock();
       thinkingBlock.dataset.mdContent += event.delta;
-      const contentEl = thinkingBlock.querySelector('.thinking-content');
-      if (typeof marked !== 'undefined') {
+      const contentEl = thinkingBlock.querySelector(".thinking-content");
+      if (typeof marked !== "undefined") {
         contentEl.innerHTML = renderMarkdown(thinkingBlock.dataset.mdContent);
       } else {
         contentEl.textContent = thinkingBlock.dataset.mdContent;
@@ -335,10 +344,10 @@ function handleAgentEvent(event) {
       scrollToBottom();
       break;
 
-    case 'text_delta':
+    case "text_delta":
       const textBlock = getOrCreateTextBlock();
       textBlock.dataset.mdContent += event.delta;
-      if (typeof marked !== 'undefined') {
+      if (typeof marked !== "undefined") {
         textBlock.innerHTML = renderMarkdown(textBlock.dataset.mdContent);
       } else {
         textBlock.textContent = textBlock.dataset.mdContent;
@@ -346,13 +355,16 @@ function handleAgentEvent(event) {
       scrollToBottom();
       break;
 
-    case 'tool_start':
-      const toolCard = document.createElement('div');
-      toolCard.className = 'tool-card running collapsed';
-      const safeInput = typeof event.toolInput === 'string' ? event.toolInput : JSON.stringify(event.toolInput, null, 2);
+    case "tool_start":
+      const toolCard = document.createElement("div");
+      toolCard.className = "tool-card running collapsed";
+      const safeInput =
+        typeof event.toolInput === "string"
+          ? event.toolInput
+          : JSON.stringify(event.toolInput, null, 2);
 
       let inputHtml = "";
-      if (typeof marked !== 'undefined') {
+      if (typeof marked !== "undefined") {
         inputHtml = marked.parse("```json\n" + safeInput + "\n```");
       } else {
         inputHtml = escapeHtml(safeInput);
@@ -372,70 +384,83 @@ function handleAgentEvent(event) {
           <div class="tool-result markdown-body" style="display: none;"></div>
         </div>
       `;
-      
-      toolCard.querySelector('.tool-header').addEventListener('click', () => {
-        toolCard.classList.toggle('collapsed');
+
+      toolCard.querySelector(".tool-header").addEventListener("click", () => {
+        toolCard.classList.toggle("collapsed");
       });
 
       // Insert before loading indicator if exists
-      const toolIndicator = currentAssistantMsg.querySelector('.loading-indicator');
+      const toolIndicator =
+        currentAssistantMsg.querySelector(".loading-indicator");
       if (toolIndicator) {
         currentAssistantMsg.insertBefore(toolCard, toolIndicator);
       } else {
         currentAssistantMsg.appendChild(toolCard);
       }
-      
+
       toolCard.dataset.toolName = event.toolName;
       scrollToBottom();
-      
+
       showLoadingIndicator();
       break;
 
-    case 'tool_end':
-      const cards = Array.from(currentAssistantMsg.querySelectorAll('.tool-card.running'));
-      const card = cards.reverse().find(c => c.dataset.toolName === event.toolName);
+    case "tool_end":
+      const cards = Array.from(
+        currentAssistantMsg.querySelectorAll(".tool-card.running"),
+      );
+      const card = cards
+        .reverse()
+        .find((c) => c.dataset.toolName === event.toolName);
       if (card) {
-        card.classList.remove('running');
-        card.classList.add(event.isError ? 'error' : 'success');
-        
+        card.classList.remove("running");
+        card.classList.add(event.isError ? "error" : "success");
+
         if (event.isError) {
-          card.classList.remove('collapsed');
+          card.classList.remove("collapsed");
         }
 
-        const statusEl = card.querySelector('.tool-status');
-        statusEl.className = 'tool-status';
-        statusEl.textContent = event.isError ? '❌' : '✅';
+        const statusEl = card.querySelector(".tool-status");
+        statusEl.className = "tool-status";
+        statusEl.textContent = event.isError ? "❌" : "✅";
 
-        const resultEl = card.querySelector('.tool-result');
-        resultEl.style.display = 'block';
-        const safeResult = typeof event.result === 'string' ? event.result : JSON.stringify(event.result, null, 2);
+        const resultEl = card.querySelector(".tool-result");
+        resultEl.style.display = "block";
+        const safeResult =
+          typeof event.result === "string"
+            ? event.result
+            : JSON.stringify(event.result, null, 2);
 
-        const mdText = event.result && typeof event.result === 'string' && (event.result.includes('\n') || event.result.length > 50)
-          ? "```bash\n" + safeResult + "\n```"
-          : "```json\n" + safeResult + "\n```";
+        const mdText =
+          event.result &&
+          typeof event.result === "string" &&
+          (event.result.includes("\n") || event.result.length > 50)
+            ? "```bash\n" + safeResult + "\n```"
+            : "```json\n" + safeResult + "\n```";
 
-        if (typeof marked !== 'undefined') {
+        if (typeof marked !== "undefined") {
           resultEl.innerHTML = marked.parse(mdText);
         } else {
           resultEl.textContent = safeResult;
         }
       }
       scrollToBottom();
-      
+
       showLoadingIndicator();
       break;
   }
 }
 
 function getOrCreateThinkingBlock() {
-  const children = Array.from(currentAssistantMsg.children).filter(c => !c.classList.contains('loading-indicator'));
+  const children = Array.from(currentAssistantMsg.children).filter(
+    (c) => !c.classList.contains("loading-indicator"),
+  );
   let lastChild = children[children.length - 1];
-  
-  if (!lastChild || !lastChild.classList.contains('thinking-card')) {
-    lastChild = document.createElement('div');
-    lastChild.className = 'tool-card thinking-card collapsed';
-    lastChild.dataset.mdContent = '';
-    
+
+  if (!lastChild || !lastChild.classList.contains("thinking-card")) {
+    lastChild = document.createElement("div");
+    lastChild.className = "tool-card thinking-card collapsed";
+    lastChild.dataset.mdContent = "";
+
     lastChild.innerHTML = `
       <div class="tool-header thinking-header">
         <span class="tool-chevron">
@@ -446,12 +471,12 @@ function getOrCreateThinkingBlock() {
       </div>
       <div class="tool-content thinking-content markdown-body"></div>
     `;
-    
-    lastChild.querySelector('.tool-header').addEventListener('click', () => {
-      lastChild.classList.toggle('collapsed');
+
+    lastChild.querySelector(".tool-header").addEventListener("click", () => {
+      lastChild.classList.toggle("collapsed");
     });
 
-    const indicator = currentAssistantMsg.querySelector('.loading-indicator');
+    const indicator = currentAssistantMsg.querySelector(".loading-indicator");
     if (indicator) {
       currentAssistantMsg.insertBefore(lastChild, indicator);
     } else {
@@ -462,15 +487,17 @@ function getOrCreateThinkingBlock() {
 }
 
 function getOrCreateTextBlock() {
-  const children = Array.from(currentAssistantMsg.children).filter(c => !c.classList.contains('loading-indicator'));
+  const children = Array.from(currentAssistantMsg.children).filter(
+    (c) => !c.classList.contains("loading-indicator"),
+  );
   let lastChild = children[children.length - 1];
-  
-  if (!lastChild || !lastChild.classList.contains('text-block')) {
-    lastChild = document.createElement('div');
-    lastChild.className = 'content text-block markdown-body';
-    lastChild.dataset.mdContent = '';
-    
-    const indicator = currentAssistantMsg.querySelector('.loading-indicator');
+
+  if (!lastChild || !lastChild.classList.contains("text-block")) {
+    lastChild = document.createElement("div");
+    lastChild.className = "content text-block markdown-body";
+    lastChild.dataset.mdContent = "";
+
+    const indicator = currentAssistantMsg.querySelector(".loading-indicator");
     if (indicator) {
       currentAssistantMsg.insertBefore(lastChild, indicator);
     } else {
@@ -528,8 +555,8 @@ function appendMessage(role, text) {
   if (role === "user") {
     div.innerHTML = '<div class="content">' + escapeHtml(text) + "</div>";
   } else if (text) {
-    const tb = document.createElement('div');
-    tb.className = 'content text-block markdown-body';
+    const tb = document.createElement("div");
+    tb.className = "content text-block markdown-body";
     tb.dataset.mdContent = text;
     tb.innerHTML = renderMarkdown(text);
     div.appendChild(tb);

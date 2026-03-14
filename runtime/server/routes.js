@@ -78,7 +78,10 @@ export function registerRoutes(app, server, rootDir) {
   });
 
   wss.on("connection", (ws, request) => {
-    const url = new URL(request.url, `http://${request.headers.host || "127.0.0.1"}`);
+    const url = new URL(
+      request.url,
+      `http://${request.headers.host || "127.0.0.1"}`,
+    );
     const reqProvider = url.searchParams.get("provider") || currentProvider;
 
     if (!apiKey) {

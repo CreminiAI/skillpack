@@ -23,7 +23,10 @@ function getPackPath(workDir: string): string {
   return path.join(workDir, PACK_FILE);
 }
 
-export function createDefaultConfig(name: string, description: string): PackConfig {
+export function createDefaultConfig(
+  name: string,
+  description: string,
+): PackConfig {
   return {
     name,
     description,
@@ -36,7 +39,9 @@ export function createDefaultConfig(name: string, description: string): PackConf
 export function loadConfig(workDir: string): PackConfig {
   const filePath = getPackPath(workDir);
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Could not find ${PACK_FILE}. Run skillapp create first or work in a directory that contains app.json`);
+    throw new Error(
+      `Could not find ${PACK_FILE}. Run skillapp create first or work in a directory that contains app.json`,
+    );
   }
   const raw = fs.readFileSync(filePath, "utf-8");
   return JSON.parse(raw) as PackConfig;

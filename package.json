@@ -1,16 +1,16 @@
 {
   "name": "skillapp",
   "version": "1.0.0",
-  "description": "Assemble, bundle, and run Agent Skills packs",
+  "description": "Turn Skills into a Standalone App with UI",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/FinpeakInc/create-skill-app.git"
+    "url": "git+https://github.com/FinpeakInc/skillapp.git"
   },
   "bugs": {
-    "url": "https://github.com/FinpeakInc/create-skill-app/issues"
+    "url": "https://github.com/FinpeakInc/skillapp.git/issues"
   },
-  "homepage": "https://github.com/FinpeakInc/create-skill-app#readme",
+  "homepage": "https://github.com/FinpeakInc/skillapp.git#readme",
   "bin": {
     "skillapp": "dist/cli.js"
   },

@@ -2,7 +2,12 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
-import { loadConfig, saveConfig, type PackConfig, type SkillEntry } from "./pack-config.js";
+import {
+  loadConfig,
+  saveConfig,
+  type PackConfig,
+  type SkillEntry,
+} from "./pack-config.js";
 
 const SKILLS_DIR = "skills";
 

@@ -18,13 +18,17 @@ export function removePrompt(workDir: string, index: number): boolean {
   const config = loadConfig(workDir);
   const idx = index - 1; // user input is 1-based
   if (idx < 0 || idx >= config.prompts.length) {
-    console.log(chalk.yellow(`Invalid index: ${index} (${config.prompts.length} total)`));
+    console.log(
+      chalk.yellow(`Invalid index: ${index} (${config.prompts.length} total)`),
+    );
     return false;
   }
 
   const removed = config.prompts.splice(idx, 1)[0];
   saveConfig(workDir, config);
-  console.log(chalk.green(`Removed Prompt #${index}: "${removed.substring(0, 50)}..."`));
+  console.log(
+    chalk.green(`Removed Prompt #${index}: "${removed.substring(0, 50)}..."`),
+  );
   return true;
 }
 

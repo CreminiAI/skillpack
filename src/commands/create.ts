@@ -1,6 +1,10 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
-import { createDefaultConfig, saveConfig, configExists } from "../core/pack-config.js";
+import {
+  createDefaultConfig,
+  saveConfig,
+  configExists,
+} from "../core/pack-config.js";
 import { scanInstalledSkills } from "../core/skill-manager.js";
 import { bundle } from "../core/bundler.js";
 import fs from "node:fs";
@@ -18,7 +22,8 @@ export async function createCommand(directory?: string): Promise<void> {
       {
         type: "confirm",
         name: "overwrite",
-        message: "An app.json file already exists in this directory. Overwrite it?",
+        message:
+          "An app.json file already exists in this directory. Overwrite it?",
         default: false,
       },
     ]);
@@ -49,10 +54,20 @@ export async function createCommand(directory?: string): Promise<void> {
   const config = createDefaultConfig(name.trim(), description.trim());
 
   // Step 2: Add skills
-  console.log(chalk.blue("\n  Add Skills (enter a skill source, leave blank to skip)\n"));
-  console.log(chalk.dim("  Supported formats: owner/repo, GitHub URL, local path, or a full npx skills add command"));
+  console.log(
+    chalk.blue("\n  Add Skills (enter a skill source, leave blank to skip)\n"),
+  );
+  console.log(
+    chalk.dim(
+      "  Supported formats: owner/repo, GitHub URL, local path, or a full npx skills add command",
+    ),
+  );
   console.log(chalk.dim("  Example: vercel-labs/agent-skills"));
-  console.log(chalk.dim("  Example: npx skills add https://github.com/vercel-labs/skills --skill find-skillsclear\n"));
+  console.log(
+    chalk.dim(
+      "  Example: npx skills add https://github.com/vercel-labs/skills --skill find-skillsclear\n",
+    ),
+  );
 
   while (true) {
     const { source } = await inquirer.prompt([
@@ -87,12 +102,14 @@ export async function createCommand(directory?: string): Promise<void> {
 
     if (specificSkill !== undefined) {
       console.log(chalk.dim(`  Auto-detected skill source: ${parsedSource}`));
-      console.log(chalk.dim(`  Auto-detected specific skill: ${specificSkill}`));
+      console.log(
+        chalk.dim(`  Auto-detected specific skill: ${specificSkill}`),
+      );
     } else {
       if (parsedSource !== source.trim()) {
         console.log(chalk.dim(`  Auto-detected skill source: ${parsedSource}`));
       }
-      
+
       // Ask whether to install a specific skill
       const answer = await inquirer.prompt([
         {
@@ -104,9 +121,10 @@ export async function createCommand(directory?: string): Promise<void> {
       specificSkill = answer.specificSkill;
     }
 
-    const skillNames = specificSkill && specificSkill.trim()
-      ? [specificSkill.trim()]
-      : undefined;
+    const skillNames =
+      specificSkill && specificSkill.trim()
+        ? [specificSkill.trim()]
+        : undefined;
 
     config.skills.push({
       name: skillNames ? skillNames.join(", ") : parsedSource,
@@ -119,7 +137,11 @@ export async function createCommand(directory?: string): Promise<void> {
 
   // Step 3: Prompt
   console.log(chalk.blue("\n  Add Prompts\n"));
-  console.log(chalk.blue("Use a prompt to explain how you will organize the skills you added to complete the task\n"));
+  console.log(
+    chalk.blue(
+      "Use a prompt to explain how you will organize the skills you added to complete the task\n",
+    ),
+  );
 
   let promptIndex = 1;
   while (true) {
@@ -132,7 +154,8 @@ export async function createCommand(directory?: string): Promise<void> {
           ? `Prompt #${promptIndex} (required):`
           : `Prompt #${promptIndex} (leave blank to finish):`,
         validate: isFirst
-          ? (v: string) => (v.trim() ? true : "The first Prompt cannot be empty")
+          ? (v: string) =>
+              v.trim() ? true : "The first Prompt cannot be empty"
           : undefined,
       },
     ]);
