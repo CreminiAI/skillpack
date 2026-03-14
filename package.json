@@ -8,15 +8,22 @@
     "url": "git+https://github.com/FinpeakInc/skillapp.git"
   },
   "bugs": {
-    "url": "https://github.com/FinpeakInc/skillapp.git/issues"
+    "url": "https://github.com/FinpeakInc/skillapp/issues"
   },
-  "homepage": "https://github.com/FinpeakInc/skillapp.git#readme",
+  "homepage": "https://github.com/FinpeakInc/skillapp#readme",
   "bin": {
     "skillapp": "dist/cli.js"
   },
   "files": [
     "dist",
-    "runtime",
+    "runtime/README.md",
+    "runtime/scripts",
+    "runtime/server/chat-proxy.js",
+    "runtime/server/index.js",
+    "runtime/server/package.json",
+    "runtime/server/routes.js",
+    "runtime/server/skills-loader.js",
+    "runtime/web",
     "README.md",
     "LICENSE"
   ],
@@ -38,7 +45,7 @@
     "ai",
     "cli"
   ],
-  "author": "",
+  "author": "Finpeak Inc",
   "license": "MIT",
   "dependencies": {
     "archiver": "^7.0.1",

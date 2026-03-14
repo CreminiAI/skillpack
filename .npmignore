@@ -5,3 +5,4 @@ tsconfig.json
 tsup.config.ts
 runtime/server/node_modules/
 runtime/server/*.log
+runtime/server/package-lock.json
