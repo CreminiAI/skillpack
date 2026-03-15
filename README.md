@@ -1,4 +1,4 @@
-# SkillPack - Pack AI Skills into Standalone Apps
+# </> SkillPack.sh - Pack AI Skills into Standalone Apps
 
 Go to [skillpack.sh](https://skillpack.sh) to pack skills and try existing skill packs.
 
