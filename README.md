@@ -1,4 +1,4 @@
-# SkillPack - Orchestrate Skills into a Standalone App
+# SkillPack - Pack AI Skills into Standalone Apps
 
 Go to [skillpack.sh](https://skillpack.sh) to pack skills and try existing skill packs.
 
