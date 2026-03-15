@@ -1,5 +1,7 @@
 # SkillPack.sh - Pack AI Skills into Standalone Apps
 
+Skillpack by Cremini is built on the idea of distributed intelligence, much like cremini mushrooms that grow from a vast, interconnected mycelial network.
+
 Go to [skillpack.sh](https://skillpack.sh) to pack skills and try existing skill packs.
 
 One command to orchestrate [Skills](https://skills.sh), tools, mcps into a standalone app users can download and use on their own computer!
