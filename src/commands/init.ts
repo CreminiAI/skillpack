@@ -16,6 +16,7 @@ import {
 } from "../core/skill-manager.js";
 import {
   copyRuntimeTemplate,
+  ensureRuntimeLaunchersExecutable,
   getRuntimeDir,
 } from "../core/runtime-template.js";
 
@@ -86,6 +87,7 @@ export async function initCommand(
   installConfiguredSkills(workDir, config);
   refreshDescriptionsAndSave(workDir, config);
   copyRuntimeTemplate(getRuntimeDir(), workDir);
+  ensureRuntimeLaunchersExecutable(workDir);
 
   if (options.bundle) {
     await bundle(workDir);

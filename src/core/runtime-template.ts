@@ -12,6 +12,16 @@ export interface RuntimeTemplateEntry {
   type: "file" | "directory";
 }
 
+const EXECUTABLE_RUNTIME_FILES = new Set(["start.sh", "start.bat"]);
+
+function isExecutableRuntimeFile(relativePath: string): boolean {
+  return EXECUTABLE_RUNTIME_FILES.has(relativePath);
+}
+
+function withExecuteBits(mode: number): number {
+  return mode | 0o111;
+}
+
 /**
  * Resolve the absolute path to the packaged runtime template directory.
  * tsup bundles the CLI into dist/cli.js, so __dirname points at dist/.
@@ -92,6 +102,18 @@ export function copyRuntimeTemplate(runtimeDir: string, workDir: string): void {
   }
 }
 
+export function ensureRuntimeLaunchersExecutable(workDir: string): void {
+  for (const relativePath of EXECUTABLE_RUNTIME_FILES) {
+    const filePath = path.join(workDir, relativePath);
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
+    const currentMode = fs.statSync(filePath).mode;
+    fs.chmodSync(filePath, withExecuteBits(currentMode));
+  }
+}
+
 export function addRuntimeFiles(
   archive: archiver.Archiver,
   runtimeDir: string,
@@ -112,7 +134,9 @@ export function addRuntimeFiles(
 
     archive.file(entry.absolutePath, {
       name: archivePath,
-      mode: entry.stats.mode,
+      mode: isExecutableRuntimeFile(entry.relativePath)
+        ? withExecuteBits(entry.stats.mode)
+        : entry.stats.mode,
     });
   }
 }

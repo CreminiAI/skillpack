@@ -1,6 +1,6 @@
 {
   "name": "@cremini/skillpack",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Turn Skills into a Standalone App with UI",
   "type": "module",
   "repository": {
@@ -16,14 +16,7 @@
   },
   "files": [
     "dist",
-    "runtime/README.md",
-    "runtime/scripts",
-    "runtime/server/chat-proxy.js",
-    "runtime/server/index.js",
-    "runtime/server/package.json",
-    "runtime/server/routes.js",
-    "runtime/server/skills-loader.js",
-    "runtime/web",
+    "runtime",
     "README.md",
     "LICENSE"
   ],

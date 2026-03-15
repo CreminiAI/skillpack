@@ -84,7 +84,7 @@ skillpack/
 
 ```bash
 # macOS / Linux
-chmod +x start.sh && ./start.sh
+./start.sh
 
 # Windows
 start.bat
