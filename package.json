@@ -1,16 +1,16 @@
 {
   "name": "@cremini/skillpack",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Turn Skills into a Standalone App with UI",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/FinpeakInc/skillpack.git"
+    "url": "git+https://github.com/CreminiAI/skillpack.git"
   },
   "bugs": {
-    "url": "https://github.com/FinpeakInc/skillpack/issues"
+    "url": "https://github.com/CreminiAI/skillpack/issues"
   },
-  "homepage": "https://github.com/FinpeakInc/skillpack#readme",
+  "homepage": "https://github.com/CreminiAI/skillpack#readme",
   "bin": {
     "skillpack": "dist/cli.js"
   },

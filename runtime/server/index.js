@@ -28,21 +28,25 @@ registerRoutes(app, server, rootDir);
 const HOST = process.env.HOST || "127.0.0.1";
 const DEFAULT_PORT = 26313;
 
-function tryListen(port) {
-  server.listen(port, HOST, () => {
-    const url = `http://${HOST}:${port}`;
-    console.log(`\n  Skills Pack Server`);
-    console.log(`  Running at ${url}\n`);
+server.once("listening", () => {
+  const address = server.address();
+  const actualPort = typeof address === "string" ? address : address.port;
+  const url = `http://${HOST}:${actualPort}`;
+  console.log(`\n  Skills Pack Server`);
+  console.log(`  Running at ${url}\n`);
 
-    // Open the browser automatically
-    const cmd =
-      process.platform === "darwin"
-        ? `open ${url}`
-        : process.platform === "win32"
-          ? `start ${url}`
-          : `xdg-open ${url}`;
-    exec(cmd, () => {});
-  });
+  // Open the browser automatically
+  const cmd =
+    process.platform === "darwin"
+      ? `open ${url}`
+      : process.platform === "win32"
+        ? `start ${url}`
+        : `xdg-open ${url}`;
+  exec(cmd, () => {});
+});
+
+function tryListen(port) {
+  server.listen(port, HOST);
 
   server.once("error", (err) => {
     if (err.code === "EADDRINUSE") {
