@@ -31,7 +31,7 @@ Step-by-Step
 
 ```bash
 npx @cremini/skillpack init --config ./skillpack.json
-npx @cremini/skillpack init output --config https://example.com/skillpack.json
+npx @cremini/skillpack init output --config https://raw.githubusercontent.com/CreminiAI/skillpack/refs/heads/main/examples/commic_explainer.json
 ```
 
 This loads a local or remote config, writes `skillpack.json` into the target directory, installs any pending skills, and skips zip packaging unless you pass `--bundle`.
