@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { createCommand } from "./commands/create.js";
+import { initCommand } from "./commands/init.js";
 import { registerSkillsCommand } from "./commands/skills-cmd.js";
 import { registerPromptsCommand } from "./commands/prompts-cmd.js";
 import { bundle } from "./core/bundler.js";
@@ -24,6 +25,20 @@ program
   .action(async (directory?: string) => {
     await createCommand(directory);
   });
+
+program
+  .command("init [directory]")
+  .description("Initialize a skills pack from a local config file or URL")
+  .requiredOption("--config <path-or-url>", "Path or URL to a skillpack.json file")
+  .option("--bundle", "Bundle as a zip after initialization")
+  .action(
+    async (
+      directory: string | undefined,
+      options: { config: string; bundle?: boolean },
+    ) => {
+      await initCommand(directory, options);
+    },
+  );
 
 // skills subcommands
 registerSkillsCommand(program);

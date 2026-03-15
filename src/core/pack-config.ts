@@ -17,9 +17,9 @@ export interface PackConfig {
   skills: SkillEntry[];
 }
 
-const PACK_FILE = "app.json";
+export const PACK_FILE = "skillpack.json";
 
-function getPackPath(workDir: string): string {
+export function getPackPath(workDir: string): string {
   return path.join(workDir, PACK_FILE);
 }
 
@@ -40,7 +40,7 @@ export function loadConfig(workDir: string): PackConfig {
   const filePath = getPackPath(workDir);
   if (!fs.existsSync(filePath)) {
     throw new Error(
-      `Could not find ${PACK_FILE}. Run npx @cremini/skillpack create first or work in a directory that contains app.json`,
+      `Could not find ${PACK_FILE}. Run npx @cremini/skillpack create first or work in a directory that contains ${PACK_FILE}`,
     );
   }
   const raw = fs.readFileSync(filePath, "utf-8");

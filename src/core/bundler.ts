@@ -3,7 +3,13 @@ import path from "node:path";
 import archiver from "archiver";
 import chalk from "chalk";
 import { fileURLToPath } from "node:url";
-import { loadConfig, type PackConfig } from "./pack-config.js";
+import {
+  getPackPath,
+  loadConfig,
+  PACK_FILE,
+  saveConfig,
+  type PackConfig,
+} from "./pack-config.js";
 import { installPendingSkills } from "./skill-manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +30,7 @@ function getRuntimeDir(): string {
  */
 export async function bundle(workDir: string): Promise<string> {
   const config = loadConfig(workDir);
+  saveConfig(workDir, config);
   const zipName = `${config.name}.zip`;
   const zipPath = path.join(workDir, zipName);
   const runtimeDir = getRuntimeDir();
@@ -54,9 +61,9 @@ export async function bundle(workDir: string): Promise<string> {
 
     const prefix = config.name;
 
-    // 1. app.json
-    archive.file(path.join(workDir, "app.json"), {
-      name: `${prefix}/app.json`,
+    // 1. skillpack.json
+    archive.file(getPackPath(workDir), {
+      name: `${prefix}/${PACK_FILE}`,
     });
 
     // 2. skills directory

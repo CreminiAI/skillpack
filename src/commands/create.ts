@@ -4,8 +4,8 @@ import {
   createDefaultConfig,
   saveConfig,
   configExists,
+  PACK_FILE,
 } from "../core/pack-config.js";
-import { scanInstalledSkills } from "../core/skill-manager.js";
 import { bundle } from "../core/bundler.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -22,8 +22,7 @@ export async function createCommand(directory?: string): Promise<void> {
       {
         type: "confirm",
         name: "overwrite",
-        message:
-          "An app.json file already exists in this directory. Overwrite it?",
+        message: `Overwrite the existing ${PACK_FILE}?`,
         default: false,
       },
     ]);
@@ -168,9 +167,8 @@ export async function createCommand(directory?: string): Promise<void> {
 
   // Save config
   saveConfig(workDir, config);
-  console.log(chalk.green("\n  app.json saved\n"));
+  console.log(chalk.green(`\n  ${PACK_FILE} saved\n`));
 
-  // Ask whether to bundle immediately
   const { shouldBundle } = await inquirer.prompt([
     {
       type: "confirm",

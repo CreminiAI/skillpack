@@ -3,8 +3,8 @@ cd "$(dirname "$0")"
 
 # Read the pack name
 PACK_NAME="Skills Pack"
-if [ -f "app.json" ] && command -v node &> /dev/null; then
-  PACK_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('app.json','utf-8')).name)" 2>/dev/null || echo "Skills Pack")
+if [ -f "skillpack.json" ] && command -v node &> /dev/null; then
+  PACK_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('skillpack.json','utf-8')).name)" 2>/dev/null || echo "Skills Pack")
 fi
 
 echo ""

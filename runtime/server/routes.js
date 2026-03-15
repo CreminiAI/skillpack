@@ -5,11 +5,11 @@ import { WebSocketServer } from "ws";
 import { handleWsConnection } from "./chat-proxy.js";
 
 /**
- * Read the app.json config.
+ * Read the skillpack.json config.
  * @param {string} rootDir
  */
 function getPackConfig(rootDir) {
-  const raw = fs.readFileSync(path.join(rootDir, "app.json"), "utf-8");
+  const raw = fs.readFileSync(path.join(rootDir, "skillpack.json"), "utf-8");
   return JSON.parse(raw);
 }
 
@@ -17,7 +17,7 @@ function getPackConfig(rootDir) {
  * Register all API routes.
  * @param {import("express").Express} app
  * @param {import("node:http").Server} server
- * @param {string} rootDir - Root directory containing app.json and skills/
+ * @param {string} rootDir - Root directory containing skillpack.json and skills/
  */
 export function registerRoutes(app, server, rootDir) {
   // API key and provider are stored in runtime memory

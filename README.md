@@ -27,6 +27,15 @@ Step-by-Step
 3. Add prompts to orchestrate and organize skills you added to accomplish tasks
 4. (Optional) bundle the result as a zip
 
+### Initialize from an Existing Config
+
+```bash
+npx @cremini/skillpack init --config ./skillpack.json
+npx @cremini/skillpack init output --config https://example.com/skillpack.json
+```
+
+This loads a local or remote config, writes `skillpack.json` into the target directory, installs any pending skills, and skips zip packaging unless you pass `--bundle`.
+
 ### Step-by-Step Commands
 
 ```bash
@@ -47,6 +56,7 @@ npx @cremini/skillpack build
 | Command                  | Description                           |
 | ------------------------ | ------------------------------------- |
 | `create`                 | Create a skill pack interactively     |
+| `init`                   | Initialize from a config path or URL  |
 | `skills add <source>`    | Add a skill                           |
 | `skills remove <name>`   | Remove a skill                        |
 | `skills list`            | List installed skills                 |
@@ -61,7 +71,7 @@ The extracted archive looks like this:
 
 ```text
 skillpack/
-├── app.json             # App configuration
+├── skillpack.json       # Pack configuration
 ├── skills/              # Collected SKILL.md files
 ├── server/              # Express backend
 ├── web/                 # Web chat UI
