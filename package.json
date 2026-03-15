@@ -1,5 +1,5 @@
 {
-  "name": "skillpack",
+  "name": "@cremini/skillpack",
   "version": "1.0.2",
   "description": "Turn Skills into a Standalone App with UI",
   "type": "module",

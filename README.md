@@ -5,7 +5,7 @@ Go to [skillpack.sh](https://skillpack.sh) to pack skills and try existing skill
 One command to orchestrate [Skills](https://skills.sh), tools, mcps into a standalone app users can download and use on their own computer!
 
 ```bash
-npx skillpack create
+npx @cremini/skillpack create
 ```
 
 If skills, tools, and MCPs are like LEGO pieces, a skill pack is the master piece that assembles them into a complete solution.
@@ -17,7 +17,7 @@ Each Skill Pack should organize different skills to address a well-defined probl
 ### Create a Skill Pack Interactively
 
 ```bash
-npx skillpack create
+npx @cremini/skillpack create
 ```
 
 Step-by-Step
@@ -31,15 +31,15 @@ Step-by-Step
 
 ```bash
 # Add skills
-npx skillpack skills add vercel-labs/agent-skills --skill frontend-design
-npx skillpack skills add ./my-local-skills
+npx @cremini/skillpack skills add vercel-labs/agent-skills --skill frontend-design
+npx @cremini/skillpack skills add ./my-local-skills
 
 # Manage prompts
-npx skillpack prompts add "Collect company data using Skill A, create charts from the data using Skill B, and compile the results into a PowerPoint using Skill C"
-npx skillpack prompts list
+npx @cremini/skillpack prompts add "Collect company data using Skill A, create charts from the data using Skill B, and compile the results into a PowerPoint using Skill C"
+npx @cremini/skillpack prompts list
 
 # Package the current app
-npx skillpack build
+npx @cremini/skillpack build
 ```
 
 ## Commands

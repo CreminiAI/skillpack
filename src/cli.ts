@@ -4,13 +4,18 @@ import { createCommand } from "./commands/create.js";
 import { registerSkillsCommand } from "./commands/skills-cmd.js";
 import { registerPromptsCommand } from "./commands/prompts-cmd.js";
 import { bundle } from "./core/bundler.js";
+import fs from "node:fs";
+
+const packageJson = JSON.parse(
+  fs.readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
+) as { version: string };
 
 const program = new Command();
 
 program
   .name("skillpack")
   .description("Assemble, package, and run Agent Skills packs")
-  .version("1.0.0");
+  .version(packageJson.version);
 
 // create command
 program

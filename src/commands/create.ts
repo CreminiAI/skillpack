@@ -186,6 +186,8 @@ export async function createCommand(directory?: string): Promise<void> {
 
   console.log(chalk.green("\n  Done!"));
   if (!shouldBundle) {
-    console.log(chalk.dim("  Run npx skillpack build to create the zip\n"));
+    console.log(
+      chalk.dim("  Run npx @cremini/skillpack build to create the zip\n"),
+    );
   }
 }

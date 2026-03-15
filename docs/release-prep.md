@@ -4,7 +4,7 @@ Use this checklist before running `npm publish` to confirm the npm package conte
 
 ## Scope
 
-- Publish the `skillpack` npm CLI package
+- Publish the `@cremini/skillpack` npm CLI package
 - Generate a publicly installable npm tarball
 - Verify that the `runtime/` directory is suitable for distribution
 
@@ -105,8 +105,8 @@ npm pack
 mkdir -p /tmp/skillpack-smoke
 cd /tmp/skillpack-smoke
 npm init -y
-npm install /Users/yava/myspace/finpeak/skill-pack/skillpack-*.tgz
-npx skillpack --version
+npm install /Users/yava/myspace/finpeak/skill-pack/cremini-skillpack-*.tgz
+npx @cremini/skillpack --version
 ```
 
 Confirm that:
@@ -135,14 +135,14 @@ npm run check && npm run build && npm pack --dry-run
 After publishing, verify at least once:
 
 ```bash
-npm view skillpack version
-npx skillpack --version
+npm view @cremini/skillpack version
+npx @cremini/skillpack --version
 ```
 
 For a first release, also verify:
 
 - The npm page renders the README correctly
-- `npx skillpack create` launches normally
+- `npx @cremini/skillpack create` launches normally
 - The package does not include unexpectedly large directories
 
 ## Notes
