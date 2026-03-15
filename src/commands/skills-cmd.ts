@@ -1,6 +1,11 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { removeSkill } from "../core/skill-manager.js";
+import {
+  installSkills,
+  refreshDescriptionsAndSave,
+  removeSkill,
+  upsertSkills,
+} from "../core/skill-manager.js";
 import { loadConfig, saveConfig } from "../core/pack-config.js";
 
 export function registerSkillsCommand(program: Command): void {
@@ -13,24 +18,42 @@ export function registerSkillsCommand(program: Command): void {
     .description("Add a skill from a git repo, URL, or local path")
     .option("-s, --skill <names...>", "Specify skill name(s)")
     .action(async (source: string, opts: { skill?: string[] }) => {
+      if (!opts.skill || opts.skill.length === 0) {
+        console.log(
+          chalk.red(
+            "Specify at least one skill name with --skill when adding a source",
+          ),
+        );
+        process.exitCode = 1;
+        return;
+      }
+
       const workDir = process.cwd();
       const config = loadConfig(workDir);
+      const requestedSkills = opts.skill.map((name) => ({
+        name: name.trim(),
+        source,
+        description: "",
+      }));
 
-      config.skills.push({
-        name: opts.skill ? opts.skill.join(", ") : source,
-        source: source,
-        description: "Pending installation",
-        installSource: source,
-        specificSkills:
-          opts.skill && opts.skill.length > 0 ? opts.skill : undefined,
-      });
+      upsertSkills(config, requestedSkills);
 
       saveConfig(workDir, config);
-      console.log(
-        chalk.green(
-          `Skill list updated (${config.skills.length} total). Skills will be installed during build.`,
-        ),
-      );
+
+      try {
+        installSkills(workDir, requestedSkills);
+        refreshDescriptionsAndSave(workDir, config);
+      } catch (error) {
+        console.log(
+          chalk.red(
+            `Skill installation failed: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+        process.exitCode = 1;
+        return;
+      }
+
+      console.log(chalk.green(`Installed ${requestedSkills.length} skill(s).`));
     });
 
   skills

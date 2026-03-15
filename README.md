@@ -34,14 +34,14 @@ npx @cremini/skillpack init --config ./skillpack.json
 npx @cremini/skillpack init commic_explainer --config https://raw.githubusercontent.com/CreminiAI/skillpack/refs/heads/main/examples/commic_explainer.json
 ```
 
-This loads a local or remote config, writes `skillpack.json` into the target directory, installs any pending skills, and skips zip packaging unless you pass `--bundle`.
+This loads a local or remote config, writes `skillpack.json` into the target directory, installs the configured skills, and skips zip packaging unless you pass `--bundle`.
 
 ### Step-by-Step Commands
 
 ```bash
 # Add skills
 npx @cremini/skillpack skills add vercel-labs/agent-skills --skill frontend-design
-npx @cremini/skillpack skills add ./my-local-skills
+npx @cremini/skillpack skills add ./my-local-skills --skill local-helper
 
 # Manage prompts
 npx @cremini/skillpack prompts add "Collect company data using Skill A, create charts from the data using Skill B, and compile the results into a PowerPoint using Skill C"
@@ -57,7 +57,7 @@ npx @cremini/skillpack build
 | ------------------------ | ------------------------------------- |
 | `create`                 | Create a skill pack interactively     |
 | `init`                   | Initialize from a config path or URL  |
-| `skills add <source>`    | Add a skill                           |
+| `skills add <source>`    | Add one or more skills with `--skill` |
 | `skills remove <name>`   | Remove a skill                        |
 | `skills list`            | List installed skills                 |
 | `prompts add <text>`     | Add a prompt                          |

@@ -8,9 +8,11 @@ import {
   loadConfig,
   PACK_FILE,
   saveConfig,
-  type PackConfig,
 } from "./pack-config.js";
-import { installPendingSkills } from "./skill-manager.js";
+import {
+  installConfiguredSkills,
+  syncSkillDescriptions,
+} from "./skill-manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,7 +32,6 @@ function getRuntimeDir(): string {
  */
 export async function bundle(workDir: string): Promise<string> {
   const config = loadConfig(workDir);
-  saveConfig(workDir, config);
   const zipName = `${config.name}.zip`;
   const zipPath = path.join(workDir, zipName);
   const runtimeDir = getRuntimeDir();
@@ -39,7 +40,9 @@ export async function bundle(workDir: string): Promise<string> {
     throw new Error(`Runtime directory not found: ${runtimeDir}`);
   }
 
-  await installPendingSkills(workDir, config);
+  installConfiguredSkills(workDir, config);
+  syncSkillDescriptions(workDir, config);
+  saveConfig(workDir, config);
 
   console.log(chalk.blue(`Packaging ${config.name}...`));
 

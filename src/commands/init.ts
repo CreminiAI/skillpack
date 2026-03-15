@@ -7,9 +7,13 @@ import {
   configExists,
   PACK_FILE,
   saveConfig,
+  validateConfigShape,
   type PackConfig,
 } from "../core/pack-config.js";
-import { installPendingSkills } from "../core/skill-manager.js";
+import {
+  installConfiguredSkills,
+  refreshDescriptionsAndSave,
+} from "../core/skill-manager.js";
 
 export interface InitCommandOptions {
   config: string;
@@ -22,37 +26,6 @@ function isHttpUrl(value: string): boolean {
     return url.protocol === "http:" || url.protocol === "https:";
   } catch {
     return false;
-  }
-}
-
-function validateConfigShape(
-  value: unknown,
-  source: string,
-): asserts value is PackConfig {
-  if (!value || typeof value !== "object") {
-    throw new Error(`Invalid config from ${source}: expected a JSON object`);
-  }
-
-  const config = value as Record<string, unknown>;
-
-  if (typeof config.name !== "string" || !config.name.trim()) {
-    throw new Error(`Invalid config from ${source}: "name" is required`);
-  }
-
-  if (typeof config.description !== "string") {
-    throw new Error(`Invalid config from ${source}: "description" must be a string`);
-  }
-
-  if (typeof config.version !== "string") {
-    throw new Error(`Invalid config from ${source}: "version" must be a string`);
-  }
-
-  if (!Array.isArray(config.prompts) || !config.prompts.every((p) => typeof p === "string")) {
-    throw new Error(`Invalid config from ${source}: "prompts" must be a string array`);
-  }
-
-  if (!Array.isArray(config.skills)) {
-    throw new Error(`Invalid config from ${source}: "skills" must be an array`);
   }
 }
 
@@ -106,7 +79,8 @@ export async function initCommand(
 
   console.log(chalk.blue(`\n  Initialize ${config.name} from ${options.config}\n`));
 
-  await installPendingSkills(workDir, config);
+  installConfiguredSkills(workDir, config);
+  refreshDescriptionsAndSave(workDir, config);
 
   if (options.bundle) {
     await bundle(workDir);
