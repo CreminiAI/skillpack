@@ -14,6 +14,10 @@ import {
   installConfiguredSkills,
   refreshDescriptionsAndSave,
 } from "../core/skill-manager.js";
+import {
+  copyRuntimeTemplate,
+  getRuntimeDir,
+} from "../core/runtime-template.js";
 
 export interface InitCommandOptions {
   config: string;
@@ -81,12 +85,14 @@ export async function initCommand(
 
   installConfiguredSkills(workDir, config);
   refreshDescriptionsAndSave(workDir, config);
+  copyRuntimeTemplate(getRuntimeDir(), workDir);
 
   if (options.bundle) {
     await bundle(workDir);
   }
 
   console.log(chalk.green(`\n  ${PACK_FILE} saved\n`));
+  console.log(chalk.green("  Runtime template expanded.\n"));
   console.log(chalk.green("  Initialization complete.\n"));
 
   if (!options.bundle) {

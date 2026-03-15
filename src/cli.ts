@@ -28,7 +28,9 @@ program
 
 program
   .command("init [directory]")
-  .description("Initialize a skills pack from a local config file or URL")
+  .description(
+    "Initialize a skills pack from a local config file or URL and expand runtime files",
+  )
   .requiredOption("--config <path-or-url>", "Path or URL to a skillpack.json file")
   .option("--bundle", "Bundle as a zip after initialization")
   .action(

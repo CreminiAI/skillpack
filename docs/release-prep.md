@@ -91,8 +91,8 @@ Confirm that the runtime server listens only on 127.0.0.1 by default:
 
 Review the launcher scripts:
 
-- [runtime/scripts/start.sh](/Users/yava/myspace/finpeak/skill-pack/runtime/scripts/start.sh)
-- [runtime/scripts/start.bat](/Users/yava/myspace/finpeak/skill-pack/runtime/scripts/start.bat)
+- [runtime/start.sh](/Users/yava/myspace/finpeak/skill-pack/runtime/start.sh)
+- [runtime/start.bat](/Users/yava/myspace/finpeak/skill-pack/runtime/start.bat)
 
 They should install dependencies with a lockfile-backed command so users get reproducible results.
 
@@ -113,7 +113,7 @@ Confirm that:
 
 - The CLI runs
 - The `create` and `build` commands start successfully
-- Generated zip files include `runtime/` and the launcher scripts correctly
+- Generated zip files preserve the `runtime/` template's relative paths and exclude any `node_modules/` directories
 
 ## Recommended Release Flow
 

@@ -27,14 +27,14 @@ Step-by-Step
 3. Add prompts to orchestrate and organize skills you added to accomplish tasks
 4. (Optional) bundle the result as a zip
 
-### Initialize from an Existing Config
+### Initialize with Configuration
 
 ```bash
 npx @cremini/skillpack init --config ./skillpack.json
 npx @cremini/skillpack init commic_explainer --config https://raw.githubusercontent.com/CreminiAI/skillpack/refs/heads/main/examples/commic_explainer.json
 ```
 
-This loads a local or remote config, writes `skillpack.json` into the target directory, installs the configured skills, and skips zip packaging unless you pass `--bundle`.
+Bootstrap a SkillPack using a local file or remote URL.
 
 ### Step-by-Step Commands
 
@@ -73,11 +73,11 @@ The extracted archive looks like this:
 skillpack/
 ├── skillpack.json       # Pack configuration
 ├── skills/              # Collected SKILL.md files
-├── server/              # Express backend
-├── web/                 # Web chat UI
+├── server/              # Runtime backend
+├── web/                 # Runtime web UI
 ├── start.sh             # One-click launcher for macOS/Linux
 ├── start.bat            # One-click launcher for Windows
-└── README.md
+└── README.md            # Runtime guide
 ```
 
 ### Run the Skill Pack
