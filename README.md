@@ -1,9 +1,11 @@
-# SkillApp - Orchestrate Skills into a Standalone App
+# SkillPack - Orchestrate Skills into a Standalone App
+
+Go to [skillpack.sh](https://skillpack.sh) to create and manage Agent/Skill apps.
 
 One command to orchestrate [Skills](https://skills.sh), tools, mcps into a standalone app users can download and use on their own computer!
 
 ```bash
-npx skillapp create
+npx skillpack create
 ```
 
 If skills, tools, and MCPs are like LEGO pieces, a skill app is the master piece that assembles them into a complete solution.
@@ -15,7 +17,7 @@ Each Skill App should organize different skills to address a well-defined proble
 ### Create a Skill App Interactively
 
 ```bash
-npx skillapp create
+npx skillpack create
 ```
 
 Step-by-Step
@@ -29,15 +31,15 @@ Step-by-Step
 
 ```bash
 # Add skills
-npx skillapp skills add vercel-labs/agent-skills --skill frontend-design
-npx skillapp skills add ./my-local-skills
+npx skillpack skills add vercel-labs/agent-skills --skill frontend-design
+npx skillpack skills add ./my-local-skills
 
 # Manage prompts
-npx skillapp prompts add "Collect company data using Skill A, create charts from the data using Skill B, and compile the results into a PowerPoint using Skill C"
-npx skillapp prompts list
+npx skillpack prompts add "Collect company data using Skill A, create charts from the data using Skill B, and compile the results into a PowerPoint using Skill C"
+npx skillpack prompts list
 
 # Package the current app
-npx skillapp build
+npx skillpack build
 ```
 
 ## Commands
@@ -58,7 +60,7 @@ npx skillapp build
 The extracted archive looks like this:
 
 ```text
-skillapp/
+skillpack/
 ├── app.json             # App configuration
 ├── skills/              # Collected SKILL.md files
 ├── server/              # Express backend

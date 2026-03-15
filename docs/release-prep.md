@@ -1,10 +1,10 @@
-# skillapp Release Checklist
+# skillpack Release Checklist
 
 Use this checklist before running `npm publish` to confirm the npm package contents, runtime behavior, and sensitive-data boundaries are ready for release.
 
 ## Scope
 
-- Publish the `skillapp` npm CLI package
+- Publish the `skillpack` npm CLI package
 - Generate a publicly installable npm tarball
 - Verify that the `runtime/` directory is suitable for distribution
 
@@ -16,7 +16,7 @@ Check [package.json](/Users/yava/myspace/finpeak/skill-pack/package.json):
 
 - `name` matches the intended package name
 - `version` has been incremented
-- `bin.skillapp` points to `dist/cli.js`
+- `bin.skillpack` points to `dist/cli.js`
 - `license`, `repository`, `bugs`, and `homepage` are correct
 
 Useful command:
@@ -102,11 +102,11 @@ Test in a clean directory:
 
 ```bash
 npm pack
-mkdir -p /tmp/skillapp-smoke
-cd /tmp/skillapp-smoke
+mkdir -p /tmp/skillpack-smoke
+cd /tmp/skillpack-smoke
 npm init -y
-npm install /Users/yava/myspace/finpeak/skill-pack/skillapp-*.tgz
-npx skillapp --version
+npm install /Users/yava/myspace/finpeak/skill-pack/skillpack-*.tgz
+npx skillpack --version
 ```
 
 Confirm that:
@@ -135,14 +135,14 @@ npm run check && npm run build && npm pack --dry-run
 After publishing, verify at least once:
 
 ```bash
-npm view skillapp version
-npx skillapp --version
+npm view skillpack version
+npx skillpack --version
 ```
 
 For a first release, also verify:
 
 - The npm page renders the README correctly
-- `npx skillapp create` launches normally
+- `npx skillpack create` launches normally
 - The package does not include unexpectedly large directories
 
 ## Notes

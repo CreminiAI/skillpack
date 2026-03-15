@@ -3,7 +3,7 @@
 ## Project Structure
 
 ```text
-skillapp/
+skillpack/
 ├── src/                 # TypeScript source for the CLI
 │   ├── cli.ts
 │   ├── commands/

@@ -40,7 +40,7 @@ export function loadConfig(workDir: string): PackConfig {
   const filePath = getPackPath(workDir);
   if (!fs.existsSync(filePath)) {
     throw new Error(
-      `Could not find ${PACK_FILE}. Run skillapp create first or work in a directory that contains app.json`,
+      `Could not find ${PACK_FILE}. Run skillpack create first or work in a directory that contains app.json`,
     );
   }
   const raw = fs.readFileSync(filePath, "utf-8");

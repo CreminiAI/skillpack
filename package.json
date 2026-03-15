@@ -1,18 +1,18 @@
 {
-  "name": "skillapp",
-  "version": "1.0.1",
+  "name": "skillpack",
+  "version": "1.0.2",
   "description": "Turn Skills into a Standalone App with UI",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/FinpeakInc/skillapp.git"
+    "url": "git+https://github.com/FinpeakInc/skillpack.git"
   },
   "bugs": {
-    "url": "https://github.com/FinpeakInc/skillapp/issues"
+    "url": "https://github.com/FinpeakInc/skillpack/issues"
   },
-  "homepage": "https://github.com/FinpeakInc/skillapp#readme",
+  "homepage": "https://github.com/FinpeakInc/skillpack#readme",
   "bin": {
-    "skillapp": "dist/cli.js"
+    "skillpack": "dist/cli.js"
   },
   "files": [
     "dist",

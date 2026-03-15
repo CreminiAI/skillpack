@@ -47,7 +47,7 @@ export async function createCommand(directory?: string): Promise<void> {
       type: "input",
       name: "description",
       message: "Description:",
-      default: "A skill App, powered by SkillApp.sh",
+      default: "A skill App, powered by SkillPack.sh",
     },
   ]);
 
@@ -155,7 +155,7 @@ export async function createCommand(directory?: string): Promise<void> {
           : `Prompt #${promptIndex} (leave blank to finish):`,
         validate: isFirst
           ? (v: string) =>
-              v.trim() ? true : "The first Prompt cannot be empty"
+            v.trim() ? true : "The first Prompt cannot be empty"
           : undefined,
       },
     ]);
@@ -186,6 +186,6 @@ export async function createCommand(directory?: string): Promise<void> {
 
   console.log(chalk.green("\n  Done!"));
   if (!shouldBundle) {
-    console.log(chalk.dim("  Run npx skillapp build to create the zip\n"));
+    console.log(chalk.dim("  Run npx skillpack build to create the zip\n"));
   }
 }

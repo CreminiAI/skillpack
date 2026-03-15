@@ -8,7 +8,7 @@ import { bundle } from "./core/bundler.js";
 const program = new Command();
 
 program
-  .name("skillapp")
+  .name("skillpack")
   .description("Assemble, package, and run Agent Skills packs")
   .version("1.0.0");
 
