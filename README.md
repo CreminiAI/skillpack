@@ -1,6 +1,6 @@
 # SkillPack - Orchestrate Skills into a Standalone App
 
-Go to [skillpack.sh](https://skillpack.sh) to create and manage Agent/Skill apps.
+Go to [skillpack.sh](https://skillpack.sh) to pack skills and try existing skill packs.
 
 One command to orchestrate [Skills](https://skills.sh), tools, mcps into a standalone app users can download and use on their own computer!
 
@@ -8,13 +8,13 @@ One command to orchestrate [Skills](https://skills.sh), tools, mcps into a stand
 npx skillpack create
 ```
 
-If skills, tools, and MCPs are like LEGO pieces, a skill app is the master piece that assembles them into a complete solution.
+If skills, tools, and MCPs are like LEGO pieces, a skill pack is the master piece that assembles them into a complete solution.
 
-Each Skill App should organize different skills to address a well-defined problem or complete specific tasks. For example, research a company by gathering information from various sources and create a PowerPoint presentation based on the findings.
+Each Skill Pack should organize different skills to address a well-defined problem or complete specific tasks. For example, research a company by gathering information from various sources and create a PowerPoint presentation based on the findings.
 
 ## Quick Start
 
-### Create a Skill App Interactively
+### Create a Skill Pack Interactively
 
 ```bash
 npx skillpack create
@@ -22,7 +22,7 @@ npx skillpack create
 
 Step-by-Step
 
-1. Set the app name and description
+1. Set the Pack name and description
 2. Add skills from a GitHub repos, URLs, or local paths
 3. Add prompts to orchestrate and organize skills you added to accomplish tasks
 4. (Optional) bundle the result as a zip
@@ -46,14 +46,14 @@ npx skillpack build
 
 | Command                  | Description                           |
 | ------------------------ | ------------------------------------- |
-| `create`                 | Create a skill app interactively      |
+| `create`                 | Create a skill pack interactively     |
 | `skills add <source>`    | Add a skill                           |
 | `skills remove <name>`   | Remove a skill                        |
 | `skills list`            | List installed skills                 |
 | `prompts add <text>`     | Add a prompt                          |
 | `prompts remove <index>` | Remove a prompt                       |
 | `prompts list`           | List all prompts                      |
-| `build`                  | Package the current app as a zip file |
+| `build`                  | Package the skill pack as a zip file  |
 
 ## Zip Output
 
@@ -70,7 +70,7 @@ skillpack/
 └── README.md
 ```
 
-### Run the App
+### Run the Skill Pack
 
 ```bash
 # macOS / Linux
@@ -80,7 +80,7 @@ chmod +x start.sh && ./start.sh
 start.bat
 ```
 
-Then open [http://127.0.0.1:26313](http://127.0.0.1:26313), enter your API key, and start working and solving problems.
+Then open [http://127.0.0.1:26313](http://127.0.0.1:26313), enter your API key, and start working and having fun!!!
 
 ## Development
 
