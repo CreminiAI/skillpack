@@ -12,6 +12,34 @@ const DEBUG = true;
 const log = (...args) => DEBUG && console.log(...args);
 const write = (data) => DEBUG && process.stdout.write(data);
 
+function getAssistantDiagnostics(message) {
+  if (!message || message.role !== "assistant") {
+    return null;
+  }
+
+  const stopReason = message.stopReason;
+  const errorMessage =
+    message.errorMessage ||
+    (stopReason === "error" || stopReason === "aborted"
+      ? `Request ${stopReason}`
+      : "");
+
+  const content = Array.isArray(message.content) ? message.content : [];
+  const text = content
+    .filter((item) => item?.type === "text")
+    .map((item) => item.text || "")
+    .join("")
+    .trim();
+  const toolCalls = content.filter((item) => item?.type === "toolCall").length;
+
+  return {
+    stopReason,
+    errorMessage,
+    hasText: text.length > 0,
+    toolCalls,
+  };
+}
+
 /**
  * Handle incoming WebSocket connection using pi-coding-agent
  * @param {import("ws").WebSocket} ws
@@ -24,6 +52,8 @@ export async function handleWsConnection(
   { apiKey, rootDir, provider = "openai", modelId = "gpt-5.4" },
 ) {
   try {
+    let turnHadVisibleOutput = false;
+
     // Create an in-memory auth storage to avoid touching disk
     const authStorage = AuthStorage.inMemory({
       [provider]: { type: "api_key", key: apiKey },
@@ -78,6 +108,7 @@ export async function handleWsConnection(
 
         case "message_update":
           if (event.assistantMessageEvent?.type === "text_delta") {
+            turnHadVisibleOutput = true;
             write(event.assistantMessageEvent.delta);
             ws.send(
               JSON.stringify({
@@ -86,6 +117,7 @@ export async function handleWsConnection(
               }),
             );
           } else if (event.assistantMessageEvent?.type === "thinking_delta") {
+            turnHadVisibleOutput = true;
             ws.send(
               JSON.stringify({
                 type: "thinking_delta",
@@ -97,6 +129,17 @@ export async function handleWsConnection(
 
         case "message_end":
           log(`\n--- [Message End: ${event.message?.role}] ---`);
+          if (event.message?.role === "assistant") {
+            const diagnostics = getAssistantDiagnostics(event.message);
+            if (diagnostics) {
+              log(
+                `[Assistant Diagnostics] stopReason=${diagnostics.stopReason || "unknown"} text=${diagnostics.hasText ? "yes" : "no"} toolCalls=${diagnostics.toolCalls}`,
+              );
+              if (diagnostics.errorMessage) {
+                log(`[Assistant Error] ${diagnostics.errorMessage}`);
+              }
+            }
+          }
           ws.send(
             JSON.stringify({
               type: "message_end",
@@ -106,6 +149,7 @@ export async function handleWsConnection(
           break;
 
         case "tool_execution_start":
+          turnHadVisibleOutput = true;
           log(`\n>>> [Tool Execution Start: ${event.toolName}] >>>`);
           log("Args:", JSON.stringify(event.args, null, 2));
           ws.send(
@@ -118,6 +162,7 @@ export async function handleWsConnection(
           break;
 
         case "tool_execution_end":
+          turnHadVisibleOutput = true;
           log(`<<< [Tool Execution End: ${event.toolName}] <<<`);
           log(`Error: ${event.isError ? "Yes" : "No"}`);
           ws.send(
@@ -142,8 +187,31 @@ export async function handleWsConnection(
       try {
         const payload = JSON.parse(data.toString());
         if (payload.text) {
+          turnHadVisibleOutput = false;
+
           // Send prompt to the agent, the session will handle message history natively
           await session.prompt(payload.text);
+
+          const lastMessage = session.state.messages.at(-1);
+          const diagnostics = getAssistantDiagnostics(lastMessage);
+          if (diagnostics?.errorMessage) {
+            ws.send(JSON.stringify({ error: diagnostics.errorMessage }));
+            return;
+          }
+
+          if (
+            diagnostics &&
+            !diagnostics.hasText &&
+            diagnostics.toolCalls === 0 &&
+            !turnHadVisibleOutput
+          ) {
+            const emptyResponseError =
+              "Assistant returned no visible output. Check the server logs for stopReason/provider details.";
+            log(`[Assistant Warning] ${emptyResponseError}`);
+            ws.send(JSON.stringify({ error: emptyResponseError }));
+            return;
+          }
+
           ws.send(JSON.stringify({ done: true }));
         }
       } catch (err) {
