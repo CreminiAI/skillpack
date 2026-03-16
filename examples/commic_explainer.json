@@ -1,6 +1,6 @@
 {
   "name": "Comic Explainer",
-  "description": "A skill App, powered by SkillApp.sh",
+  "description": "Explains complex concepts to children through educational comics.",
   "version": "1.0.0",
   "prompts": [
     "Please create a children's science comic in English that explains what skills are, and produce a 4 to 6-page PDF:\n- Watermark-free, Style: manga, Tone: neutral, automatically extract parameters, and save the final PDF to the current directory\n- Use Nano Banana Pro to generate the images\n- Base the content on https://agentskills.io/what-are-skills\n\nNote:\nAs the first step, obtain the API key by reading GEMINI_API_KEY or GOOGLE_API_KEY from the current system environment variables; if neither is available, ask the user for it before proceeding with the remaining tasks."

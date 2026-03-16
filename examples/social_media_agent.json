@@ -1,0 +1,16 @@
+{
+  "name": "Social Media Agent",
+  "description": "Collects content from Twitter / X, Reddit, and GitHub, then generates a summarized Markdown report with source details.",
+  "version": "1.0.0",
+  "prompts": [
+    "Use `OpenClaw` as the keyword. Automatically gather the most popular and most valuable related content from Twitter / X, Reddit, and GitHub, then generate a summarized Markdown report, save it as `social-media-search-result.md` in the current directory, and send me the full Markdown.\n\nWorkflow:\n- Use the `xreach-cli` npm tool to collect popular Twitter / X posts and discussion threads related to the keyword: https://www.npmjs.com/package/xreach-cli\n- Use the `reddit` skill to collect popular Reddit discussions related to the keyword\n- Search GitHub for basic information about repositories associated with the keyword, if any exist\n\nOutput requirements:\n- Organize the report by source: Twitter / X, Reddit, and GitHub\n- For each item, include the original content whenever possible; if it exceeds 200 characters, provide a concise summary instead\n- Include the author, publish time, and original link for each item",
+    "以 `OpenClaw` 作为关键词，自动从 Twitter / X、Reddit 和 GitHub 收集最热门、最有价值的相关内容，并生成一份汇总后的 Markdown 报告，保存为当前目录下的 `social-media-search-result.md`，最后将完整 Markdown 发送给我。\n\n工作流程：\n- 使用 `xreach-cli` npm 工具收集与关键词相关的热门 Twitter / X 帖子和讨论串：https://www.npmjs.com/package/xreach-cli\n- 使用 `reddit` skill 收集与关键词相关的热门 Reddit 讨论\n- 在 GitHub 中检索关键词关联仓库的基本信息（如果存在的话）\n\n输出要求：\n- 按信息源组织内容：Twitter / X、Reddit、GitHub\n- 每条信息尽量包含原始内容；如果超过 200 字，则提取简洁摘要\n- 每条信息都包含作者、发布时间和原始链接"
+  ],
+  "skills": [
+    {
+      "name": "reddit",
+      "source": "https://github.com/resciencelab/opc-skills",
+      "description": "Research Reddit discussions to extract relevant community feedback, recurring themes, and sentiment."
+    }
+  ]
+}
