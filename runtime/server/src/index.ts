@@ -90,7 +90,7 @@ async function startAdapters() {
   // Telegram adapter (conditional)
   if (dataConfig.adapters?.telegram?.token) {
     try {
-      const { TelegramAdapter } = await import("./adapters/telegram");
+      const { TelegramAdapter } = await import("./adapters/telegram.js");
       const telegramAdapter = new TelegramAdapter({
         token: dataConfig.adapters.telegram.token,
       });
