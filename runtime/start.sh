@@ -19,4 +19,4 @@ if [ ! -d "server/node_modules" ]; then
 fi
 
 # Start the server
-cd server && node index.js
+cd server && node dist/index.js

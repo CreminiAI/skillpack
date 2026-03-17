@@ -11,5 +11,5 @@ if not exist "server\node_modules" (
   echo.
 )
 
-rem Start the server (port detection and browser launch are handled by server\index.js)
-cd server && node index.js
+rem Start the server (port detection and browser launch are handled by server\dist\index.js)
+cd server && node dist/index.js

@@ -53,6 +53,17 @@ export function collectRuntimeTemplateEntries(
         continue;
       }
 
+      // Skip TypeScript source files from runtime/server/ (only ship compiled dist/)
+      const currentRelative = relativeDir
+        ? path.posix.join(relativeDir, dirEntry.name)
+        : dirEntry.name;
+      if (
+        currentRelative === "server/src" ||
+        currentRelative === "server/tsconfig.json"
+      ) {
+        continue;
+      }
+
       const absolutePath = path.join(currentDir, dirEntry.name);
       const relativePath = relativeDir
         ? path.posix.join(relativeDir, dirEntry.name)

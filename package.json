@@ -24,7 +24,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "npm run build:runtime && tsup",
+    "build:runtime": "cd runtime/server && npx tsc",
     "dev": "tsup --watch",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
