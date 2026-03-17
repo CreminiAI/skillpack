@@ -23,6 +23,38 @@ function parseSkillNames(value: string): string[] {
     .filter(Boolean);
 }
 
+function normalizeSourceInput(value: string): string {
+  return value.trim().replace(/^npx\s+skills\s+add\s+/u, "");
+}
+
+function parseSourceInput(value: string): {
+  source: string;
+  inlineSkillNames: string[];
+} {
+  const trimmedValue = normalizeSourceInput(value);
+  const skillFlagIndex = trimmedValue.indexOf(" --skill ");
+
+  if (skillFlagIndex === -1) {
+    return {
+      source: trimmedValue,
+      inlineSkillNames: [],
+    };
+  }
+
+  const source = trimmedValue.slice(0, skillFlagIndex).trim();
+  const inlineSkillValue = trimmedValue
+    .slice(skillFlagIndex + " --skill ".length)
+    .trim();
+
+  return {
+    source,
+    inlineSkillNames: inlineSkillValue
+      .split(/[,\s]+/)
+      .map((name) => name.trim())
+      .filter(Boolean),
+  };
+}
+
 export async function createCommand(directory?: string): Promise<void> {
   const workDir = directory ? path.resolve(directory) : process.cwd();
 
@@ -72,7 +104,10 @@ export async function createCommand(directory?: string): Promise<void> {
     chalk.dim("  Supported formats: owner/repo, GitHub URL, or local path"),
   );
   console.log(chalk.dim("  Example source: vercel-labs/agent-skills"));
-  console.log(chalk.dim("  Example skill names: frontend-design, skill-creator\n"));
+  console.log(
+    chalk.dim("  Example inline skill: vercel-labs/agent-skills --skill find-skills"),
+  );
+  console.log();
 
   while (true) {
     const { source } = await inquirer.prompt([
@@ -87,20 +122,29 @@ export async function createCommand(directory?: string): Promise<void> {
       break;
     }
 
-    const { skillNames } = await inquirer.prompt([
-      {
-        type: "input",
-        name: "skillNames",
-        message: "Skill names (comma-separated):",
-        validate: (value: string) =>
-          parseSkillNames(value).length > 0
-            ? true
-            : "Enter at least one skill name",
-      },
-    ]);
+    const parsedSource = parseSourceInput(source);
+    let skillNames = parsedSource.inlineSkillNames;
 
-    const nextSkills = parseSkillNames(skillNames).map((skillName) => ({
-      source: source.trim(),
+    if (skillNames.length === 0) {
+      console.log(
+        chalk.dim("  Example skill names: frontend-design, skill-creator"),
+      );
+      const promptResult = await inquirer.prompt([
+        {
+          type: "input",
+          name: "skillNames",
+          message: "Skill names (comma-separated):",
+          validate: (value: string) =>
+            parseSkillNames(value).length > 0
+              ? true
+              : "Enter at least one skill name",
+        },
+      ]);
+      skillNames = parseSkillNames(promptResult.skillNames);
+    }
+
+    const nextSkills = skillNames.map((skillName) => ({
+      source: parsedSource.source,
       name: skillName,
       description: "",
     }));

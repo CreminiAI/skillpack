@@ -181,12 +181,24 @@ function renderMarkdown(mdText, { renderEmbeddedMarkdown = true } = {}) {
     return escapeHtml(mdText);
   }
 
-  const html = marked.parse(mdText);
+  const html = ensureLinksOpenInNewTab(marked.parse(mdText));
   if (!renderEmbeddedMarkdown) {
     return html;
   }
 
   return renderEmbeddedMarkdownBlocks(html);
+}
+
+function ensureLinksOpenInNewTab(html) {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  template.content.querySelectorAll("a[href]").forEach((linkEl) => {
+    linkEl.setAttribute("target", "_blank");
+    linkEl.setAttribute("rel", "noopener noreferrer");
+  });
+
+  return template.innerHTML;
 }
 
 function renderEmbeddedMarkdownBlocks(html) {
@@ -365,7 +377,9 @@ function handleAgentEvent(event) {
 
       let inputHtml = "";
       if (typeof marked !== "undefined") {
-        inputHtml = marked.parse("```json\n" + safeInput + "\n```");
+        inputHtml = ensureLinksOpenInNewTab(
+          marked.parse("```json\n" + safeInput + "\n```"),
+        );
       } else {
         inputHtml = escapeHtml(safeInput);
       }
@@ -438,7 +452,7 @@ function handleAgentEvent(event) {
             : "```json\n" + safeResult + "\n```";
 
         if (typeof marked !== "undefined") {
-          resultEl.innerHTML = marked.parse(mdText);
+          resultEl.innerHTML = ensureLinksOpenInNewTab(marked.parse(mdText));
         } else {
           resultEl.textContent = safeResult;
         }
