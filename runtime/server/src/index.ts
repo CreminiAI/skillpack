@@ -29,6 +29,10 @@ interface DataConfig {
   provider?: string;
   adapters?: {
     telegram?: { token: string };
+    slack?: {
+      botToken?: string;
+      appToken?: string;
+    };
     [key: string]: unknown;
   };
 }
@@ -97,6 +101,27 @@ async function startAdapters() {
       await telegramAdapter.start({ agent, server, app, rootDir });
     } catch (err) {
       console.error("[Telegram] Failed to start:", err);
+    }
+  }
+
+  // Slack adapter (conditional)
+  const slackConfig = dataConfig.adapters?.slack;
+  if (slackConfig?.botToken || slackConfig?.appToken) {
+    if (!slackConfig.botToken || !slackConfig.appToken) {
+      console.warn(
+        "[Slack] Skipped: both adapters.slack.botToken and adapters.slack.appToken are required.",
+      );
+    } else {
+      try {
+        const { SlackAdapter } = await import("./adapters/slack.js");
+        const slackAdapter = new SlackAdapter({
+          botToken: slackConfig.botToken,
+          appToken: slackConfig.appToken,
+        });
+        await slackAdapter.start({ agent, server, app, rootDir });
+      } catch (err) {
+        console.error("[Slack] Failed to start:", err);
+      }
     }
   }
 }

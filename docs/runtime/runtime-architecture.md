@@ -17,14 +17,16 @@
 │   │   └── adapters/
 │   │       ├── types.js
 │   │       ├── web.js
-│   │       └── telegram.js
+│   │       ├── telegram.js
+│   │       └── slack.js
 │   ├── src/                   # TypeScript 源码（不进入分发包）
 │   │   ├── index.ts
 │   │   ├── agent.ts
 │   │   └── adapters/
 │   │       ├── types.ts
 │   │       ├── web.ts
-│   │       └── telegram.ts
+│   │       ├── telegram.ts
+│   │       └── slack.ts
 │   ├── package.json
 │   └── tsconfig.json
 ├── web/
@@ -51,7 +53,7 @@
 
 ### 服务端
 
-服务端入口是 `runtime/server/src/index.ts`，编译后以 `dist/index.js` 运行，基于 `express` + `ws` + `@mariozechner/pi-coding-agent`。
+服务端入口是 `runtime/server/src/index.ts`，编译后以 `dist/index.js` 运行，基于 `express` + `ws` + `@mariozechner/pi-coding-agent`，并按需加载 Telegram / Slack IM Adapter。
 
 职责分层如下：
 
@@ -61,7 +63,7 @@
 - 读取 `data/config.json`，环境变量（`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`）优先级更高
 - 托管 `web/` 静态资源（优先读 `rootDir/web`，否则回退 `serverDir/../web`）
 - 创建共享 `PackAgent` 实例
-- 按配置依次启动 `WebAdapter`（始终启用）和 `TelegramAdapter`（有 token 时启用，动态 import）
+- 按配置依次启动 `WebAdapter`（始终启用）、`TelegramAdapter`（有 token 时启用，动态 import）和 `SlackAdapter`（同时配置 bot/app token 时启用，动态 import）
 - 监听 `HOST:PORT`，默认 `127.0.0.1:26313`；端口占用自动递增
 - 启动成功后自动打开浏览器（`open` / `start` / `xdg-open`）
 
@@ -114,12 +116,48 @@ const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
 - `BotCommand`：`"clear" | "restart" | "shutdown"`
 - `ChannelMessage` / `ChannelAttachment` / `SessionInfo`：预留扩展接口
 
+#### `adapters/telegram.ts`
+
+- Polling 模式接收 Telegram 消息，不依赖 webhook
+- Chat 维度复用 session，`channelId = telegram-<chatId>`
+- 只回传最终文本；发送前用 `typing` 作为处理中提示
+- 长消息按 Telegram 4096 字符限制分片，命中 429 时自动重试
+
+#### `adapters/slack.ts`
+
+- 基于 `@slack/bolt` + Socket Mode，不新增 HTTP 回调入口
+- 监听 `message.im` 与 `app_mention`
+- DM 维度 session：`channelId = slack-dm-<teamId>-<channelId>`
+- 频道按线程隔离 session：`channelId = slack-thread-<teamId>-<channelId>-<threadTs|ts>`
+- 只回传最终文本，不透出 thinking/tool 中间事件
+- 支持 Slack slash commands `/skillpack-clear`、`/skillpack-restart`、`/skillpack-shutdown`
+- 由于 Slack slash command 无法直接从线程触发，频道命令会优先作用于该频道最近一个活跃的 Skillpack 线程；若无活跃线程则提示用户先 mention bot，或在对应线程中发送文本命令
+
 #### 运行时 API key 策略
 
 1. 读取 `data/config.json` 的 `apiKey` / `provider` 字段
 2. 环境变量 `OPENAI_API_KEY` 或 `ANTHROPIC_API_KEY` 覆盖（设置了环境变量则强制对应 provider）
 3. Web 前端可通过 `POST /api/config/key` 在内存中临时覆盖（重启失效）
 4. 不写入磁盘
+
+#### `data/config.json` 中的 IM 配置
+
+```json
+{
+  "adapters": {
+    "telegram": {
+      "token": "123456:ABC-DEF..."
+    },
+    "slack": {
+      "botToken": "xoxb-...",
+      "appToken": "xapp-..."
+    }
+  }
+}
+```
+
+- Slack 凭证当前只从 `data/config.json` 读取，不走环境变量覆盖
+- 若只配置了 `adapters.slack.botToken` 或 `adapters.slack.appToken` 其中之一，运行时会记录 warning 并跳过 Slack Adapter
 
 ### 前端
 
