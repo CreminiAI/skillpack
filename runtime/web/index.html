@@ -40,6 +40,89 @@
           <button id="save-key-btn">Save</button>
         </div>
       </div>
+
+      <div class="sidebar-section">
+        <h3>SLACK</h3>
+        <div class="api-key-form">
+          <input type="password" id="slack-bot-token-input" placeholder="xoxb-..." />
+        </div>
+        <div class="api-key-form" style="margin-top: 8px;">
+          <input type="password" id="slack-signing-secret-input" placeholder="Signing secret" />
+        </div>
+        <div class="api-key-form" style="margin-top: 8px;">
+          <input type="password" id="slack-app-token-input" placeholder="xapp-... (optional)" />
+        </div>
+        <div class="api-key-form" style="margin-top: 8px;">
+          <input type="text" id="slack-events-path-input" placeholder="/api/slack/events" />
+        </div>
+        <label style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" id="slack-use-thread-input" />
+          Reply in thread
+        </label>
+        <div class="api-key-footer">
+          <p id="slack-status" class="status-text"></p>
+          <button id="save-slack-btn">Save</button>
+        </div>
+        <div class="provider-select-wrapper" style="margin-top: 10px;">
+          <select id="slack-channel-select">
+            <option value="">Select a Slack channel...</option>
+          </select>
+        </div>
+        <div class="api-key-form" style="margin-top: 6px;">
+          <input type="text" id="slack-channel-id-input" placeholder="Or enter channel ID (e.g. C0123456789)" />
+        </div>
+        <div class="api-key-footer" style="margin-top: 6px;">
+          <p id="slack-binding-status" class="status-text"></p>
+          <button id="refresh-channels-btn">Refresh</button>
+        </div>
+        <div class="api-key-footer" style="margin-top: 6px;">
+          <p id="session-id-text" class="status-text"></p>
+          <button id="copy-session-id-btn">Copy SID</button>
+        </div>
+        <div class="api-key-footer" style="margin-top: 6px;">
+          <p id="slack-current-binding" class="status-text"></p>
+          <button id="bind-session-btn">Bind Session</button>
+        </div>
+        <div class="api-key-footer" style="margin-top: 6px;">
+          <p id="slack-deep-link" class="status-text"></p>
+          <button id="unbind-session-btn">Unbind</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>TUNNEL</h3>
+        <div class="provider-select-wrapper">
+          <select id="tunnel-provider-select">
+            <option value="cloudflared">cloudflared</option>
+            <option value="ngrok">ngrok</option>
+          </select>
+        </div>
+        <div class="api-key-form" style="margin-top: 8px;">
+          <input type="text" id="tunnel-name-input" placeholder="Named tunnel (e.g. skillpack)" />
+        </div>
+        <div class="api-key-form" style="margin-top: 8px;">
+          <input type="number" id="tunnel-port-input" min="1" max="65535" placeholder="26313" />
+        </div>
+        <div class="api-key-footer">
+          <p id="tunnel-status" class="status-text"></p>
+          <button id="start-tunnel-btn">Start</button>
+        </div>
+        <div class="api-key-footer" style="margin-top: 6px;">
+          <p id="tunnel-url" class="status-text"></p>
+          <button id="stop-tunnel-btn">Stop</button>
+        </div>
+        <div class="api-key-footer" style="margin-top: 6px;">
+          <p id="tunnel-callback-url" class="status-text"></p>
+          <button id="copy-callback-btn">Copy URL</button>
+        </div>
+        <div class="api-key-footer" style="margin-top: 8px; align-items: flex-start;">
+          <p id="slack-health-summary" class="status-text"></p>
+          <button id="refresh-health-btn">Refresh</button>
+        </div>
+        <div class="api-key-form" style="margin-top: 6px;">
+          <div id="slack-health-details" class="status-text"></div>
+        </div>
+      </div>
     </aside>
 
     <main id="chat-area" class="mode-welcome">
@@ -66,7 +149,7 @@
     </main>
   </div>
   <script src="marked.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=8"></script>
 </body>
 
 </html>

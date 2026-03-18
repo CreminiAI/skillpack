@@ -1,4 +1,5 @@
 import path from "node:path";
+import crypto from "node:crypto";
 import {
   AuthStorage,
   createAgentSession,
@@ -11,6 +12,13 @@ const DEBUG = true;
 
 const log = (...args) => DEBUG && console.log(...args);
 const write = (data) => DEBUG && process.stdout.write(data);
+
+const sessions = new Map();
+
+export function hasActiveWebSubscriber(sessionId) {
+  const state = sessions.get(sessionId);
+  return !!(state && state.subscribers && state.subscribers.size > 0);
+}
 
 function getAssistantDiagnostics(message) {
   if (!message || message.role !== "assistant") {
@@ -37,58 +45,225 @@ function getAssistantDiagnostics(message) {
     errorMessage,
     hasText: text.length > 0,
     toolCalls,
+    text,
   };
+}
+
+async function createSessionState({
+  sessionId,
+  apiKey,
+  rootDir,
+  provider,
+  modelId,
+}) {
+  const authStorage = AuthStorage.inMemory({
+    [provider]: { type: "api_key", key: apiKey },
+  });
+  authStorage.setRuntimeApiKey(provider, apiKey);
+
+  const modelRegistry = new ModelRegistry(authStorage);
+  const model = modelRegistry.find(provider, modelId);
+
+  const sessionManager = SessionManager.inMemory();
+
+  const skillsPath = path.resolve(rootDir, "skills");
+  log(`[ChatProxy] Loading additional skills from: ${skillsPath}`);
+
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: rootDir,
+    additionalSkillPaths: [skillsPath],
+  });
+  await resourceLoader.reload();
+
+  const { session } = await createAgentSession({
+    cwd: rootDir,
+    authStorage,
+    modelRegistry,
+    sessionManager,
+    resourceLoader,
+    model,
+  });
+
+  const state = {
+    sessionId,
+    session,
+    subscribers: new Set(),
+    wsConnections: new Set(),
+    queue: Promise.resolve(),
+  };
+
+  session.subscribe((event) => {
+    for (const subscriber of state.subscribers) {
+      subscriber(event);
+    }
+  });
+
+  sessions.set(sessionId, state);
+  return state;
+}
+
+async function getOrCreateSessionState(options) {
+  const existing = sessions.get(options.sessionId);
+  if (existing) {
+    return existing;
+  }
+
+  return createSessionState(options);
+}
+
+export function broadcastToSession(sessionId, data) {
+  const state = sessions.get(sessionId);
+  if (!state) return;
+  const msg = JSON.stringify(data);
+  for (const conn of state.wsConnections) {
+    if (conn.readyState === 1) {
+      conn.send(msg);
+    }
+  }
+}
+
+function subscribeSession(state, subscriber) {
+  state.subscribers.add(subscriber);
+  return () => {
+    state.subscribers.delete(subscriber);
+  };
+}
+
+function extractMessageText(message) {
+  if (!message || !Array.isArray(message.content)) {
+    return "";
+  }
+
+  return message.content
+    .filter((item) => item?.type === "text")
+    .map((item) => item.text || "")
+    .join("")
+    .trim();
+}
+
+export async function promptSession(
+  { sessionId, apiKey, rootDir, provider = "openai", modelId = "gpt-5.4" },
+  text,
+  onEvent,
+) {
+  const state = await getOrCreateSessionState({
+    sessionId,
+    apiKey,
+    rootDir,
+    provider,
+    modelId,
+  });
+
+  let turnHadVisibleOutput = false;
+  const unsubscribe = subscribeSession(state, (event) => {
+    if (
+      event.type === "message_update" &&
+      (event.assistantMessageEvent?.type === "text_delta" ||
+        event.assistantMessageEvent?.type === "thinking_delta")
+    ) {
+      turnHadVisibleOutput = true;
+    }
+
+    if (
+      event.type === "tool_execution_start" ||
+      event.type === "tool_execution_end"
+    ) {
+      turnHadVisibleOutput = true;
+    }
+
+    if (onEvent) {
+      onEvent(event);
+    }
+  });
+
+  try {
+    state.queue = state.queue.then(async () => {
+      await state.session.prompt(text);
+    });
+    await state.queue;
+
+    const lastMessage = state.session.state.messages.at(-1);
+    const diagnostics = getAssistantDiagnostics(lastMessage);
+
+    if (diagnostics?.errorMessage) {
+      return {
+        ok: false,
+        diagnostics,
+        error: diagnostics.errorMessage,
+      };
+    }
+
+    if (
+      diagnostics &&
+      !diagnostics.hasText &&
+      diagnostics.toolCalls === 0 &&
+      !turnHadVisibleOutput
+    ) {
+      const emptyResponseError =
+        "Assistant returned no visible output. Check the server logs for stopReason/provider details.";
+      log(`[Assistant Warning] ${emptyResponseError}`);
+      return {
+        ok: false,
+        diagnostics,
+        error: emptyResponseError,
+      };
+    }
+
+    return {
+      ok: true,
+      diagnostics,
+      assistantText: diagnostics?.text || "",
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: String(err),
+    };
+  } finally {
+    unsubscribe();
+  }
 }
 
 /**
  * Handle incoming WebSocket connection using pi-coding-agent
- * @param {import("ws").WebSocket} ws
- * @param {object} options
- * @param {string} options.apiKey - OpenAI API Key
- * @param {string} options.rootDir - Pack root directory
  */
 export async function handleWsConnection(
   ws,
-  { apiKey, rootDir, provider = "openai", modelId = "gpt-5.4" },
+  {
+    sessionId,
+    apiKey,
+    rootDir,
+    provider = "openai",
+    modelId = "gpt-5.4",
+    onUserMessage,
+    onAssistantFinal,
+  },
 ) {
+  const resolvedSessionId = sessionId || crypto.randomUUID();
+
   try {
-    let turnHadVisibleOutput = false;
-
-    // Create an in-memory auth storage to avoid touching disk
-    const authStorage = AuthStorage.inMemory({
-      [provider]: { type: "api_key", key: apiKey },
-    });
-    authStorage.setRuntimeApiKey(provider, apiKey);
-
-    const modelRegistry = new ModelRegistry(authStorage);
-    const model = modelRegistry.find(provider, modelId);
-
-    const sessionManager = SessionManager.inMemory();
-
-    const skillsPath = path.resolve(rootDir, "skills");
-    log(`[ChatProxy] Loading additional skills from: ${skillsPath}`);
-
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: rootDir,
-      additionalSkillPaths: [skillsPath], // 手动加载 rootDir/skills
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      cwd: rootDir, // Allow pi-coding-agent to find skills in this pack's directory
-      authStorage,
-      modelRegistry,
-      sessionManager,
-      resourceLoader,
-      model,
+    const state = await getOrCreateSessionState({
+      sessionId: resolvedSessionId,
+      apiKey,
+      rootDir,
+      provider,
+      modelId,
     });
 
-    // Stream agent events to the WebSocket
-    session.subscribe((event) => {
+    state.wsConnections.add(ws);
+
+    ws.send(
+      JSON.stringify({
+        type: "session_info",
+        sessionId: resolvedSessionId,
+      }),
+    );
+
+    const unsubscribe = subscribeSession(state, (event) => {
       switch (event.type) {
         case "agent_start":
           log("\n=== [PI-CODING-AGENT SESSION START] ===");
-          log("System Prompt:\n", session.systemPrompt);
+          log("System Prompt:\n", state.session.systemPrompt);
           log("========================================\n");
           ws.send(JSON.stringify({ type: "agent_start" }));
           break;
@@ -98,17 +273,18 @@ export async function handleWsConnection(
           if (event.message?.role === "user") {
             log(JSON.stringify(event.message.content, null, 2));
           }
+          const messageText = extractMessageText(event.message);
           ws.send(
             JSON.stringify({
               type: "message_start",
               role: event.message?.role,
+              text: messageText,
             }),
           );
           break;
 
         case "message_update":
           if (event.assistantMessageEvent?.type === "text_delta") {
-            turnHadVisibleOutput = true;
             write(event.assistantMessageEvent.delta);
             ws.send(
               JSON.stringify({
@@ -117,7 +293,6 @@ export async function handleWsConnection(
               }),
             );
           } else if (event.assistantMessageEvent?.type === "thinking_delta") {
-            turnHadVisibleOutput = true;
             ws.send(
               JSON.stringify({
                 type: "thinking_delta",
@@ -129,17 +304,6 @@ export async function handleWsConnection(
 
         case "message_end":
           log(`\n--- [Message End: ${event.message?.role}] ---`);
-          if (event.message?.role === "assistant") {
-            const diagnostics = getAssistantDiagnostics(event.message);
-            if (diagnostics) {
-              log(
-                `[Assistant Diagnostics] stopReason=${diagnostics.stopReason || "unknown"} text=${diagnostics.hasText ? "yes" : "no"} toolCalls=${diagnostics.toolCalls}`,
-              );
-              if (diagnostics.errorMessage) {
-                log(`[Assistant Error] ${diagnostics.errorMessage}`);
-              }
-            }
-          }
           ws.send(
             JSON.stringify({
               type: "message_end",
@@ -149,7 +313,6 @@ export async function handleWsConnection(
           break;
 
         case "tool_execution_start":
-          turnHadVisibleOutput = true;
           log(`\n>>> [Tool Execution Start: ${event.toolName}] >>>`);
           log("Args:", JSON.stringify(event.args, null, 2));
           ws.send(
@@ -162,7 +325,6 @@ export async function handleWsConnection(
           break;
 
         case "tool_execution_end":
-          turnHadVisibleOutput = true;
           log(`<<< [Tool Execution End: ${event.toolName}] <<<`);
           log(`Error: ${event.isError ? "Yes" : "No"}`);
           ws.send(
@@ -182,45 +344,52 @@ export async function handleWsConnection(
       }
     });
 
-    // Listen for incoming messages from the frontend
     ws.on("message", async (data) => {
       try {
         const payload = JSON.parse(data.toString());
-        if (payload.text) {
-          turnHadVisibleOutput = false;
-
-          // Send prompt to the agent, the session will handle message history natively
-          await session.prompt(payload.text);
-
-          const lastMessage = session.state.messages.at(-1);
-          const diagnostics = getAssistantDiagnostics(lastMessage);
-          if (diagnostics?.errorMessage) {
-            ws.send(JSON.stringify({ error: diagnostics.errorMessage }));
-            return;
-          }
-
-          if (
-            diagnostics &&
-            !diagnostics.hasText &&
-            diagnostics.toolCalls === 0 &&
-            !turnHadVisibleOutput
-          ) {
-            const emptyResponseError =
-              "Assistant returned no visible output. Check the server logs for stopReason/provider details.";
-            log(`[Assistant Warning] ${emptyResponseError}`);
-            ws.send(JSON.stringify({ error: emptyResponseError }));
-            return;
-          }
-
-          ws.send(JSON.stringify({ done: true }));
+        if (!payload.text) {
+          return;
         }
+
+        if (onUserMessage) {
+          onUserMessage({
+            sessionId: resolvedSessionId,
+            text: payload.text,
+          });
+        }
+
+        const result = await promptSession(
+          {
+            sessionId: resolvedSessionId,
+            apiKey,
+            rootDir,
+            provider,
+            modelId,
+          },
+          payload.text,
+        );
+
+        if (!result.ok) {
+          ws.send(JSON.stringify({ error: result.error || "Request failed" }));
+          return;
+        }
+
+        if (onAssistantFinal && result.assistantText) {
+          onAssistantFinal({
+            sessionId: resolvedSessionId,
+            text: result.assistantText,
+          });
+        }
+
+        ws.send(JSON.stringify({ done: true }));
       } catch (err) {
         ws.send(JSON.stringify({ error: String(err) }));
       }
     });
 
     ws.on("close", () => {
-      session.dispose();
+      unsubscribe();
+      state.wsConnections.delete(ws);
     });
   } catch (err) {
     ws.send(JSON.stringify({ error: String(err) }));

@@ -166,8 +166,17 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-top: 12px;
   min-height: 32px;
+}
+
+.api-key-footer .status-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .api-key-footer button {
@@ -188,6 +197,36 @@ body {
 .api-key-footer button:hover {
   background: var(--accent-hover);
   box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.api-key-footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+#tunnel-url,
+#tunnel-callback-url,
+#slack-deep-link {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 11px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+#slack-deep-link a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+#slack-deep-link a:hover {
+  text-decoration: underline;
+}
+
+#slack-health-details {
+  line-height: 1.5;
 }
 
 .status-text {

@@ -1,10 +1,52 @@
 const API_BASE = "";
 let chatHistory = [];
+let currentSessionId = localStorage.getItem("skillpack_session_id") || null;
+let tunnelPollTimer = null;
+let healthPollTimer = null;
+let slackChannelsCache = [];
 
 // Initialize
 async function init() {
-  await loadConfig();
+  ensureSessionId();
   setupEventListeners();
+  await Promise.all([
+    loadConfig(),
+    loadSlackConfig(),
+    loadSlackChannels(),
+    loadCurrentSlackBinding(),
+    loadTunnelStatus(),
+    loadSlackHealth(),
+  ]);
+  startTunnelPolling();
+  startHealthPolling();
+}
+
+function ensureSessionId() {
+  if (currentSessionId) {
+    renderSessionId();
+    return currentSessionId;
+  }
+
+  currentSessionId = crypto.randomUUID();
+  localStorage.setItem("skillpack_session_id", currentSessionId);
+  renderSessionId();
+  return currentSessionId;
+}
+
+function renderSessionId() {
+  const el = document.getElementById("session-id-text");
+  if (!el) {
+    return;
+  }
+
+  if (!currentSessionId) {
+    el.textContent = "Session ID unavailable";
+    el.className = "status-text error";
+    return;
+  }
+
+  el.textContent = `SID: ${currentSessionId}`;
+  el.className = "status-text";
 }
 
 async function loadConfig() {
@@ -63,6 +105,41 @@ async function loadConfig() {
   }
 }
 
+async function loadSlackConfig() {
+  const status = document.getElementById("slack-status");
+  const eventsPathInput = document.getElementById("slack-events-path-input");
+
+  if (!status || !eventsPathInput) {
+    return;
+  }
+
+  try {
+    const res = await fetch(API_BASE + "/api/slack/config");
+    if (!res.ok) {
+      throw new Error("Failed to load Slack config");
+    }
+
+    const config = await res.json();
+    eventsPathInput.value = config.eventsPath || "/api/slack/events";
+
+    const useThreadInput = document.getElementById("slack-use-thread-input");
+    if (useThreadInput) {
+      useThreadInput.checked = !!config.useThread;
+    }
+
+    if (config.hasBotToken && config.hasSigningSecret) {
+      status.textContent = "Slack configured";
+      status.className = "status-text success";
+    } else {
+      status.textContent = "Slack not configured";
+      status.className = "status-text";
+    }
+  } catch (err) {
+    status.textContent = "Slack config unavailable";
+    status.className = "status-text error";
+  }
+}
+
 function showWelcome(config) {
   const welcomeContent = document.getElementById("welcome-content");
 
@@ -98,9 +175,21 @@ function setupEventListeners() {
   // Send button
   document.getElementById("send-btn").addEventListener("click", sendMessage);
 
-  // Send on Enter
-  document.getElementById("user-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+  // CJK IME composition tracking to prevent Enter from double-sending
+  const userInput = document.getElementById("user-input");
+  let imeComposing = false;
+  userInput.addEventListener("compositionstart", () => {
+    imeComposing = true;
+  });
+  userInput.addEventListener("compositionend", () => {
+    // Delay clearing — the Enter keydown that ends composition fires BEFORE
+    // compositionend in some browsers, so we swallow it with this timeout
+    setTimeout(() => { imeComposing = false; }, 200);
+  });
+
+  // Send on Enter (blocked during IME composition)
+  userInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !imeComposing && !e.isComposing) {
       e.preventDefault();
       sendMessage();
     }
@@ -114,6 +203,56 @@ function setupEventListeners() {
 
   // Save API key
   document.getElementById("save-key-btn").addEventListener("click", saveApiKey);
+
+  const saveSlackBtn = document.getElementById("save-slack-btn");
+  if (saveSlackBtn) {
+    saveSlackBtn.addEventListener("click", saveSlackConfig);
+  }
+
+  const startTunnelBtn = document.getElementById("start-tunnel-btn");
+  if (startTunnelBtn) {
+    startTunnelBtn.addEventListener("click", startTunnel);
+  }
+
+  const stopTunnelBtn = document.getElementById("stop-tunnel-btn");
+  if (stopTunnelBtn) {
+    stopTunnelBtn.addEventListener("click", stopTunnel);
+  }
+
+  const copyCallbackBtn = document.getElementById("copy-callback-btn");
+  if (copyCallbackBtn) {
+    copyCallbackBtn.addEventListener("click", copyCallbackUrl);
+  }
+
+  const tunnelProviderSelect = document.getElementById("tunnel-provider-select");
+  if (tunnelProviderSelect) {
+    tunnelProviderSelect.addEventListener("change", () => loadTunnelStatus());
+  }
+
+  const refreshHealthBtn = document.getElementById("refresh-health-btn");
+  if (refreshHealthBtn) {
+    refreshHealthBtn.addEventListener("click", () => loadSlackHealth(true));
+  }
+
+  const refreshChannelsBtn = document.getElementById("refresh-channels-btn");
+  if (refreshChannelsBtn) {
+    refreshChannelsBtn.addEventListener("click", () => loadSlackChannels(true));
+  }
+
+  const bindSessionBtn = document.getElementById("bind-session-btn");
+  if (bindSessionBtn) {
+    bindSessionBtn.addEventListener("click", bindCurrentSession);
+  }
+
+  const copySessionIdBtn = document.getElementById("copy-session-id-btn");
+  if (copySessionIdBtn) {
+    copySessionIdBtn.addEventListener("click", copySessionId);
+  }
+
+  const unbindSessionBtn = document.getElementById("unbind-session-btn");
+  if (unbindSessionBtn) {
+    unbindSessionBtn.addEventListener("click", unbindCurrentSession);
+  }
 
   // Prompt click
   const welcomeContent = document.getElementById("welcome-content");
@@ -136,6 +275,503 @@ function setupEventListeners() {
           }
         });
     });
+  }
+}
+
+function renderHealthItem(label, ok, extra = "") {
+  const icon = ok ? "✅" : "❌";
+  const suffix = extra ? ` - ${extra}` : "";
+  return `${icon} ${label}${suffix}`;
+}
+
+function setSlackBindingStatus(text, cls = "") {
+  const statusEl = document.getElementById("slack-binding-status");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = text;
+  statusEl.className = cls ? `status-text ${cls}` : "status-text";
+}
+
+function renderSlackChannels(channels = []) {
+  const select = document.getElementById("slack-channel-select");
+  if (!select) {
+    return;
+  }
+
+  slackChannelsCache = channels;
+
+  const previous = select.value;
+  select.innerHTML = "";
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = channels.length
+    ? "Select a Slack channel..."
+    : "No channels available";
+  select.appendChild(placeholder);
+
+  channels.forEach((ch) => {
+    const option = document.createElement("option");
+    option.value = ch.id;
+    option.textContent = `#${ch.name}${ch.isPrivate ? " (private)" : ""}`;
+    select.appendChild(option);
+  });
+
+  if (previous && channels.some((c) => c.id === previous)) {
+    select.value = previous;
+  }
+}
+
+async function loadSlackChannels(force = false) {
+  try {
+    setSlackBindingStatus(force ? "Refreshing channels..." : "Loading channels...");
+    const res = await fetch(API_BASE + "/api/slack/channels");
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to load channels");
+    }
+
+    const channels = Array.isArray(data.channels) ? data.channels : [];
+    renderSlackChannels(channels);
+    setSlackBindingStatus(
+      channels.length
+        ? `Loaded ${channels.length} channel(s)`
+        : "No channels found. Invite the bot and check scopes.",
+      channels.length ? "success" : "",
+    );
+  } catch (err) {
+    renderSlackChannels([]);
+    setSlackBindingStatus(
+      `Channels unavailable: ${err.message || "error"}`,
+      "error",
+    );
+  }
+}
+
+async function copySessionId() {
+  const sid = ensureSessionId();
+  try {
+    await navigator.clipboard.writeText(sid);
+    setSlackBindingStatus("Session ID copied", "success");
+  } catch (_err) {
+    setSlackBindingStatus("Copy failed. Please copy SID manually.", "error");
+  }
+}
+
+function renderCurrentSlackBinding(mapping) {
+  const currentEl = document.getElementById("slack-current-binding");
+  const linkEl = document.getElementById("slack-deep-link");
+  if (!currentEl) {
+    return;
+  }
+
+  if (linkEl) {
+    linkEl.innerHTML = "";
+    linkEl.className = "status-text";
+  }
+
+  if (!mapping) {
+    currentEl.textContent = "Current session not bound";
+    currentEl.className = "status-text";
+    if (linkEl) {
+      linkEl.textContent = "No Slack thread link";
+    }
+    return;
+  }
+
+  const channelMeta = slackChannelsCache.find((c) => c.id === mapping.channelId);
+  const channelLabel = channelMeta
+    ? `#${channelMeta.name}${channelMeta.isPrivate ? " (private)" : ""}`
+    : mapping.channelId;
+  const threadShort = String(mapping.threadTs || "").slice(0, 10);
+  currentEl.textContent = `Bound: ${channelLabel} / thread ${threadShort}...`;
+  currentEl.className = "status-text success";
+
+  if (linkEl) {
+    if (mapping.permalink) {
+      linkEl.innerHTML = `<a href="${escapeHtml(mapping.permalink)}" target="_blank" rel="noopener noreferrer">Open Slack thread</a>`;
+      linkEl.className = "status-text success";
+    } else {
+      linkEl.textContent = "Slack thread link unavailable";
+      linkEl.className = "status-text";
+    }
+  }
+}
+
+async function loadCurrentSlackBinding() {
+  const sessionId = ensureSessionId();
+
+  try {
+    const res = await fetch(
+      API_BASE + `/api/slack/mappings?sessionId=${encodeURIComponent(sessionId)}`,
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to load mapping");
+    }
+
+    const data = await res.json();
+    const mapping = Array.isArray(data.mappings) ? data.mappings[0] : null;
+    renderCurrentSlackBinding(mapping || null);
+  } catch (_err) {
+    renderCurrentSlackBinding(null);
+  }
+}
+
+async function bindCurrentSession() {
+  const sessionId = ensureSessionId();
+  const channelSelect = document.getElementById("slack-channel-select");
+  const channelIdInput = document.getElementById("slack-channel-id-input");
+
+  const channelId =
+    (channelSelect && channelSelect.value) ||
+    (channelIdInput && channelIdInput.value.trim()) ||
+    "";
+
+  if (!channelId) {
+    setSlackBindingStatus("Select a channel or enter a channel ID", "error");
+    return;
+  }
+
+  try {
+    setSlackBindingStatus("Binding current session...");
+
+    const res = await fetch(API_BASE + "/api/slack/bind-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        channelId,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Bind failed");
+    }
+
+    setSlackBindingStatus("Session bound successfully", "success");
+    renderCurrentSlackBinding(data.mapping || null);
+  } catch (err) {
+    setSlackBindingStatus(`Bind failed: ${err.message || "error"}`, "error");
+  }
+}
+
+async function unbindCurrentSession() {
+  const sessionId = ensureSessionId();
+  const channelSelect = document.getElementById("slack-channel-select");
+
+  try {
+    setSlackBindingStatus("Unbinding current session...");
+    const res = await fetch(API_BASE + "/api/slack/unbind-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Unbind failed");
+    }
+
+    renderCurrentSlackBinding(null);
+    if (channelSelect) {
+      channelSelect.value = "";
+    }
+    setSlackBindingStatus(
+      data.removed
+        ? "Session unbound. Select a channel to bind again."
+        : "No existing binding. Select a channel to bind.",
+      "success",
+    );
+  } catch (err) {
+    setSlackBindingStatus(`Unbind failed: ${err.message || "error"}`, "error");
+  }
+}
+
+function renderSlackHealth(health) {
+  const summaryEl = document.getElementById("slack-health-summary");
+  const detailsEl = document.getElementById("slack-health-details");
+
+  if (!summaryEl || !detailsEl) {
+    return;
+  }
+
+  if (!health || !health.checks) {
+    summaryEl.textContent = "Health unavailable";
+    summaryEl.className = "status-text error";
+    detailsEl.innerHTML = "";
+    return;
+  }
+
+  summaryEl.textContent = health.ok
+    ? "Slack integration healthy"
+    : "Slack integration not ready";
+  summaryEl.className = health.ok ? "status-text success" : "status-text error";
+
+  const checks = health.checks;
+  const lines = [
+    renderHealthItem("API key", checks.apiKeyConfigured),
+    renderHealthItem("Slack bot token", checks.botTokenConfigured),
+    renderHealthItem("Slack signing secret", checks.signingSecretConfigured),
+    renderHealthItem("Tunnel", checks.tunnelRunning, checks.callbackUrl || ""),
+    renderHealthItem("Slack auth.test", checks.slackAuthOk, checks.slackTeam || checks.error || ""),
+  ];
+
+  detailsEl.innerHTML = lines.map((l) => `<div>${l}</div>`).join("");
+}
+
+async function loadSlackHealth(force = false) {
+  try {
+    const url = force
+      ? API_BASE + "/api/slack/health?refresh=1"
+      : API_BASE + "/api/slack/health";
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error("Failed to load health");
+    }
+
+    const health = await res.json();
+    renderSlackHealth(health);
+  } catch (_err) {
+    renderSlackHealth(null);
+  }
+}
+
+function renderTunnelStatus(status) {
+  const statusEl = document.getElementById("tunnel-status");
+  const urlEl = document.getElementById("tunnel-url");
+  const callbackEl = document.getElementById("tunnel-callback-url");
+  const providerSelect = document.getElementById("tunnel-provider-select");
+  const tunnelNameInput = document.getElementById("tunnel-name-input");
+  const portInput = document.getElementById("tunnel-port-input");
+  const startBtn = document.getElementById("start-tunnel-btn");
+  const stopBtn = document.getElementById("stop-tunnel-btn");
+
+  if (!statusEl || !urlEl || !callbackEl) {
+    return;
+  }
+
+  if (providerSelect && status.provider) {
+    providerSelect.value = status.provider;
+  }
+  if (tunnelNameInput && status.tunnelName) {
+    tunnelNameInput.value = status.tunnelName;
+  }
+  if (portInput && status.port) {
+    portInput.value = String(status.port);
+  } else if (portInput && !portInput.value) {
+    portInput.value = window.location.port || "26313";
+  }
+
+  const providerName = providerSelect ? providerSelect.value : "cloudflared";
+  const isAvailable = !!status.available?.[providerName];
+
+  if (!isAvailable) {
+    statusEl.textContent = `${providerName} not installed`;
+    statusEl.className = "status-text error";
+  } else if (status.status === "running") {
+    statusEl.textContent = `Tunnel running (${status.provider})`;
+    statusEl.className = "status-text success";
+  } else if (status.status === "starting") {
+    statusEl.textContent = `Starting ${status.provider}...`;
+    statusEl.className = "status-text";
+  } else if (status.status === "error") {
+    statusEl.textContent = status.lastError || "Tunnel error";
+    statusEl.className = "status-text error";
+  } else {
+    statusEl.textContent = "Tunnel stopped";
+    statusEl.className = "status-text";
+  }
+
+  urlEl.textContent = status.publicUrl ? status.publicUrl : "";
+  callbackEl.textContent = status.callbackUrl
+    ? `Slack callback: ${status.callbackUrl}`
+    : "";
+
+  if (startBtn) {
+    const isBusy = status.status === "starting" || status.status === "running";
+    startBtn.disabled = !isAvailable || isBusy;
+    startBtn.textContent = status.status === "running" ? "Running" : "Start";
+  }
+  if (stopBtn) {
+    stopBtn.disabled = status.status !== "running" && status.status !== "starting";
+  }
+}
+
+async function loadTunnelStatus() {
+  try {
+    const res = await fetch(API_BASE + "/api/tunnel/status");
+    if (!res.ok) {
+      throw new Error("Failed to load tunnel status");
+    }
+
+    const status = await res.json();
+    renderTunnelStatus(status);
+  } catch (_err) {
+    const statusEl = document.getElementById("tunnel-status");
+    if (statusEl) {
+      statusEl.textContent = "Tunnel status unavailable";
+      statusEl.className = "status-text error";
+    }
+  }
+}
+
+function startTunnelPolling() {
+  if (tunnelPollTimer) {
+    clearInterval(tunnelPollTimer);
+  }
+
+  tunnelPollTimer = setInterval(() => {
+    loadTunnelStatus();
+  }, 2000);
+}
+
+function startHealthPolling() {
+  if (healthPollTimer) {
+    clearInterval(healthPollTimer);
+  }
+
+  healthPollTimer = setInterval(() => {
+    loadSlackHealth();
+  }, 5000);
+}
+
+async function startTunnel() {
+  const providerSelect = document.getElementById("tunnel-provider-select");
+  const tunnelNameInput = document.getElementById("tunnel-name-input");
+  const portInput = document.getElementById("tunnel-port-input");
+
+  const provider = providerSelect ? providerSelect.value : "cloudflared";
+  const tunnelName = tunnelNameInput ? tunnelNameInput.value.trim() : "";
+  const port = Number(portInput?.value || window.location.port || 26313);
+
+  try {
+    const res = await fetch(API_BASE + "/api/tunnel/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, port, tunnelName }),
+    });
+    const status = await res.json();
+    renderTunnelStatus(status);
+    loadSlackHealth();
+  } catch (_err) {
+    const statusEl = document.getElementById("tunnel-status");
+    if (statusEl) {
+      statusEl.textContent = "Failed to start tunnel";
+      statusEl.className = "status-text error";
+    }
+  }
+}
+
+async function stopTunnel() {
+  try {
+    const res = await fetch(API_BASE + "/api/tunnel/stop", {
+      method: "POST",
+    });
+    const status = await res.json();
+    renderTunnelStatus(status);
+    loadSlackHealth();
+  } catch (_err) {
+    const statusEl = document.getElementById("tunnel-status");
+    if (statusEl) {
+      statusEl.textContent = "Failed to stop tunnel";
+      statusEl.className = "status-text error";
+    }
+  }
+}
+
+async function copyCallbackUrl() {
+  const callbackEl = document.getElementById("tunnel-callback-url");
+  if (!callbackEl || !callbackEl.textContent) {
+    return;
+  }
+
+  const prefix = "Slack callback: ";
+  const callbackUrl = callbackEl.textContent.startsWith(prefix)
+    ? callbackEl.textContent.slice(prefix.length)
+    : callbackEl.textContent;
+
+  if (!callbackUrl) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(callbackUrl);
+    const statusEl = document.getElementById("tunnel-status");
+    if (statusEl) {
+      statusEl.textContent = "Callback URL copied";
+      statusEl.className = "status-text success";
+    }
+  } catch (_err) {
+    const statusEl = document.getElementById("tunnel-status");
+    if (statusEl) {
+      statusEl.textContent = "Copy failed";
+      statusEl.className = "status-text error";
+    }
+  }
+}
+
+async function saveSlackConfig() {
+  const botTokenInput = document.getElementById("slack-bot-token-input");
+  const signingSecretInput = document.getElementById(
+    "slack-signing-secret-input",
+  );
+  const appTokenInput = document.getElementById("slack-app-token-input");
+  const eventsPathInput = document.getElementById("slack-events-path-input");
+  const status = document.getElementById("slack-status");
+
+  if (!status || !botTokenInput || !signingSecretInput || !eventsPathInput) {
+    return;
+  }
+
+  const useThreadInput = document.getElementById("slack-use-thread-input");
+  const payload = {
+    botToken: botTokenInput.value.trim(),
+    signingSecret: signingSecretInput.value.trim(),
+    appToken: appTokenInput ? appTokenInput.value.trim() : "",
+    eventsPath: eventsPathInput.value.trim() || "/api/slack/events",
+    useThread: useThreadInput ? useThreadInput.checked : false,
+  };
+
+  if (!payload.botToken || !payload.signingSecret) {
+    status.textContent = "Bot token and signing secret are required";
+    status.className = "status-text error";
+    return;
+  }
+
+  try {
+    const res = await fetch(API_BASE + "/api/slack/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error("Save failed");
+    }
+
+    const saved = await res.json();
+    status.textContent = "Slack settings saved";
+    status.className = "status-text success";
+
+    if (saved.eventsPath && eventsPathInput.value !== saved.eventsPath) {
+      eventsPathInput.value = saved.eventsPath;
+    }
+
+    loadTunnelStatus();
+    loadSlackHealth(true);
+    loadSlackChannels(true);
+    loadCurrentSlackBinding();
+
+    botTokenInput.value = "";
+    signingSecretInput.value = "";
+    if (appTokenInput) appTokenInput.value = "";
+  } catch (err) {
+    status.textContent = "Save failed";
+    status.className = "status-text error";
   }
 }
 
@@ -244,7 +880,11 @@ async function getOrCreateWs() {
     const provider = providerSelect ? providerSelect.value : "openai";
 
     // URLSearchParams would be cleaner if more query params are added later
-    const wsUrl = `${protocol}//${window.location.host}${API_BASE}/api/chat?provider=${provider}`;
+    const qs = new URLSearchParams({ provider });
+    if (currentSessionId) {
+      qs.set("sessionId", currentSessionId);
+    }
+    const wsUrl = `${protocol}//${window.location.host}${API_BASE}/api/chat?${qs.toString()}`;
 
     ws = new WebSocket(wsUrl);
 
@@ -259,8 +899,17 @@ async function getOrCreateWs() {
         const parsed = JSON.parse(event.data);
         if (parsed.error) {
           handleError(parsed.error);
+        } else if (parsed.type === "session_info" && parsed.sessionId) {
+          currentSessionId = parsed.sessionId;
+          localStorage.setItem("skillpack_session_id", currentSessionId);
+          renderSessionId();
+          loadCurrentSlackBinding();
         } else if (parsed.done) {
           handleDone();
+        } else if (parsed.type === "slack_user_message") {
+          handleSlackUserMessage(parsed);
+        } else if (parsed.type === "slack_assistant_response") {
+          handleSlackAssistantResponse(parsed);
         } else if (parsed.type) {
           handleAgentEvent(parsed);
         }
@@ -274,6 +923,31 @@ async function getOrCreateWs() {
       enableInput();
     };
   });
+}
+
+function handleSlackUserMessage(event) {
+  const chatArea = document.getElementById("chat-area");
+  if (chatArea.classList.contains("mode-welcome")) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
+  }
+
+  appendMessage("user", "[Slack] " + (event.text || ""));
+  chatHistory.push({ role: "user", content: event.text || "" });
+}
+
+function handleSlackAssistantResponse(event) {
+  const chatArea = document.getElementById("chat-area");
+  if (chatArea.classList.contains("mode-welcome")) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
+  }
+
+  const msg = appendMessage("assistant", event.text || "");
+  if (event.isError) {
+    msg.classList.add("error");
+  }
+  chatHistory.push({ role: "assistant", content: event.text || "" });
 }
 
 function handleError(errorMsg) {
@@ -322,20 +996,67 @@ function hideLoadingIndicator() {
   }
 }
 
-function handleAgentEvent(event) {
-  if (!currentAssistantMsg) return;
+function isAssistantPlaceholderEmpty(node) {
+  if (!node) {
+    return true;
+  }
 
+  const nonLoadingChildren = Array.from(node.children).filter(
+    (c) => !c.classList.contains("loading-indicator"),
+  );
+  return nonLoadingChildren.length === 0;
+}
+
+function ensureAssistantMessageForStream() {
+  if (!currentAssistantMsg) {
+    currentAssistantMsg = appendMessage("assistant", "");
+  }
+  return currentAssistantMsg;
+}
+
+function maybeAppendRemoteUserMessage(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return;
+  }
+
+  const messages = document.getElementById("messages");
+  const allUserMsgs = messages?.querySelectorAll(".message.user");
+  const lastUserMsg = allUserMsgs?.[allUserMsgs.length - 1];
+  const lastUserText = (lastUserMsg?.querySelector(".content")?.textContent || "").trim();
+
+  if (lastUserText === normalized) {
+    return;
+  }
+
+  appendMessage("user", normalized);
+}
+
+function handleAgentEvent(event) {
   if (
     ["text_delta", "thinking_delta", "tool_start", "tool_end"].includes(
       event.type,
     )
   ) {
+    ensureAssistantMessageForStream();
     hideLoadingIndicator();
   }
 
   switch (event.type) {
     case "agent_start":
+      showLoadingIndicator();
+      break;
+
     case "message_start":
+      if (event.role === "user") {
+        maybeAppendRemoteUserMessage(event.text);
+        break;
+      }
+
+      if (event.role === "assistant") {
+        ensureAssistantMessageForStream();
+      }
+
       showLoadingIndicator();
       break;
 
@@ -501,22 +1222,22 @@ function getOrCreateThinkingBlock() {
 }
 
 function getOrCreateTextBlock() {
-  const children = Array.from(currentAssistantMsg.children).filter(
-    (c) => !c.classList.contains("loading-indicator"),
-  );
-  let lastChild = children[children.length - 1];
+  // Always reuse the existing text-block for this assistant message.
+  // Only create a new one after a real tool card (not thinking).
+  const existing = currentAssistantMsg.querySelector(".text-block");
+  if (existing) {
+    return existing;
+  }
 
-  if (!lastChild || !lastChild.classList.contains("text-block")) {
-    lastChild = document.createElement("div");
-    lastChild.className = "content text-block markdown-body";
-    lastChild.dataset.mdContent = "";
+  const lastChild = document.createElement("div");
+  lastChild.className = "content text-block markdown-body";
+  lastChild.dataset.mdContent = "";
 
-    const indicator = currentAssistantMsg.querySelector(".loading-indicator");
-    if (indicator) {
-      currentAssistantMsg.insertBefore(lastChild, indicator);
-    } else {
-      currentAssistantMsg.appendChild(lastChild);
-    }
+  const indicator = currentAssistantMsg.querySelector(".loading-indicator");
+  if (indicator) {
+    currentAssistantMsg.insertBefore(lastChild, indicator);
+  } else {
+    currentAssistantMsg.appendChild(lastChild);
   }
   return lastChild;
 }
@@ -528,9 +1249,14 @@ function enableInput() {
 }
 
 async function sendMessage() {
+  const sendBtn = document.getElementById("send-btn");
+  if (sendBtn && sendBtn.disabled) return;
+
   const input = document.getElementById("user-input");
   const text = input.value.trim();
   if (!text) return;
+
+  if (sendBtn) sendBtn.disabled = true;
 
   const chatArea = document.getElementById("chat-area");
   if (chatArea.classList.contains("mode-welcome")) {
@@ -545,9 +1271,7 @@ async function sendMessage() {
   appendMessage("user", text);
   chatHistory.push({ role: "user", content: text });
 
-  // Disable input while the agent is responding
-  const sendBtn = document.getElementById("send-btn");
-  sendBtn.disabled = true;
+  // sendBtn already disabled at top of function
 
   // Create an assistant message placeholder
   currentAssistantMsg = appendMessage("assistant", "");

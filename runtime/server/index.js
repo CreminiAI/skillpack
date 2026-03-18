@@ -15,7 +15,13 @@ const webDir = fs.existsSync(path.join(rootDir, "web"))
   : path.join(__dirname, "..", "web");
 
 const app = express();
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = Buffer.from(buf);
+    },
+  }),
+);
 
 // Static file serving
 app.use(express.static(webDir));
