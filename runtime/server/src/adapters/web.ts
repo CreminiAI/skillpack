@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
+import { configManager } from "../config.js";
 
 import type {
   PlatformAdapter,
@@ -46,43 +47,23 @@ export class WebAdapter implements PlatformAdapter {
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
 
-    // Read from data/config.json first
-    let apiKey = "";
-    let currentProvider = "openai";
-
-    const configPath = path.join(rootDir, "data", "config.json");
-    if (fs.existsSync(configPath)) {
-      try {
-        const dataConfig = JSON.parse(
-          fs.readFileSync(configPath, "utf-8"),
-        );
-        if (dataConfig.apiKey) apiKey = dataConfig.apiKey;
-        if (dataConfig.provider) currentProvider = dataConfig.provider;
-      } catch {
-        // ignore malformed config
-      }
-    }
-
-    // Environment variables override config file
-    if (process.env.OPENAI_API_KEY) {
-      apiKey = process.env.OPENAI_API_KEY;
-      currentProvider = "openai";
-    } else if (process.env.ANTHROPIC_API_KEY) {
-      apiKey = process.env.ANTHROPIC_API_KEY;
-      currentProvider = "anthropic";
-    }
+    const currentConf = configManager.getConfig();
+    let apiKey = currentConf.apiKey || "";
+    let currentProvider = currentConf.provider || "openai";
 
     // -- HTTP API routes ----------------------------------------------------
 
     app.get("/api/config", (_req, res) => {
       const config = getPackConfig(rootDir);
+      const conf = configManager.getConfig();
       res.json({
         name: config.name,
         description: config.description,
         prompts: config.prompts || [],
         skills: config.skills || [],
-        hasApiKey: !!apiKey,
-        provider: currentProvider,
+        hasApiKey: !!conf.apiKey,
+        provider: conf.provider || "openai",
+        adapters: conf.adapters || {}
       });
     });
 
@@ -91,15 +72,30 @@ export class WebAdapter implements PlatformAdapter {
       res.json(config.skills || []);
     });
 
-    app.post("/api/config/key", (req, res) => {
-      const { key, provider } = req.body;
-      if (!key) {
-        res.status(400).json({ error: "API key is required" });
-        return;
+    app.post("/api/config/update", (req, res) => {
+      const { key, provider, adapters } = req.body;
+      const updates: any = {};
+      
+      if (key !== undefined) {
+        updates.apiKey = key;
+        apiKey = key;
       }
-      apiKey = key;
-      if (provider) currentProvider = provider;
-      res.json({ success: true, provider: currentProvider });
+      if (provider !== undefined) {
+        updates.provider = provider;
+        currentProvider = provider;
+      }
+      if (adapters !== undefined) {
+        updates.adapters = adapters;
+      }
+
+      configManager.save(rootDir, updates);
+
+      // Note: PackAgent instances need to be recreated or have their keys updated dynamically, 
+      // but if the design is to restart to take effect or if we only need it persisted, this covers the save.
+      // Depending on agent implementation, we might need agent.updateConfig({ apiKey: key, provider: currentProvider })
+
+      const newConf = configManager.getConfig();
+      res.json({ success: true, provider: newConf.provider, adapters: newConf.adapters });
     });
 
     app.delete("/api/chat", (_req, res) => {

@@ -7,6 +7,7 @@ import { exec } from "node:child_process";
 
 import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
+import { configManager } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,43 +25,12 @@ const rootDir =
 // Read configuration: data/config.json first, env vars override
 // ---------------------------------------------------------------------------
 
-interface DataConfig {
-  apiKey?: string;
-  provider?: string;
-  adapters?: {
-    telegram?: { token: string };
-    slack?: {
-      botToken?: string;
-      appToken?: string;
-    };
-    [key: string]: unknown;
-  };
-}
-
-let dataConfig: DataConfig = {};
-const configPath = path.join(rootDir, "data", "config.json");
-if (fs.existsSync(configPath)) {
-  try {
-    dataConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    console.log("  Loaded config from data/config.json");
-  } catch (err) {
-    console.warn("  Warning: Failed to parse data/config.json:", err);
-  }
-}
-
-let apiKey = dataConfig.apiKey || "";
-let provider = dataConfig.provider || "openai";
-
-// Environment variables override config file
-if (process.env.OPENAI_API_KEY) {
-  apiKey = process.env.OPENAI_API_KEY;
-  provider = "openai";
-} else if (process.env.ANTHROPIC_API_KEY) {
-  apiKey = process.env.ANTHROPIC_API_KEY;
-  provider = "anthropic";
-}
+const dataConfig = configManager.load(rootDir);
+const apiKey = dataConfig.apiKey || "";
+const provider = dataConfig.provider || "openai";
 
 const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
+
 
 // ---------------------------------------------------------------------------
 // Create Express app & HTTP server

@@ -76,7 +76,11 @@ interface AdapterContext {
 ```typescript
 interface IPackAgent {
   /** 流式处理消息，通过 onEvent 回调实时吐出 AgentEvent */
-  handleMessage(channelId: string, text: string, onEvent: (e: AgentEvent) => void): Promise<HandleResult>;
+  handleMessage(
+    channelId: string,
+    text: string,
+    onEvent: (e: AgentEvent) => void,
+  ): Promise<HandleResult>;
 
   /** 处理统一命令（/clear /restart /shutdown） */
   handleCommand(command: BotCommand, channelId: string): Promise<CommandResult>;
@@ -125,8 +129,8 @@ type AgentEvent =
 }
 ```
 
-- `data/config.json` 先读取
-- 环境变量 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 后读取并覆盖（同时强制对应 provider）
+- `data/config.json` 先读取，优先级最高
+- 如果 `data/config.json` 未设置或读取失败，则读取环境变量 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`
 - **Web Adapter 始终启用**
 - Telegram 仅在配置了 `adapters.telegram.token` 时动态 import 并启动
 - Slack 仅在同时配置了 `adapters.slack.botToken` 与 `adapters.slack.appToken` 时动态 import 并启动；缺一则记录 warning 并跳过
@@ -135,20 +139,20 @@ type AgentEvent =
 
 所有 Adapter 均支持以下命令（消息文本以 `/` 开头触发），由 `PackAgent.handleCommand()` 统一处理：
 
-| 命令 | 行为 |
-|---|---|
-| `/clear` | 销毁当前 channel 的 AgentSession，下次消息重新创建 |
-| `/restart` | 延迟 500ms 后 `process.exit(0)`，由进程管理器负责重启 |
-| `/shutdown` | 延迟 500ms 后 `process.exit(0)` |
+| 命令        | 行为                                                  |
+| ----------- | ----------------------------------------------------- |
+| `/clear`    | 销毁当前 channel 的 AgentSession，下次消息重新创建    |
+| `/restart`  | 延迟 500ms 后 `process.exit(0)`，由进程管理器负责重启 |
+| `/shutdown` | 延迟 500ms 后 `process.exit(0)`                       |
 
 > `/restart` 与 `/shutdown` 在代码层面行为相同，均为 `process.exit(0)`；语义区分由外部进程管理器（如 `pm2`）决定。
 
 Slack 额外暴露 namespaced slash commands：
 
-| Slack 命令 | 映射到 |
-|---|---|
-| `/skillpack-clear` | `clear` |
-| `/skillpack-restart` | `restart` |
+| Slack 命令            | 映射到     |
+| --------------------- | ---------- |
+| `/skillpack-clear`    | `clear`    |
+| `/skillpack-restart`  | `restart`  |
 | `/skillpack-shutdown` | `shutdown` |
 
 > Slack 限制 slash command 不能在消息线程内直接触发，因此频道内会优先作用于该频道最近一个活跃的 Skillpack 线程；若没有活跃线程，会提示用户先 `@bot` 发起线程，或直接在对应线程里发送 `@bot /clear` 这类文本命令。
@@ -162,15 +166,15 @@ Slack 额外暴露 namespaced slash commands：
 
 ### HTTP API
 
-| 端点 | 方法 | 作用 |
-|---|---|---|
-| `/api/config` | GET | pack 名称、描述、prompts、skills、provider、是否有 API Key |
-| `/api/skills` | GET | skills 列表（读 `skillpack.json`） |
-| `/api/config/key` | POST | 在内存中覆盖 API Key 和 provider（重启失效） |
-| `/api/chat` | WebSocket | 聊天主通道 |
-| `/api/chat` | DELETE | 占位，返回 `{ success: true }` |
-| `/api/sessions` | GET | 会话列表（预留，当前返回空数组） |
-| `/api/sessions/:id` | GET | 恢复历史会话（预留，返回 501） |
+| 端点                | 方法      | 作用                                                                  |
+| ------------------- | --------- | --------------------------------------------------------------------- |
+| `/api/config`       | GET       | pack 名称、描述、prompts、skills、provider、是否有 API Key            |
+| `/api/skills`       | GET       | skills 列表（读 `skillpack.json`）                                    |
+| `/api/config/key`   | POST      | 保存并在内存中更新 API Key 和 provider（持久化到 `data/config.json`） |
+| `/api/chat`         | WebSocket | 聊天主通道                                                            |
+| `/api/chat`         | DELETE    | 占位，返回 `{ success: true }`                                        |
+| `/api/sessions`     | GET       | 会话列表（预留，当前返回空数组）                                      |
+| `/api/sessions/:id` | GET       | 恢复历史会话（预留，返回 501）                                        |
 
 ### WebSocket 消息协议
 
@@ -197,7 +201,12 @@ Slack 额外暴露 namespaced slash commands：
 命令执行结果：
 
 ```json
-{ "type": "command_result", "command": "clear", "success": true, "message": "Session cleared." }
+{
+  "type": "command_result",
+  "command": "clear",
+  "success": true,
+  "message": "Session cleared."
+}
 ```
 
 ## TelegramAdapter
