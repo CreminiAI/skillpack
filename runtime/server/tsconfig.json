@@ -9,6 +9,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "declaration": false,
+    "sourceMap": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true
   },
