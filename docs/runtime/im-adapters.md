@@ -145,7 +145,7 @@ type AgentEvent =
 | `/restart`  | 触发 `Lifecycle` 优雅退出，并以退出码 `75` 结束进程   |
 | `/shutdown` | 触发 `Lifecycle` 优雅退出，并以退出码 `64` 结束进程   |
 
-> 建议在 PM2 下运行。PM2 配置 `stop_exit_codes: [64]` 后，会对 `75` 自动拉起，对 `64` 视为显式停机。
+> `start.sh` 中的包裹循环会根据退出码来决定后续行为：`75` 自动重新启动进程，`64` 视为显式停机并退出脚本。
 
 Slack 额外暴露 namespaced slash commands：
 

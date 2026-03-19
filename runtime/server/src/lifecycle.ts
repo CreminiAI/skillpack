@@ -18,7 +18,7 @@ type StopReason = "restart" | "shutdown";
 type ExitFn = (code: number) => never | void;
 
 function detectProcessManager(): ProcessManager {
-  return process.env.SKILLPACK_PROCESS_MANAGER === "pm2" ? "pm2" : "none";
+  return process.env.PACK_ROOT ? "wrapper" : "none";
 }
 
 export class Lifecycle implements LifecycleHandler, LifecycleInfo {
@@ -40,7 +40,7 @@ export class Lifecycle implements LifecycleHandler, LifecycleInfo {
 
   getRuntimeControl(): RuntimeControl {
     return {
-      canManagedRestart: this.processManager === "pm2",
+      canManagedRestart: this.processManager === "wrapper",
       processManager: this.processManager,
     };
   }

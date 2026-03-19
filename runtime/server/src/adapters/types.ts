@@ -16,7 +16,7 @@ export interface CommandResult {
 
 export type LifecycleTrigger = "web" | "telegram" | "slack" | "signal";
 
-export type ProcessManager = "pm2" | "none";
+export type ProcessManager = "wrapper" | "none";
 
 export interface RuntimeControl {
   canManagedRestart: boolean;

@@ -125,14 +125,18 @@ server.once("listening", () => {
   console.log(`\n  Skills Pack Server`);
   console.log(`  Running at ${url}\n`);
 
-  // Open the browser automatically
-  const cmd =
-    process.platform === "darwin"
-      ? `open ${url}`
-      : process.platform === "win32"
-        ? `start ${url}`
-        : `xdg-open ${url}`;
-  exec(cmd, () => {});
+  // Open the browser automatically (only on first run)
+  if (process.env.SKILLPACK_FIRST_RUN === "1") {
+    const cmd =
+      process.platform === "darwin"
+        ? `open ${url}`
+        : process.platform === "win32"
+          ? `start ${url}`
+          : `xdg-open ${url}`;
+    exec(cmd, (err) => {
+      if (err) console.warn(`  Could not open browser: ${err.message}`);
+    });
+  }
 });
 
 function tryListen(port: number) {
