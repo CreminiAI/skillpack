@@ -7,6 +7,9 @@ import {
   DefaultResourceLoader,
 } from "@mariozechner/pi-coding-agent";
 
+import { MemoryManager } from "./memory.js";
+import type { MemoryConfig } from "./memory.js";
+
 import type {
   IPackAgent,
   PackAgentOptions,
@@ -80,9 +83,19 @@ interface ChannelSession {
 export class PackAgent implements IPackAgent {
   private options: PackAgentOptions;
   private channels = new Map<string, ChannelSession>();
+  private memoryManager?: MemoryManager;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
+    if (options.memory?.enabled && options.memory.serverUrl) {
+      this.memoryManager = new MemoryManager({
+        enabled: true,
+        serverUrl: options.memory.serverUrl,
+        maxMemories: options.memory.maxMemories,
+      });
+      // 异步健康检查，不阻塞构造
+      this.memoryManager.healthCheck().catch(() => {});
+    }
   }
 
   /**
@@ -124,6 +137,14 @@ export class PackAgent implements IPackAgent {
 
     const channelSession: ChannelSession = { session, running: false };
     this.channels.set(channelId, channelSession);
+
+    // 为该 channel 创建 OpenViking Session
+    if (this.memoryManager) {
+      this.memoryManager.createSession(channelId).catch((err) => {
+        log("[PackAgent] Failed to create OV session:", err);
+      });
+    }
+
     return channelSession;
   }
 
@@ -136,6 +157,21 @@ export class PackAgent implements IPackAgent {
     cs.running = true;
 
     let turnHadVisibleOutput = false;
+
+    // ── Memory: 检索相关记忆并注入 context ──
+    let memoryContext = "";
+    if (this.memoryManager) {
+      try {
+        memoryContext = await this.memoryManager.retrieveMemories(text);
+        if (memoryContext) {
+          log("[PackAgent] Retrieved memory context, injecting...");
+        }
+      } catch (err) {
+        log("[PackAgent] Memory retrieval failed (non-fatal):", err);
+      }
+      // 同步 user 消息到 OV Session
+      this.memoryManager.syncMessage(channelId, "user", text);
+    }
 
     // Subscribe to agent events and forward to adapter
     const unsubscribe = cs.session.subscribe((event: any) => {
@@ -219,7 +255,11 @@ export class PackAgent implements IPackAgent {
     });
 
     try {
-      await cs.session.prompt(text);
+      // 如果有记忆 context，将其作为前置消息注入
+      const promptText = memoryContext
+        ? `${memoryContext}\n\n---\n\n${text}`
+        : text;
+      await cs.session.prompt(promptText);
 
       const lastMessage = cs.session.state.messages.at(-1);
       const diagnostics = getAssistantDiagnostics(lastMessage);
@@ -248,6 +288,22 @@ export class PackAgent implements IPackAgent {
     } finally {
       cs.running = false;
       unsubscribe();
+
+      // ── Memory: 同步 assistant 回复到 OV Session ──
+      if (this.memoryManager) {
+        const lastMsg = cs.session.state.messages.at(-1);
+        if (lastMsg?.role === "assistant") {
+          const content = Array.isArray(lastMsg.content)
+            ? lastMsg.content
+                .filter((item: any) => item?.type === "text")
+                .map((item: any) => item.text || "")
+                .join("")
+            : "";
+          if (content.trim()) {
+            this.memoryManager.syncMessage(channelId, "assistant", content);
+          }
+        }
+      }
     }
   }
 
@@ -257,6 +313,12 @@ export class PackAgent implements IPackAgent {
   ): Promise<CommandResult> {
     switch (command) {
       case "clear": {
+        // 提交 OV Session 并提取记忆（在 pi session 销毁前）
+        if (this.memoryManager) {
+          await this.memoryManager.commitSession(channelId).catch((err) => {
+            log("[PackAgent] OV commit on clear failed (non-fatal):", err);
+          });
+        }
         const cs = this.channels.get(channelId);
         if (cs) {
           cs.session.dispose();
@@ -294,6 +356,10 @@ export class PackAgent implements IPackAgent {
   }
 
   dispose(channelId: string): void {
+    // 尝试提交 OV Session（fire-and-forget）
+    if (this.memoryManager) {
+      this.memoryManager.disposeSession(channelId).catch(() => {});
+    }
     const cs = this.channels.get(channelId);
     if (cs) {
       cs.session.dispose();

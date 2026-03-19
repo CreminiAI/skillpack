@@ -1,9 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export interface MemoryDataConfig {
+  enabled?: boolean;
+  serverUrl?: string;
+  maxMemories?: number;
+}
+
 export interface DataConfig {
   apiKey?: string;
   provider?: string;
+  memory?: MemoryDataConfig;
   adapters?: {
     telegram?: { token?: string };
     slack?: {

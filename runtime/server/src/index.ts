@@ -58,6 +58,13 @@ const agent = new PackAgent({
   provider,
   modelId,
   lifecycleHandler: lifecycle,
+  memory: dataConfig.memory?.enabled
+    ? {
+        enabled: true,
+        serverUrl: dataConfig.memory.serverUrl || "http://localhost:1933",
+        maxMemories: dataConfig.memory.maxMemories,
+      }
+    : undefined,
 });
 
 // ---------------------------------------------------------------------------

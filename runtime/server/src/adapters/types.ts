@@ -100,6 +100,12 @@ export interface PackAgentOptions {
   provider: string;
   modelId: string;
   lifecycleHandler: LifecycleHandler;
+  /** OpenViking Memory 配置（可选） */
+  memory?: {
+    enabled: boolean;
+    serverUrl: string;
+    maxMemories?: number;
+  };
 }
 
 /**
