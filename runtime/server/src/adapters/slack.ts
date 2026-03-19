@@ -30,6 +30,7 @@ const SLASH_COMMANDS: Record<string, BotCommand> = {
 };
 
 const MAX_MESSAGE_LENGTH = 3500;
+const ACK_REACTION = "eyes";
 
 interface SlackRoute {
   channel: string;
@@ -142,6 +143,8 @@ export class SlackAdapter implements PlatformAdapter {
     const channelId = `slack-dm-${teamId}-${event.channel}`;
     const route: SlackRoute = { channel: event.channel };
 
+    await this.tryAckReaction(client, event);
+
     if (await this.tryHandleInlineCommand(text, channelId, client, route)) {
       return;
     }
@@ -182,6 +185,8 @@ export class SlackAdapter implements PlatformAdapter {
       );
       return;
     }
+
+    await this.tryAckReaction(client, event);
 
     if (await this.tryHandleInlineCommand(text, channelId, client, route)) {
       return;
@@ -434,6 +439,18 @@ export class SlackAdapter implements PlatformAdapter {
         }
         throw err;
       }
+    }
+  }
+
+  private async tryAckReaction(client: any, event: any): Promise<void> {
+    try {
+      await client.reactions.add({
+        channel: event.channel,
+        timestamp: event.ts,
+        name: ACK_REACTION,
+      });
+    } catch (err) {
+      console.error("[Slack] Failed to add ack reaction:", err);
     }
   }
 

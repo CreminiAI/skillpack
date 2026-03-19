@@ -23,6 +23,10 @@ const COMMANDS: Record<string, BotCommand> = {
 };
 
 const MAX_MESSAGE_LENGTH = 4096;
+const ACK_REACTION = {
+  type: "emoji" as const,
+  emoji: "👀" as const,
+};
 
 // ---------------------------------------------------------------------------
 // Markdown → Telegram MarkdownV2 escaping
@@ -103,10 +107,13 @@ export class TelegramAdapter implements PlatformAdapter {
     if (!this.bot || !this.agent) return;
 
     const chatId = msg.chat.id;
+    const messageId = msg.message_id;
     const text = msg.text?.trim();
     if (!text) return;
 
     const channelId = `telegram-${chatId}`;
+
+    await this.tryAckReaction(chatId, messageId);
 
     // --- Command handling ---
     const commandKey = text.split(/\s/)[0].toLowerCase();
@@ -176,6 +183,23 @@ export class TelegramAdapter implements PlatformAdapter {
 
     for (const chunk of chunks) {
       await this.sendWithRetry(chatId, chunk);
+    }
+  }
+
+  /**
+   * React to the incoming message to show the bot has started processing it.
+   */
+  private async tryAckReaction(
+    chatId: number,
+    messageId: number,
+  ): Promise<void> {
+    try {
+      await this.bot?.setMessageReaction(chatId, messageId, {
+        reaction: [ACK_REACTION],
+        is_big: false,
+      });
+    } catch (err) {
+      console.error("[Telegram] Failed to add ack reaction:", err);
     }
   }
 
