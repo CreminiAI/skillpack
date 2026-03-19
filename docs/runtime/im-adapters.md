@@ -215,12 +215,11 @@ Slack 额外暴露 namespaced slash commands：
 - 每个 Telegram Chat ID 对应一个独立的 channel（`telegram-<chatId>`），session 在进程生命周期内持久复用
 - 启动时向 Telegram 注册命令菜单（`/clear`、`/restart`、`/shutdown`）
 - 收到文本消息后，会先给原消息加一个 `👀` reaction，表示已收到并开始处理
-- **只发最终结果**（纯文本），不暴露 `thinking_delta` / `tool_start` / `tool_end` 中间事件
+- **只发最终结果**，不暴露 `thinking_delta` / `tool_start` / `tool_end` 中间事件
+- 发送前会把常见 Markdown 转成 Telegram HTML 子集；若输出里包含 ```` ```md ```` / ```` ```markdown ```` 源码块，会先解包再渲染
 - 消息发送前发送 `typing` 动作作为"思考中"指示器
 - 长消息自动分割（上限 4096 字符），分割优先在段落（`\n\n`）→ 换行（`\n`）→ 空格处断开
 - HTTP 429 自动重试（最多 3 次，等待 `retry_after` 秒）
-
-> **注意**：当前 Telegram 发送纯文本，Markdown 转义函数（`escapeMarkdownV2` / `toTelegramFormat`）已定义但暂未启用，复杂 Markdown 格式化留待后续增强。
 
 ## SlackAdapter
 
@@ -232,7 +231,8 @@ Slack 额外暴露 namespaced slash commands：
 - 过滤 bot/self message、带 subtype 的系统消息、以及未命中的非 mention 消息
 - 发送给 Agent 前移除开头的 bot mention；若 mention 后没有正文，会返回简短提示
 - 收到 DM 或频道 mention 后，会先对原消息加 `:eyes:` reaction，表示已收到并开始处理
-- **只发最终结果**（纯文本），不暴露 `thinking_delta` / `tool_start` / `tool_end` 中间事件
+- **只发最终结果**，不暴露 `thinking_delta` / `tool_start` / `tool_end` 中间事件
+- 发送前会把常见 Markdown 转成 Slack `mrkdwn`；若输出里包含 ```` ```md ```` / ```` ```markdown ```` 源码块，会先解包再渲染
 - 长消息按段落优先分片发送；Slack API 限流时最多自动重试 3 次
 - 线程内文本命令继续支持 `/clear`、`/restart`、`/shutdown`
 

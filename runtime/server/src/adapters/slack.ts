@@ -7,6 +7,7 @@ import type {
   BotCommand,
   IPackAgent,
 } from "./types.js";
+import { formatSlackMessage } from "./markdown.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -421,7 +422,8 @@ export class SlackAdapter implements PlatformAdapter {
       try {
         await client.chat.postMessage({
           channel: route.channel,
-          text,
+          text: formatSlackMessage(text),
+          mrkdwn: true,
           thread_ts: route.threadTs,
           reply_broadcast: false,
         });

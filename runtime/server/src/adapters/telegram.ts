@@ -7,6 +7,7 @@ import type {
   BotCommand,
   IPackAgent,
 } from "./types.js";
+import { formatTelegramMessage } from "./markdown.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -27,32 +28,6 @@ const ACK_REACTION = {
   type: "emoji" as const,
   emoji: "👀" as const,
 };
-
-// ---------------------------------------------------------------------------
-// Markdown → Telegram MarkdownV2 escaping
-// ---------------------------------------------------------------------------
-
-/**
- * Escape special characters for Telegram MarkdownV2.
- * Reference: https://core.telegram.org/bots/api#markdownv2-style
- */
-function escapeMarkdownV2(text: string): string {
-  return text.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
-}
-
-/**
- * Attempt basic conversion from standard markdown to Telegram MarkdownV2.
- * Falls back to plain text on complex formatting.
- */
-function toTelegramFormat(text: string): string {
-  try {
-    // For now, just escape the text for MarkdownV2.
-    // Complex markdown conversion can be enhanced later.
-    return escapeMarkdownV2(text);
-  } catch {
-    return text;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // TelegramAdapter
@@ -178,7 +153,6 @@ export class TelegramAdapter implements PlatformAdapter {
    * Send a message, splitting into chunks if too long.
    */
   private async sendLongMessage(chatId: number, text: string): Promise<void> {
-    // Try to send as plain text first (more reliable than MarkdownV2 for complex content)
     const chunks = this.splitMessage(text);
 
     for (const chunk of chunks) {
@@ -250,7 +224,9 @@ export class TelegramAdapter implements PlatformAdapter {
   ): Promise<void> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        await this.bot!.sendMessage(chatId, text);
+        await this.bot!.sendMessage(chatId, formatTelegramMessage(text), {
+          parse_mode: "HTML",
+        });
         return;
       } catch (err: any) {
         if (
