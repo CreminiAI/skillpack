@@ -17,24 +17,23 @@ Double-click `start.bat` or run:
 start.bat
 ```
 
-After the server starts, your browser opens [http://127.0.0.1:26313](http://127.0.0.1:26313) automatically.
+Both launchers install server dependencies locally if needed, then start the app under the bundled PM2 runtime. After the server starts, your browser opens [http://127.0.0.1:26313](http://127.0.0.1:26313) automatically.
 
 By default, the server only listens on `127.0.0.1` so the API key you enter stays on the local machine and is not exposed to your LAN.
 
 ## Managed Restart with PM2
 
-If you want the web UI and bot commands to support in-app restart, run the server under PM2:
+`start.sh` and `start.bat` already use PM2. If you want to launch it manually, use the local PM2 binary inside `server/node_modules`:
 
 ```bash
-npm install -g pm2
-pm2 start ecosystem.config.cjs
+./server/node_modules/.bin/pm2 startOrRestart ecosystem.config.cjs --update-env
 ```
 
 Behavior:
 
 - `/restart` or the web restart button exits with restart code `75`; PM2 brings the process back up
 - `/shutdown` exits with code `64`; PM2 treats it as a stop and does not auto-restart
-- When started via `start.sh` or `start.bat`, restart is manual only
+- The PM2 app name is derived from `skillpack.json.name`, falling back to the folder name
 
 ## First Use
 

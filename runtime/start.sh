@@ -11,12 +11,15 @@ echo ""
 echo "  Starting ${PACK_NAME}..."
 echo ""
 
-# Install dependencies
-if [ ! -d "server/node_modules" ]; then
+# Install dependencies (including local PM2)
+if [ ! -x "server/node_modules/.bin/pm2" ]; then
   echo "  Installing dependencies..."
   cd server && npm install --omit=dev && cd ..
   echo ""
 fi
 
-# Start the server
-cd server && node dist/index.js
+PM2_BIN="./server/node_modules/.bin/pm2"
+
+echo "  Launching under PM2..."
+echo ""
+"$PM2_BIN" startOrRestart ecosystem.config.cjs --update-env

@@ -5,11 +5,14 @@ echo.
 echo   Starting Skills Pack...
 echo.
 
-if not exist "server\node_modules" (
+if not exist "server\node_modules\.bin\pm2.cmd" (
   echo   Installing dependencies...
   cd server && npm ci --omit=dev && cd ..
   echo.
 )
 
-rem Start the server (port detection and browser launch are handled by server\dist\index.js)
-cd server && node dist/index.js
+set "PM2_BIN=server\node_modules\.bin\pm2.cmd"
+
+echo   Launching under PM2...
+echo.
+"%PM2_BIN%" startOrRestart ecosystem.config.cjs --update-env
