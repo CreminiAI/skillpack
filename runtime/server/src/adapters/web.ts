@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { configManager } from "../config.js";
+import type { DataConfig } from "../config.js";
 
 import type {
   PlatformAdapter,
@@ -31,6 +32,16 @@ function parseCommand(text: string): BotCommand | null {
   return COMMANDS[trimmed] ?? null;
 }
 
+function getRuntimeConfigSignature(config: DataConfig): string {
+  return JSON.stringify({
+    apiKey: config.apiKey || "",
+    provider: config.provider || "openai",
+    telegramToken: config.adapters?.telegram?.token || "",
+    slackBotToken: config.adapters?.slack?.botToken || "",
+    slackAppToken: config.adapters?.slack?.appToken || "",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // WebAdapter
 // ---------------------------------------------------------------------------
@@ -42,7 +53,7 @@ export class WebAdapter implements PlatformAdapter {
   private agent: IPackAgent | null = null;
 
   async start(ctx: AdapterContext): Promise<void> {
-    const { agent, server, app, rootDir } = ctx;
+    const { agent, server, app, rootDir, lifecycle } = ctx;
     this.agent = agent;
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
@@ -63,7 +74,8 @@ export class WebAdapter implements PlatformAdapter {
         skills: config.skills || [],
         hasApiKey: !!conf.apiKey,
         provider: conf.provider || "openai",
-        adapters: conf.adapters || {}
+        adapters: conf.adapters || {},
+        runtimeControl: lifecycle.getRuntimeControl(),
       });
     });
 
@@ -75,6 +87,7 @@ export class WebAdapter implements PlatformAdapter {
     app.post("/api/config/update", (req, res) => {
       const { key, provider, adapters } = req.body;
       const updates: any = {};
+      const beforeConfig = JSON.parse(JSON.stringify(configManager.getConfig()));
       
       if (key !== undefined) {
         updates.apiKey = key;
@@ -95,7 +108,31 @@ export class WebAdapter implements PlatformAdapter {
       // Depending on agent implementation, we might need agent.updateConfig({ apiKey: key, provider: currentProvider })
 
       const newConf = configManager.getConfig();
-      res.json({ success: true, provider: newConf.provider, adapters: newConf.adapters });
+      const requiresRestart =
+        getRuntimeConfigSignature(beforeConfig) !==
+        getRuntimeConfigSignature(newConf);
+      res.json({
+        success: true,
+        provider: newConf.provider,
+        adapters: newConf.adapters,
+        requiresRestart,
+        runtimeControl: lifecycle.getRuntimeControl(),
+      });
+    });
+
+    app.post("/api/runtime/restart", async (_req, res) => {
+      const runtimeControl = lifecycle.getRuntimeControl();
+      if (!runtimeControl.canManagedRestart) {
+        res.status(409).json({
+          success: false,
+          message: "Managed restart is unavailable for this process.",
+          runtimeControl,
+        });
+        return;
+      }
+
+      const result = await lifecycle.requestRestart("web");
+      res.status(202).json({ ...result, runtimeControl });
     });
 
     app.delete("/api/chat", (_req, res) => {

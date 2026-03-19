@@ -14,6 +14,24 @@ export interface CommandResult {
   message?: string;
 }
 
+export type LifecycleTrigger = "web" | "telegram" | "slack" | "signal";
+
+export type ProcessManager = "pm2" | "none";
+
+export interface RuntimeControl {
+  canManagedRestart: boolean;
+  processManager: ProcessManager;
+}
+
+export interface LifecycleHandler {
+  requestRestart(trigger: LifecycleTrigger): Promise<CommandResult>;
+  requestShutdown(trigger: LifecycleTrigger): Promise<CommandResult>;
+}
+
+export interface LifecycleInfo {
+  getRuntimeControl(): RuntimeControl;
+}
+
 // ---------------------------------------------------------------------------
 // Channel & Message
 // ---------------------------------------------------------------------------
@@ -81,6 +99,7 @@ export interface PackAgentOptions {
   rootDir: string;
   provider: string;
   modelId: string;
+  lifecycleHandler: LifecycleHandler;
 }
 
 /**
@@ -146,6 +165,7 @@ export interface AdapterContext {
   server: Server;
   app: Express;
   rootDir: string;
+  lifecycle: LifecycleInfo & LifecycleHandler;
 }
 
 export interface PlatformAdapter {

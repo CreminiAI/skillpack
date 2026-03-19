@@ -14,6 +14,7 @@ import type {
   AgentEvent,
   BotCommand,
   CommandResult,
+  LifecycleTrigger,
   SessionInfo,
 } from "./adapters/types.js";
 
@@ -55,6 +56,12 @@ function getAssistantDiagnostics(message: any): AssistantDiagnostics | null {
   ).length;
 
   return { stopReason, errorMessage, hasText: text.length > 0, toolCalls };
+}
+
+function getLifecycleTrigger(channelId: string): LifecycleTrigger {
+  if (channelId.startsWith("telegram-")) return "telegram";
+  if (channelId.startsWith("slack-")) return "slack";
+  return "web";
 }
 
 // ---------------------------------------------------------------------------
@@ -260,14 +267,15 @@ export class PackAgent implements IPackAgent {
 
       case "restart":
         log("[PackAgent] Restart requested");
-        // Give a brief delay so the response can be sent
-        setTimeout(() => process.exit(0), 500);
-        return { success: true, message: "Restarting..." };
+        return this.options.lifecycleHandler.requestRestart(
+          getLifecycleTrigger(channelId),
+        );
 
       case "shutdown":
         log("[PackAgent] Shutdown requested");
-        setTimeout(() => process.exit(0), 500);
-        return { success: true, message: "Shutting down..." };
+        return this.options.lifecycleHandler.requestShutdown(
+          getLifecycleTrigger(channelId),
+        );
 
       default:
         return { success: false, message: `Unknown command: ${command}` };

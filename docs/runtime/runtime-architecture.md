@@ -137,8 +137,8 @@ const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
 
 1. 读取 `data/config.json` 的 `apiKey` / `provider` 字段
 2. 环境变量 `OPENAI_API_KEY` 或 `ANTHROPIC_API_KEY` 覆盖（设置了环境变量则强制对应 provider）
-3. Web 前端可通过 `POST /api/config/key` 在内存中临时覆盖（重启失效）
-4. 不写入磁盘
+3. Web 前端通过 `POST /api/config/update` 持久化到 `data/config.json`
+4. 运行时凭证变更统一要求重启后生效
 
 #### `data/config.json` 中的 IM 配置
 
@@ -158,6 +158,7 @@ const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
 
 - Slack 凭证当前只从 `data/config.json` 读取，不走环境变量覆盖
 - 若只配置了 `adapters.slack.botToken` 或 `adapters.slack.appToken` 其中之一，运行时会记录 warning 并跳过 Slack Adapter
+- Web 端保存配置后会返回 `requiresRestart`；若运行在 PM2 下，可直接调用 `/api/runtime/restart`
 
 ### 前端
 

@@ -1,6 +1,7 @@
 export const state = {
   config: null,
-  API_BASE: ""
+  API_BASE: "",
+  restartRequired: false,
 };
 
 export async function loadConfig() {

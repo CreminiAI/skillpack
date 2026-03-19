@@ -8,6 +8,7 @@ import { exec } from "node:child_process";
 import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
 import { configManager } from "./config.js";
+import { Lifecycle } from "./lifecycle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,21 +46,31 @@ app.use(express.json());
 app.use(express.static(webDir));
 
 const server = createServer(app);
+const lifecycle = new Lifecycle(server);
 
 // ---------------------------------------------------------------------------
 // Create PackAgent (shared instance)
 // ---------------------------------------------------------------------------
 
-const agent = new PackAgent({ apiKey, rootDir, provider, modelId });
+const agent = new PackAgent({
+  apiKey,
+  rootDir,
+  provider,
+  modelId,
+  lifecycleHandler: lifecycle,
+});
 
 // ---------------------------------------------------------------------------
 // Start adapters
 // ---------------------------------------------------------------------------
 
 async function startAdapters() {
+  const adapters = [];
+
   // Web adapter is always enabled
   const webAdapter = new WebAdapter();
-  await webAdapter.start({ agent, server, app, rootDir });
+  await webAdapter.start({ agent, server, app, rootDir, lifecycle });
+  adapters.push(webAdapter);
 
   // Telegram adapter (conditional)
   if (dataConfig.adapters?.telegram?.token) {
@@ -68,7 +79,8 @@ async function startAdapters() {
       const telegramAdapter = new TelegramAdapter({
         token: dataConfig.adapters.telegram.token,
       });
-      await telegramAdapter.start({ agent, server, app, rootDir });
+      await telegramAdapter.start({ agent, server, app, rootDir, lifecycle });
+      adapters.push(telegramAdapter);
     } catch (err) {
       console.error("[Telegram] Failed to start:", err);
     }
@@ -88,12 +100,15 @@ async function startAdapters() {
           botToken: slackConfig.botToken,
           appToken: slackConfig.appToken,
         });
-        await slackAdapter.start({ agent, server, app, rootDir });
+        await slackAdapter.start({ agent, server, app, rootDir, lifecycle });
+        adapters.push(slackAdapter);
       } catch (err) {
         console.error("[Slack] Failed to start:", err);
       }
     }
   }
+
+  lifecycle.registerAdapters(adapters);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +148,14 @@ function tryListen(port: number) {
     }
   });
 }
+
+process.on("SIGINT", () => {
+  void lifecycle.requestShutdown("signal");
+});
+
+process.on("SIGTERM", () => {
+  void lifecycle.requestShutdown("signal");
+});
 
 // Start adapters, then listen
 startAdapters()

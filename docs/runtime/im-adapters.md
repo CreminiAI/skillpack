@@ -142,10 +142,10 @@ type AgentEvent =
 | 命令        | 行为                                                  |
 | ----------- | ----------------------------------------------------- |
 | `/clear`    | 销毁当前 channel 的 AgentSession，下次消息重新创建    |
-| `/restart`  | 延迟 500ms 后 `process.exit(0)`，由进程管理器负责重启 |
-| `/shutdown` | 延迟 500ms 后 `process.exit(0)`                       |
+| `/restart`  | 触发 `Lifecycle` 优雅退出，并以退出码 `75` 结束进程   |
+| `/shutdown` | 触发 `Lifecycle` 优雅退出，并以退出码 `64` 结束进程   |
 
-> `/restart` 与 `/shutdown` 在代码层面行为相同，均为 `process.exit(0)`；语义区分由外部进程管理器（如 `pm2`）决定。
+> 建议在 PM2 下运行。PM2 配置 `stop_exit_codes: [64]` 后，会对 `75` 自动拉起，对 `64` 视为显式停机。
 
 Slack 额外暴露 namespaced slash commands：
 
@@ -168,9 +168,10 @@ Slack 额外暴露 namespaced slash commands：
 
 | 端点                | 方法      | 作用                                                                  |
 | ------------------- | --------- | --------------------------------------------------------------------- |
-| `/api/config`       | GET       | pack 名称、描述、prompts、skills、provider、是否有 API Key            |
+| `/api/config`       | GET       | pack 元数据、provider、是否有 API Key、adapter 配置、runtimeControl   |
 | `/api/skills`       | GET       | skills 列表（读 `skillpack.json`）                                    |
-| `/api/config/key`   | POST      | 保存并在内存中更新 API Key 和 provider（持久化到 `data/config.json`） |
+| `/api/config/update`| POST      | 保存 API Key / provider / adapter 配置，返回 `requiresRestart`        |
+| `/api/runtime/restart` | POST   | 在支持的进程管理器下触发受管重启                                      |
 | `/api/chat`         | WebSocket | 聊天主通道                                                            |
 | `/api/chat`         | DELETE    | 占位，返回 `{ success: true }`                                        |
 | `/api/sessions`     | GET       | 会话列表（预留，当前返回空数组）                                      |
