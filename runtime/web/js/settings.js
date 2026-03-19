@@ -169,7 +169,7 @@ async function handleRestart() {
     await restartRuntime();
     setTimeout(() => {
       window.location.reload();
-    }, 3000);
+    }, 6000);
   } catch (err) {
     if (saveBtn) saveBtn.disabled = false;
     restartBtn.disabled = false;
