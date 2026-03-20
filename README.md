@@ -1,16 +1,16 @@
-# SkillPack.sh - Pack AI Skills into Standalone Apps
+# SkillPack.sh - Pack AI Skills into Local Agents
 
 Skillpack by Cremini is built on the idea of distributed intelligence, much like cremini mushrooms that grow from a vast, interconnected mycelial network.
 
 Go to [skillpack.sh](https://skillpack.sh) to pack skills and try existing skill packs.
 
-One command to orchestrate [Skills](https://skills.sh), tools, mcps into a standalone app users can download and use on their own computer to address a well-defined problem or complete specific tasks!
+One command to orchestrate [Skills](https://skills.sh) and tools into a Local Agent that users can download and run it on their own computer to get work done. It can also connect to chat platforms like Slack or Telegram, allowing you to easily send instructions to your local agent team anytime.
 
 ```bash
 npx @cremini/skillpack create
 ```
 
-If skills, tools, and MCPs are like LEGO pieces, a skill pack is the master piece that assembles them into a complete solution.
+If skills and tools are like LEGO pieces, a skill pack is the master piece that assembles them into a complete solution.
 
 Each Skill Pack should organize different skills to address a well-defined problem or complete specific tasks. For example, research a company by gathering information from various sources and create a PowerPoint presentation based on the findings.
 
@@ -92,7 +92,7 @@ skillpack/
 start.bat
 ```
 
-Then open [http://127.0.0.1:26313](http://127.0.0.1:26313), enter your API key, and start working and having fun!!!
+Running start.sh will open [http://127.0.0.1:26313](http://127.0.0.1:26313) in your browser. Just enter your API key to get started and enjoy!
 
 ## Development
 
