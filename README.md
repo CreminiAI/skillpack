@@ -3,7 +3,7 @@
 Skillpack by Cremini is built on the idea of distributed intelligence, much like cremini mushrooms that grow from a vast, interconnected mycelial network.
 
 ## Use Case
-The main use case is to run local agents on your computer and integrate them with Slack or Telegram so they can work for you and your team—operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills.
+The main use case is to **run local agents on your computer and integrate them with Slack or Telegram** so they can work for you and your team—operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills.
 
 If skills and tools are like LEGO pieces, a skill pack is the master piece that assembles them into a complete solution. Go to [skillpack.sh](https://skillpack.sh) to download skillpacks.Each Skill Pack should organize different skills to address a well-defined problem or complete specific tasks. For example, research a company by gathering information from various sources and create a PowerPoint presentation based on the findings.
 
