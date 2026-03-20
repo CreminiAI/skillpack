@@ -55,7 +55,8 @@ body {
 .sidebar-header {
   padding: 24px 20px;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  background: transparent;
+  flex-shrink: 0;
 }
 
 .sidebar-header h1 {
@@ -71,12 +72,20 @@ body {
   line-height: 1.4;
 }
 
-.sidebar-section {
+.sidebar-settings-section {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 
-.sidebar-section h3 {
+.sidebar-skills-section {
+  padding: 16px 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-skills-section h3 {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -85,23 +94,26 @@ body {
   margin-bottom: 10px;
 }
 
-.sidebar-section ul {
+.sidebar-skills-section ul {
   list-style: none;
 }
 
-.sidebar-section li {
-  padding: 8px 12px;
+.sidebar-skills-section li {
+  padding: 12px;
   font-size: 13px;
   color: var(--text-primary);
   background: var(--bg-tertiary);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   cursor: default;
   transition: all 0.2s;
 }
 
-.sidebar-section li:hover {
-  background: var(--border-color);
+.sidebar-skills-section li:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .skill-name {
@@ -197,6 +209,9 @@ body {
 
 .status-text.success {
   color: var(--success);
+}
+.status-text.warning {
+  color: var(--accent);
 }
 .status-text.error {
   color: var(--error);
@@ -771,4 +786,280 @@ body {
 }
 .thinking-content p:last-child {
   margin-bottom: 0;
+}
+
+/* ---- Sidebar Action Buttons ---- */
+.sidebar-actions-group {
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-family: inherit;
+}
+
+/* Default (not connected) state — outline style */
+.action-btn.chatapps-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+.action-btn.chatapps-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+
+/* Connected state — green filled */
+.action-btn.chatapps-btn.connected {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  opacity: 0.85;
+}
+.action-btn.chatapps-btn.connected:hover {
+  opacity: 1;
+  box-shadow: 0 4px 16px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.action-btn.chatapps-btn.connected .action-btn-icon {
+  stroke: #fff;
+}
+
+/* API Key button — always outline style */
+.action-btn.apikey-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+.action-btn.apikey-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+
+/* API Key configured state */
+.action-btn.apikey-btn.connected {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-secondary);
+}
+.action-btn.apikey-btn.connected .action-btn-icon {
+  stroke: var(--accent);
+}
+
+.action-btn-icon {
+  flex-shrink: 0;
+}
+
+/* ---- Compact Modal Variant ---- */
+.compact-modal {
+  width: 440px;
+}
+
+/* ---- Settings Modal ---- */
+.settings-trigger-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.settings-trigger-btn:hover {
+  background: #ebebeb;
+}
+
+.settings-modal {
+  margin: auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  width: 520px;
+  max-width: 90vw;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1), 0 0 0 1px var(--border-color);
+  font-family: inherit;
+  color: var(--text-primary);
+  opacity: 0;
+  transform: scale(0.95) translateY(10px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.settings-modal[open] {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+.settings-modal::backdrop {
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.settings-modal[open]::backdrop {
+  opacity: 1;
+}
+
+.settings-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 12px 24px;
+  background: transparent;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+.settings-modal-header h2 { font-size: 18px; font-weight: 600; margin: 0; color: var(--text-primary); letter-spacing: -0.01em; }
+.close-btn { 
+  background: var(--bg-tertiary); 
+  border: 1px solid var(--border-color); 
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px; 
+  cursor: pointer; 
+  color: var(--text-secondary); 
+  transition: all 0.2s ease;
+}
+.close-btn:hover { 
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.settings-sections {
+  padding: 24px;
+  max-height: calc(85vh - 140px);
+  overflow-y: auto;
+}
+.settings-section {
+  margin-bottom: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border-color);
+}
+.settings-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.8;
+}
+
+.form-group { margin-bottom: 16px; }
+.form-group:last-child { margin-bottom: 0; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-primary); }
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  outline: none;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+.form-input:focus { 
+  border-color: var(--accent); 
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* Specific to provider-select in Settings Modal to match form-input */
+.settings-modal .provider-select-wrapper select {
+  padding: 12px 14px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+.settings-modal .provider-select-wrapper select:focus {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.settings-modal-footer {
+  padding: 16px 24px 24px 24px;
+  background: transparent;
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.secondary-btn {
+  padding: 10px 20px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.secondary-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.primary-btn {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.primary-btn:hover { 
+  background: var(--accent-hover); 
+  box-shadow: 0 4px 12px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.primary-btn:active {
+  transform: translateY(0);
+}
+.primary-btn:disabled,
+.secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }

@@ -1,7 +1,7 @@
 {
   "name": "@cremini/skillpack",
-  "version": "1.0.9",
-  "description": "Turn Skills into a Standalone App with UI",
+  "version": "1.0.9-im.5",
+  "description": "Pack AI Skills into Local Agents",
   "type": "module",
   "repository": {
     "type": "git",
@@ -24,7 +24,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "npm run build:runtime && tsup",
+    "build:runtime": "cd runtime/server && npx tsc",
     "dev": "tsup --watch",
     "check": "tsc --noEmit",
     "format": "prettier --write .",

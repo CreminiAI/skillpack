@@ -1,69 +1,47 @@
-const API_BASE = "";
-let chatHistory = [];
+import { state } from "./config.js";
 
-// Initialize
-async function init() {
-  await loadConfig();
-  setupEventListeners();
-}
+export const chatHistory = [];
+let ws = null;
+let currentAssistantMsg = null;
 
-async function loadConfig() {
-  try {
-    const res = await fetch(API_BASE + "/api/config");
-    const config = await res.json();
+export function initChat() {
+  // Send button
+  document.getElementById("send-btn").addEventListener("click", sendMessage);
 
-    document.getElementById("pack-name").textContent = config.name;
-    document.getElementById("pack-desc").textContent = config.description;
-    document.title = config.name;
-
-    // Skills
-    const skillsList = document.getElementById("skills-list");
-    skillsList.innerHTML = config.skills
-      .map(
-        (s) =>
-          `<li><div class="skill-name">${s.name}</div><div class="skill-desc">${s.description}</div></li>`,
-      )
-      .join("");
-
-    // Pre-fill when there is exactly one prompt
-    if (config.prompts && config.prompts.length === 1) {
-      const input = document.getElementById("user-input");
-      input.value = config.prompts[0];
-      input.style.height = "auto";
-      input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  // Send on Enter
+  document.getElementById("user-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
+  });
 
-    // API key status and provider
-    const keyStatus = document.getElementById("key-status");
-    if (config.hasApiKey) {
-      keyStatus.textContent = "API key configured";
-      keyStatus.className = "status-text success";
-    }
+  // Auto-resize the input box
+  document.getElementById("user-input").addEventListener("input", (e) => {
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+  });
 
-    const providerSelect = document.getElementById("provider-select");
-    if (providerSelect && config.provider) {
-      providerSelect.value = config.provider;
-    }
+  // Prompt click (Welcome message prompts)
+  const welcomeContent = document.getElementById("welcome-content");
+  if (welcomeContent) {
+    welcomeContent.addEventListener("click", (e) => {
+      const item = e.target.closest(".prompt-card");
+      if (!item) return;
+      const index = parseInt(item.dataset.index);
 
-    const updatePlaceholder = () => {
-      const p = providerSelect.value;
-      const input = document.getElementById("api-key-input");
-      if (p === "openai") input.placeholder = "sk-proj-...";
-      else if (p === "anthropic") input.placeholder = "sk-ant-api03-...";
-      else input.placeholder = "sk-...";
-    };
-
-    providerSelect.addEventListener("change", updatePlaceholder);
-    updatePlaceholder();
-
-    // Show welcome view
-    showWelcome(config);
-  } catch (err) {
-    console.error("Failed to load config:", err);
+      if (state.config && state.config.prompts[index]) {
+        const input = document.getElementById("user-input");
+        input.value = state.config.prompts[index];
+        input.focus();
+        input.style.height = "auto";
+        input.style.height = Math.min(input.scrollHeight, 120) + "px";
+      }
+    });
   }
 }
 
-function showWelcome(config) {
+export function showWelcome(config) {
   const welcomeContent = document.getElementById("welcome-content");
 
   let promptsHtml = "";
@@ -94,94 +72,69 @@ function showWelcome(config) {
   }
 }
 
-function setupEventListeners() {
-  // Send button
-  document.getElementById("send-btn").addEventListener("click", sendMessage);
+export async function sendMessage() {
+  const input = document.getElementById("user-input");
+  const text = input.value.trim();
+  if (!text) return;
 
-  // Send on Enter
-  document.getElementById("user-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  // Auto-resize the input box
-  document.getElementById("user-input").addEventListener("input", (e) => {
-    e.target.style.height = "auto";
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-  });
-
-  // Save API key
-  document.getElementById("save-key-btn").addEventListener("click", saveApiKey);
-
-  // Prompt click
-  const welcomeContent = document.getElementById("welcome-content");
-  if (welcomeContent) {
-    welcomeContent.addEventListener("click", (e) => {
-      const item = e.target.closest(".prompt-card");
-      if (!item) return;
-      const index = parseInt(item.dataset.index);
-
-      // Get the full prompt text
-      fetch(API_BASE + "/api/config")
-        .then((r) => r.json())
-        .then((config) => {
-          if (config.prompts[index]) {
-            const input = document.getElementById("user-input");
-            input.value = config.prompts[index];
-            input.focus();
-            input.style.height = "auto";
-            input.style.height = Math.min(input.scrollHeight, 120) + "px";
-          }
-        });
-    });
+  const chatArea = document.getElementById("chat-area");
+  if (chatArea.classList.contains("mode-welcome")) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
   }
-}
 
-async function saveApiKey() {
-  const input = document.getElementById("api-key-input");
-  const providerSelect = document.getElementById("provider-select");
-  const status = document.getElementById("key-status");
-  const key = input.value.trim();
-  const provider = providerSelect ? providerSelect.value : "openai";
+  input.value = "";
+  input.style.height = "auto";
 
-  if (!key) {
-    status.textContent = "Enter an API key";
-    status.className = "status-text error";
-    return;
-  }
+  appendMessage("user", text);
+  chatHistory.push({ role: "user", content: text });
+
+  const sendBtn = document.getElementById("send-btn");
+  sendBtn.disabled = true;
+
+  currentAssistantMsg = appendMessage("assistant", "");
+  showLoadingIndicator();
 
   try {
-    const res = await fetch(API_BASE + "/api/config/key", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, provider }),
-    });
-
-    if (res.ok) {
-      status.textContent = "API key saved";
-      status.className = "status-text success";
-      input.value = "";
-    } else {
-      status.textContent = "Save failed";
-      status.className = "status-text error";
-    }
+    const socket = await getOrCreateWs();
+    socket.send(JSON.stringify({ text }));
   } catch (err) {
-    status.textContent = "Save failed: " + err.message;
-    status.className = "status-text error";
+    handleError(err.message);
   }
 }
 
-let ws = null;
-let currentAssistantMsg = null;
+export async function sendBotCommand(cmdText) {
+  const chatArea = document.getElementById("chat-area");
+  if (chatArea.classList.contains("mode-welcome")) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
+  }
+
+  appendMessage("user", cmdText);
+  chatHistory.push({ role: "user", content: cmdText });
+
+  const sendBtn = document.getElementById("send-btn");
+  sendBtn.disabled = true;
+
+  currentAssistantMsg = appendMessage("assistant", "");
+  showLoadingIndicator();
+
+  try {
+    const socket = await getOrCreateWs();
+    socket.send(JSON.stringify({ text: cmdText }));
+  } catch (err) {
+    handleError(err.message);
+  }
+}
+
+// ========== Internal Rendering & WS logic ==========
 
 function renderMarkdown(mdText, { renderEmbeddedMarkdown = true } = {}) {
-  if (typeof marked === "undefined") {
+  if (typeof window.marked === "undefined") {
     return escapeHtml(mdText);
   }
 
-  const html = ensureLinksOpenInNewTab(marked.parse(mdText));
+  const html = ensureLinksOpenInNewTab(window.marked.parse(mdText));
   if (!renderEmbeddedMarkdown) {
     return html;
   }
@@ -208,11 +161,9 @@ function renderEmbeddedMarkdownBlocks(html) {
   const codeBlocks = template.content.querySelectorAll("pre > code");
   codeBlocks.forEach((codeEl) => {
     const languageClass = Array.from(codeEl.classList).find((className) =>
-      className.startsWith("language-"),
+      className.startsWith("language-")
     );
-    const language = languageClass
-      ? languageClass.slice("language-".length)
-      : "";
+    const language = languageClass ? languageClass.slice("language-".length) : "";
 
     if (!/^(markdown|md)$/i.test(language)) {
       return;
@@ -240,11 +191,9 @@ async function getOrCreateWs() {
 
   return new Promise((resolve, reject) => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const providerSelect = document.getElementById("provider-select");
-    const provider = providerSelect ? providerSelect.value : "openai";
+    const provider = state.config && state.config.provider ? state.config.provider : "openai";
 
-    // URLSearchParams would be cleaner if more query params are added later
-    const wsUrl = `${protocol}//${window.location.host}${API_BASE}/api/chat?provider=${provider}`;
+    const wsUrl = `${protocol}//${window.location.host}${state.API_BASE}/api/chat?provider=${provider}`;
 
     ws = new WebSocket(wsUrl);
 
@@ -327,10 +276,25 @@ function handleAgentEvent(event) {
 
   if (
     ["text_delta", "thinking_delta", "tool_start", "tool_end"].includes(
-      event.type,
+      event.type
     )
   ) {
     hideLoadingIndicator();
+  }
+
+  // Handle bot command results injected by the backend WebSocket response
+  if (event.type === "command_result") {
+    const textBlock = getOrCreateTextBlock();
+    let resText = `Command \`${event.command}\` succeeded.`;
+    if (event.errorMessage) {
+      resText = `Command \`${event.command}\` failed: ${event.errorMessage}`;
+    } else if (event.result) {
+      resText = `Command \`${event.command}\` result:\n\n${event.result}`;
+    }
+    textBlock.dataset.mdContent += resText;
+    textBlock.innerHTML = renderMarkdown(textBlock.dataset.mdContent);
+    scrollToBottom();
+    return;
   }
 
   switch (event.type) {
@@ -348,7 +312,7 @@ function handleAgentEvent(event) {
       const thinkingBlock = getOrCreateThinkingBlock();
       thinkingBlock.dataset.mdContent += event.delta;
       const contentEl = thinkingBlock.querySelector(".thinking-content");
-      if (typeof marked !== "undefined") {
+      if (typeof window.marked !== "undefined") {
         contentEl.innerHTML = renderMarkdown(thinkingBlock.dataset.mdContent);
       } else {
         contentEl.textContent = thinkingBlock.dataset.mdContent;
@@ -359,7 +323,7 @@ function handleAgentEvent(event) {
     case "text_delta":
       const textBlock = getOrCreateTextBlock();
       textBlock.dataset.mdContent += event.delta;
-      if (typeof marked !== "undefined") {
+      if (typeof window.marked !== "undefined") {
         textBlock.innerHTML = renderMarkdown(textBlock.dataset.mdContent);
       } else {
         textBlock.textContent = textBlock.dataset.mdContent;
@@ -376,9 +340,9 @@ function handleAgentEvent(event) {
           : JSON.stringify(event.toolInput, null, 2);
 
       let inputHtml = "";
-      if (typeof marked !== "undefined") {
+      if (typeof window.marked !== "undefined") {
         inputHtml = ensureLinksOpenInNewTab(
-          marked.parse("```json\n" + safeInput + "\n```"),
+          window.marked.parse("\`\`\`json\n" + safeInput + "\n\`\`\`")
         );
       } else {
         inputHtml = escapeHtml(safeInput);
@@ -387,7 +351,7 @@ function handleAgentEvent(event) {
       toolCard.innerHTML = `
         <div class="tool-header">
           <span class="tool-chevron">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </span>
           <span class="tool-icon">🛠️</span>
           <span class="tool-name">${escapeHtml(event.toolName)}</span>
@@ -403,9 +367,7 @@ function handleAgentEvent(event) {
         toolCard.classList.toggle("collapsed");
       });
 
-      // Insert before loading indicator if exists
-      const toolIndicator =
-        currentAssistantMsg.querySelector(".loading-indicator");
+      const toolIndicator = currentAssistantMsg.querySelector(".loading-indicator");
       if (toolIndicator) {
         currentAssistantMsg.insertBefore(toolCard, toolIndicator);
       } else {
@@ -414,17 +376,12 @@ function handleAgentEvent(event) {
 
       toolCard.dataset.toolName = event.toolName;
       scrollToBottom();
-
       showLoadingIndicator();
       break;
 
     case "tool_end":
-      const cards = Array.from(
-        currentAssistantMsg.querySelectorAll(".tool-card.running"),
-      );
-      const card = cards
-        .reverse()
-        .find((c) => c.dataset.toolName === event.toolName);
+      const cards = Array.from(currentAssistantMsg.querySelectorAll(".tool-card.running"));
+      const card = cards.reverse().find((c) => c.dataset.toolName === event.toolName);
       if (card) {
         card.classList.remove("running");
         card.classList.add(event.isError ? "error" : "success");
@@ -448,17 +405,16 @@ function handleAgentEvent(event) {
           event.result &&
           typeof event.result === "string" &&
           (event.result.includes("\n") || event.result.length > 50)
-            ? "```bash\n" + safeResult + "\n```"
-            : "```json\n" + safeResult + "\n```";
+            ? "\`\`\`bash\n" + safeResult + "\n\`\`\`"
+            : "\`\`\`json\n" + safeResult + "\n\`\`\`";
 
-        if (typeof marked !== "undefined") {
-          resultEl.innerHTML = ensureLinksOpenInNewTab(marked.parse(mdText));
+        if (typeof window.marked !== "undefined") {
+          resultEl.innerHTML = ensureLinksOpenInNewTab(window.marked.parse(mdText));
         } else {
           resultEl.textContent = safeResult;
         }
       }
       scrollToBottom();
-
       showLoadingIndicator();
       break;
   }
@@ -466,7 +422,7 @@ function handleAgentEvent(event) {
 
 function getOrCreateThinkingBlock() {
   const children = Array.from(currentAssistantMsg.children).filter(
-    (c) => !c.classList.contains("loading-indicator"),
+    (c) => !c.classList.contains("loading-indicator")
   );
   let lastChild = children[children.length - 1];
 
@@ -478,7 +434,7 @@ function getOrCreateThinkingBlock() {
     lastChild.innerHTML = `
       <div class="tool-header thinking-header">
         <span class="tool-chevron">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </span>
         <span class="tool-icon">🧠</span>
         <span class="tool-name" style="color: var(--text-secondary);">Thinking Process</span>
@@ -502,7 +458,7 @@ function getOrCreateThinkingBlock() {
 
 function getOrCreateTextBlock() {
   const children = Array.from(currentAssistantMsg.children).filter(
-    (c) => !c.classList.contains("loading-indicator"),
+    (c) => !c.classList.contains("loading-indicator")
   );
   let lastChild = children[children.length - 1];
 
@@ -525,40 +481,6 @@ function enableInput() {
   const sendBtn = document.getElementById("send-btn");
   if (sendBtn) sendBtn.disabled = false;
   currentAssistantMsg = null;
-}
-
-async function sendMessage() {
-  const input = document.getElementById("user-input");
-  const text = input.value.trim();
-  if (!text) return;
-
-  const chatArea = document.getElementById("chat-area");
-  if (chatArea.classList.contains("mode-welcome")) {
-    chatArea.classList.remove("mode-welcome");
-    chatArea.classList.add("mode-chat");
-  }
-
-  input.value = "";
-  input.style.height = "auto";
-
-  // Add the user message
-  appendMessage("user", text);
-  chatHistory.push({ role: "user", content: text });
-
-  // Disable input while the agent is responding
-  const sendBtn = document.getElementById("send-btn");
-  sendBtn.disabled = true;
-
-  // Create an assistant message placeholder
-  currentAssistantMsg = appendMessage("assistant", "");
-  showLoadingIndicator();
-
-  try {
-    const socket = await getOrCreateWs();
-    socket.send(JSON.stringify({ text }));
-  } catch (err) {
-    handleError(err.message);
-  }
 }
 
 function appendMessage(role, text) {
@@ -591,6 +513,3 @@ function scrollToBottom() {
   const messages = document.getElementById("messages");
   messages.scrollTop = messages.scrollHeight;
 }
-
-// Start the app
-init();
