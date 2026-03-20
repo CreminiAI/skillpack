@@ -78,12 +78,17 @@ function populateForm() {
       "warning",
     );
     updateRestartButton(true);
-  } else if (config.hasApiKey) {
-    setStatus("API key configured", "success");
-    updateRestartButton(false);
   } else {
     setStatus("", "");
     updateRestartButton(false);
+  }
+
+  if (config.hasApiKey && config.apiKey) {
+    apiKeyInput.value = config.apiKey;
+  } else if (config.hasApiKey) {
+    apiKeyInput.value = "***************************************************";
+  } else {
+    apiKeyInput.value = "";
   }
 
   if (config.provider) {
@@ -124,19 +129,29 @@ async function handleSave() {
   }
 
   const updates = { provider, adapters };
-  if (key) {
+  if (key && key !== "***************************************************" && key !== state.config.apiKey) {
     updates.key = key;
   }
 
   try {
     const res = await saveConfigData(updates);
-    apiKeyInput.value = ""; // clear after save
     
     // Update local config
     state.config.provider = res.provider;
     state.config.adapters = res.adapters;
     state.config.runtimeControl = res.runtimeControl;
-    if (key) state.config.hasApiKey = true;
+    if (updates.key) {
+      state.config.hasApiKey = true;
+      state.config.apiKey = updates.key;
+    }
+    
+    if (state.config.hasApiKey && state.config.apiKey) {
+      apiKeyInput.value = state.config.apiKey;
+    } else if (state.config.hasApiKey) {
+      apiKeyInput.value = "***************************************************";
+    } else {
+      apiKeyInput.value = "";
+    }
     state.restartRequired = !!res.requiresRestart;
 
     if (res.requiresRestart) {

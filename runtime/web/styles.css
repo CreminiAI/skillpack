@@ -55,7 +55,8 @@ body {
 .sidebar-header {
   padding: 24px 20px;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  background: transparent;
+  flex-shrink: 0;
 }
 
 .sidebar-header h1 {
@@ -71,12 +72,20 @@ body {
   line-height: 1.4;
 }
 
-.sidebar-section {
+.sidebar-settings-section {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
 }
 
-.sidebar-section h3 {
+.sidebar-skills-section {
+  padding: 16px 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-skills-section h3 {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -85,23 +94,26 @@ body {
   margin-bottom: 10px;
 }
 
-.sidebar-section ul {
+.sidebar-skills-section ul {
   list-style: none;
 }
 
-.sidebar-section li {
-  padding: 8px 12px;
+.sidebar-skills-section li {
+  padding: 12px;
   font-size: 13px;
   color: var(--text-primary);
   background: var(--bg-tertiary);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   cursor: default;
   transition: all 0.2s;
 }
 
-.sidebar-section li:hover {
-  background: var(--border-color);
+.sidebar-skills-section li:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .skill-name {
@@ -776,6 +788,92 @@ body {
   margin-bottom: 0;
 }
 
+/* ---- Sidebar Action Buttons ---- */
+.sidebar-actions-group {
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-family: inherit;
+}
+
+/* Default (not connected) state — outline style */
+.action-btn.chatapps-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+.action-btn.chatapps-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+
+/* Connected state — green filled */
+.action-btn.chatapps-btn.connected {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  opacity: 0.85;
+}
+.action-btn.chatapps-btn.connected:hover {
+  opacity: 1;
+  box-shadow: 0 4px 16px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.action-btn.chatapps-btn.connected .action-btn-icon {
+  stroke: #fff;
+}
+
+/* API Key button — always outline style */
+.action-btn.apikey-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+.action-btn.apikey-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+
+/* API Key configured state */
+.action-btn.apikey-btn.connected {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-secondary);
+}
+.action-btn.apikey-btn.connected .action-btn-icon {
+  stroke: var(--accent);
+}
+
+.action-btn-icon {
+  flex-shrink: 0;
+}
+
+/* ---- Compact Modal Variant ---- */
+.compact-modal {
+  width: 440px;
+}
+
 /* ---- Settings Modal ---- */
 .settings-trigger-btn {
   display: flex;
@@ -793,10 +891,7 @@ body {
   transition: all 0.2s ease;
 }
 .settings-trigger-btn:hover {
-  background: var(--bg-secondary);
-  border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-  transform: translateY(-1px);
+  background: #ebebeb;
 }
 
 .settings-modal {

@@ -73,6 +73,7 @@ export class WebAdapter implements PlatformAdapter {
         prompts: config.prompts || [],
         skills: config.skills || [],
         hasApiKey: !!conf.apiKey,
+        apiKey: conf.apiKey || "",
         provider: conf.provider || "openai",
         adapters: conf.adapters || {},
         runtimeControl: lifecycle.getRuntimeControl(),
