@@ -1013,7 +1013,7 @@ body {
 }
 
 .settings-modal-footer {
-  padding: 16px 24px 24px 24px;
+  padding: 28px 24px 24px 24px;
   background: transparent;
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 16px;
@@ -1021,6 +1021,16 @@ body {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
+  position: relative;
+}
+
+.settings-modal-footer .status-text {
+  position: absolute;
+  top: 8px;
+  right: 24px;
+  text-align: right;
+  margin: 0;
+  max-width: calc(100% - 48px);
 }
 .secondary-btn {
   padding: 10px 20px;

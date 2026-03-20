@@ -120,14 +120,17 @@ async function handleSave() {
   const slackBotToken = slackBotTokenInput.value.trim();
   const slackAppToken = slackAppTokenInput.value.trim();
 
-  const adapters = {};
-  if (telegramToken) adapters.telegram = { token: telegramToken };
-  if (slackBotToken || slackAppToken) {
-    adapters.slack = {
-      botToken: slackBotToken || undefined,
-      appToken: slackAppToken || undefined,
-    };
-  }
+  // 始终写入所有 adapter 键，空值也要显式传递，让后端能感知「清空」操作
+  const adapters = {
+    telegram: telegramToken ? { token: telegramToken } : null,
+    slack:
+      slackBotToken || slackAppToken
+        ? {
+            botToken: slackBotToken || undefined,
+            appToken: slackAppToken || undefined,
+          }
+        : null,
+  };
 
   const updates = { adapters };
 
@@ -148,8 +151,7 @@ async function handleSave() {
       );
       updateRestartButton(!!res.runtimeControl?.canManagedRestart);
     } else {
-      setStatus("Settings saved", "success");
-      updateRestartButton(false);
+      close();
     }
 
     updateChatAppsButton();

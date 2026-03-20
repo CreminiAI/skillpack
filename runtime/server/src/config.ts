@@ -73,12 +73,17 @@ export class ConfigManager {
     if (updates.apiKey !== undefined) this.configData.apiKey = updates.apiKey;
     if (updates.provider !== undefined) this.configData.provider = updates.provider;
     
-    // Deep merge for adapters to avoid losing other objects not provided in this update 
+    // 对每个 adapter key 单独处理：null 表示删除，有实际对象则直接覆写
     if (updates.adapters !== undefined) {
-      this.configData.adapters = {
-        ...(this.configData.adapters || {}),
-        ...updates.adapters
-      };
+      const merged: DataConfig['adapters'] = { ...(this.configData.adapters || {}) };
+      for (const [adapterKey, adapterVal] of Object.entries(updates.adapters)) {
+        if (adapterVal === null || adapterVal === undefined) {
+          delete merged[adapterKey];
+        } else {
+          merged[adapterKey] = adapterVal;
+        }
+      }
+      this.configData.adapters = merged;
     }
 
     try {
