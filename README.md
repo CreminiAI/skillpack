@@ -4,7 +4,7 @@ Skillpack by Cremini is built on the idea of distributed intelligence, much like
 
 Go to [skillpack.sh](https://skillpack.sh) to pack skills and try existing skill packs.
 
-One command to orchestrate [Skills](https://skills.sh) and tools into a Local Agent that users can download and run it on their own computer to get work done. It can also connect to chat platforms like Slack or Telegram, allowing you to easily send instructions to your local agent team anytime.
+One command orchestrates [Skills](https://skills.sh) and tools into a Local Agent that users can download and run it on their own computer to get work done. It can also connect to chat platforms like Slack or Telegram, allowing you to easily send instructions to your local agent team anytime.
 
 ```bash
 npx @cremini/skillpack create
