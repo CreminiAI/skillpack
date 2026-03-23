@@ -1,58 +1,52 @@
-# IM 平台适配器架构
+# IM Platform Adapters
 
-## 概述
+## Overview
 
-Runtime 支持多个 IM 平台同时接入，共用一个 `PackAgent` 实例和配置读取逻辑。目前已实现 **Web**、**Telegram** 和 **Slack** 三个 Adapter。
+The runtime supports multiple IM platforms simultaneously through a shared `PackAgent` instance.
+Currently three adapters are implemented: **Web**, **Telegram**, and **Slack**.
 
-## 架构
+## Architecture
 
 ```
                     ┌──────────────────┐
-                    │     index.ts     │
-                    │  读取配置，编排   │
+                    │    server.ts     │
+                    │  Load config,    │
+                    │  start adapters  │
                     └────────┬─────────┘
-                             │ 创建共享 PackAgent
+                             │  Create shared PackAgent
           ┌──────────────────┼──────────────────┬──────────────────┐
           ▼                  ▼                  ▼                  ▼
    ┌──────────────┐  ┌───────────────┐  ┌──────────────┐  ┌──────────────┐
-   │  WebAdapter  │  │TelegramAdapter│  │ SlackAdapter │  │ (未来扩展)   │
+   │  WebAdapter  │  │TelegramAdapter│  │ SlackAdapter │  │  (future)    │
    └──────┬───────┘  └───────┬───────┘  └──────┬───────┘  └──────────────┘
-          │                  │                 │
-          └────────┬─────────┴─────────────────┘
+          │                  │                  │
+          └────────┬─────────┴──────────────────┘
                    ▼
           ┌────────────────┐
-          │   PackAgent    │  平台无关 Agent 层
-          │  (per channel) │  管理 AgentSession
+          │   PackAgent    │  Platform-agnostic agent layer
+          │  (per channel) │  Manages AgentSession per channelId
           └────────────────┘
 ```
 
-所有 Adapter 实现同一个 `PlatformAdapter` 接口，`PackAgent` 完全不感知平台。每个 channel 的 session 懒加载创建，不同 Adapter 之间的 channel 相互隔离。
+All adapters implement the same `PlatformAdapter` interface. `PackAgent` has no awareness of the underlying platform. Sessions are created lazily per `channelId` and are fully isolated across adapters.
 
-## 文件结构
+## File Structure
 
 ```
-runtime/server/
-├── tsconfig.json              # TS 编译配置
-├── package.json
-├── src/                       # TypeScript 源码（不进入分发包）
-│   ├── index.ts               # 入口：读配置、启动 Adapter
-│   ├── agent.ts               # PackAgent（核心 Agent 层）
-│   └── adapters/
-│       ├── types.ts           # 共享接口定义
-│       ├── web.ts             # WebAdapter
-│       ├── telegram.ts        # TelegramAdapter
-│       └── slack.ts           # SlackAdapter
-└── dist/                      # 编译产物（进入 npm 包和 zip）
-    ├── index.js
-    ├── agent.js
-    └── adapters/
-        ├── types.js
-        ├── web.js
-        ├── telegram.js
-        └── slack.js
+src/runtime/
+├── server.ts                    # Entry: read config, start adapters
+├── agent.ts                     # PackAgent (core agent layer)
+├── config.ts                    # Runtime config loading
+├── lifecycle.ts                 # Graceful shutdown / restart
+└── adapters/
+    ├── types.ts                 # Shared interface definitions
+    ├── web.ts                   # WebAdapter (HTTP + WebSocket)
+    ├── telegram.ts              # TelegramAdapter (polling)
+    ├── slack.ts                 # SlackAdapter (Socket Mode)
+    └── markdown.ts              # Markdown → platform text converter
 ```
 
-## 核心接口
+## Core Interfaces
 
 ### PlatformAdapter
 
@@ -75,21 +69,21 @@ interface AdapterContext {
 
 ```typescript
 interface IPackAgent {
-  /** 流式处理消息，通过 onEvent 回调实时吐出 AgentEvent */
+  /** Stream a message; emit AgentEvents via onEvent callback in real time */
   handleMessage(
     channelId: string,
     text: string,
     onEvent: (e: AgentEvent) => void,
   ): Promise<HandleResult>;
 
-  /** 处理统一命令（/clear /restart /shutdown） */
+  /** Handle a unified command (/clear /restart /shutdown) */
   handleCommand(command: BotCommand, channelId: string): Promise<CommandResult>;
 
   abort(channelId: string): void;
   isRunning(channelId: string): boolean;
   dispose(channelId: string): void;
 
-  // 预留：会话历史
+  // Reserved: session history
   listSessions(): SessionInfo[];
   restoreSession(sessionId: string): Promise<void>;
 }
@@ -109,9 +103,9 @@ type AgentEvent =
   | { type: "tool_end"; toolName: string; isError: boolean; result: unknown };
 ```
 
-## 配置
+## Configuration
 
-运行时配置通过 `data/config.json` 提供（此目录**不打包进 zip**），环境变量优先级更高可覆盖配置文件。
+Runtime configuration is read from `data/config.json` (this directory is **not** included in the zip). Environment variables take higher priority and override the config file.
 
 ```json
 {
@@ -129,77 +123,77 @@ type AgentEvent =
 }
 ```
 
-- `data/config.json` 先读取，优先级最高
-- 如果 `data/config.json` 未设置或读取失败，则读取环境变量 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`
-- **Web Adapter 始终启用**
-- Telegram 仅在配置了 `adapters.telegram.token` 时动态 import 并启动
-- Slack 仅在同时配置了 `adapters.slack.botToken` 与 `adapters.slack.appToken` 时动态 import 并启动；缺一则记录 warning 并跳过
+- `data/config.json` is read first.
+- If the `apiKey` / `provider` fields are absent or the file cannot be read, the environment variables `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are used as a fallback.
+- **WebAdapter is always enabled.**
+- TelegramAdapter is only dynamically imported and started when `adapters.telegram.token` is configured.
+- SlackAdapter requires both `adapters.slack.botToken` and `adapters.slack.appToken`; if either is missing a warning is logged and the adapter is skipped.
 
-## 统一命令系统
+## Unified Command System
 
-所有 Adapter 均支持以下命令（消息文本以 `/` 开头触发），由 `PackAgent.handleCommand()` 统一处理：
+All adapters support the following commands (triggered by a `/`-prefixed message), handled by `PackAgent.handleCommand()`:
 
-| 命令        | 行为                                                  |
-| ----------- | ----------------------------------------------------- |
-| `/clear`    | 销毁当前 channel 的 AgentSession，下次消息重新创建    |
-| `/restart`  | 触发 `Lifecycle` 优雅退出，并以退出码 `75` 结束进程   |
-| `/shutdown` | 触发 `Lifecycle` 优雅退出，并以退出码 `64` 结束进程   |
+| Command | Behavior |
+| --- | --- |
+| `/clear` | Destroys the current channel's AgentSession; the next message creates a new one |
+| `/restart` | Triggers a `Lifecycle` graceful exit with exit code `75` |
+| `/shutdown` | Triggers a `Lifecycle` graceful exit with exit code `64` |
 
-> `start.sh` 中的包裹循环会根据退出码来决定后续行为：`75` 自动重新启动进程，`64` 视为显式停机并退出脚本。
+> The `start.sh` wrapper loop interprets the exit code: `75` automatically restarts the process; `64` is treated as an explicit shutdown and exits the script.
 
-Slack 额外暴露 namespaced slash commands：
+Slack additionally exposes namespaced slash commands:
 
-| Slack 命令            | 映射到     |
-| --------------------- | ---------- |
-| `/skillpack-clear`    | `clear`    |
-| `/skillpack-restart`  | `restart`  |
+| Slack command | Maps to |
+| --- | --- |
+| `/skillpack-clear` | `clear` |
+| `/skillpack-restart` | `restart` |
 | `/skillpack-shutdown` | `shutdown` |
 
-> Slack 限制 slash command 不能在消息线程内直接触发，因此频道内会优先作用于该频道最近一个活跃的 Skillpack 线程；若没有活跃线程，会提示用户先 `@bot` 发起线程，或直接在对应线程里发送 `@bot /clear` 这类文本命令。
+> Slack slash commands cannot be triggered directly from within a thread. In a channel context, the command targets the most recently active Skillpack thread in that channel. If no active thread exists, the user is prompted to `@mention` the bot first, or to send a text command like `@bot /clear` inside the relevant thread.
 
 ## WebAdapter
 
-- **始终启用**，负责 HTTP REST API 和 WebSocket 聊天
-- 每个 WebSocket 连接生成独立 `channelId`（格式：`web-<timestamp>-<random>`），连接断开时自动 `dispose`
-- 流式生成：每个 `AgentEvent` 立即通过 `ws.send()` 推送到前端
-- WebSocket 握手仅处理 `/api/chat` 路径，其他 upgrade 请求直接 `socket.destroy()`
+- **Always enabled**; handles HTTP REST API and WebSocket chat.
+- Each WebSocket connection generates a unique `channelId` (`web-<timestamp>-<random>`); disposing happens automatically on disconnect.
+- Streams every `AgentEvent` to the frontend immediately via `ws.send()`.
+- WebSocket upgrades are only accepted on the `/api/chat` path; all other upgrade requests are destroyed.
 
 ### HTTP API
 
-| 端点                | 方法      | 作用                                                                  |
-| ------------------- | --------- | --------------------------------------------------------------------- |
-| `/api/config`       | GET       | pack 元数据、provider、是否有 API Key、adapter 配置、runtimeControl   |
-| `/api/skills`       | GET       | skills 列表（读 `skillpack.json`）                                    |
-| `/api/config/update`| POST      | 保存 API Key / provider / adapter 配置，返回 `requiresRestart`        |
-| `/api/runtime/restart` | POST   | 在支持的进程管理器下触发受管重启                                      |
-| `/api/chat`         | WebSocket | 聊天主通道                                                            |
-| `/api/chat`         | DELETE    | 占位，返回 `{ success: true }`                                        |
-| `/api/sessions`     | GET       | 会话列表（预留，当前返回空数组）                                      |
-| `/api/sessions/:id` | GET       | 恢复历史会话（预留，返回 501）                                        |
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/api/config` | GET | Pack metadata, provider, API key presence, adapter config, runtimeControl |
+| `/api/skills` | GET | Skills list (reads `skillpack.json`) |
+| `/api/config/update` | POST | Save API key / provider / adapter config; returns `requiresRestart` |
+| `/api/runtime/restart` | POST | Triggers a managed restart under supported process managers |
+| `/api/chat` | WebSocket | Main chat channel |
+| `/api/chat` | DELETE | Placeholder; returns `{ success: true }` |
+| `/api/sessions` | GET | Session list (reserved; currently returns an empty array) |
+| `/api/sessions/:id` | GET | Restore a historical session (reserved; returns 501) |
 
-### WebSocket 消息协议
+### WebSocket Message Protocol
 
-**前端 → 服务端**
+**Frontend → server**
 
 ```json
 { "text": "user input" }
 ```
 
-**服务端 → 前端（流式 AgentEvent）**
+**Server → frontend (streaming AgentEvents)**
 
-各类 `AgentEvent` 逐条 JSON 发送；结束时：
+Each `AgentEvent` is sent as an individual JSON frame. When the stream ends:
 
 ```json
 { "done": true }
 ```
 
-若有错误：
+On error:
 
 ```json
 { "error": "error message" }
 ```
 
-命令执行结果：
+Command result:
 
 ```json
 {
@@ -212,61 +206,41 @@ Slack 额外暴露 namespaced slash commands：
 
 ## TelegramAdapter
 
-- Polling 模式（`node-telegram-bot-api`），适合私有部署，无需公网 webhook
-- 每个 Telegram Chat ID 对应一个独立的 channel（`telegram-<chatId>`），session 在进程生命周期内持久复用
-- 启动时向 Telegram 注册命令菜单（`/clear`、`/restart`、`/shutdown`）
-- 收到文本消息后，会先给原消息加一个 `👀` reaction，表示已收到并开始处理
-- **只发最终结果**，不暴露 `thinking_delta` / `tool_start` / `tool_end` 中间事件
-- 发送前会把常见 Markdown 转成 Telegram HTML 子集；若输出里包含 ```` ```md ```` / ```` ```markdown ```` 源码块，会先解包再渲染
-- 消息发送前发送 `typing` 动作作为"思考中"指示器
-- 长消息自动分割（上限 4096 字符），分割优先在段落（`\n\n`）→ 换行（`\n`）→ 空格处断开
-- HTTP 429 自动重试（最多 3 次，等待 `retry_after` 秒）
+- Polling mode (`node-telegram-bot-api`) — suitable for private deployments; no public webhook required.
+- Each Telegram Chat ID maps to a dedicated channel (`telegram-<chatId>`); the session persists for the process lifetime.
+- Registers a command menu (`/clear`, `/restart`, `/shutdown`) with Telegram on startup.
+- Adds a `👀` reaction to the incoming message to acknowledge receipt before processing.
+- **Only the final result is sent**; `thinking_delta` / `tool_start` / `tool_end` events are not exposed.
+- Markdown is converted to Telegram's HTML subset before sending; ` ```md ` / ` ```markdown ` code blocks are unwrapped and rendered inline.
+- Long messages are split at 4096 characters, preferring paragraph (`\n\n`) → newline (`\n`) → space boundaries.
+- HTTP 429 responses trigger automatic retries (up to 3 attempts, waiting `retry_after` seconds).
 
 ## SlackAdapter
 
-- Socket Mode（`@slack/bolt`），适合私有部署，无需公网 webhook
-- 监听 `message.im` 与 `app_mention`
-- DM 会话使用 `channelId = slack-dm-<teamId>-<channelId>`
-- 频道 mention 会话按线程隔离，使用 `channelId = slack-thread-<teamId>-<channelId>-<threadTs|ts>`
-- 频道回复始终发回原线程；如果 mention 发生在非线程消息上，则以该消息的 `ts` 新开线程
-- 过滤 bot/self message、带 subtype 的系统消息、以及未命中的非 mention 消息
-- 发送给 Agent 前移除开头的 bot mention；若 mention 后没有正文，会返回简短提示
-- 收到 DM 或频道 mention 后，会先对原消息加 `:eyes:` reaction，表示已收到并开始处理
-- **只发最终结果**，不暴露 `thinking_delta` / `tool_start` / `tool_end` 中间事件
-- 发送前会把常见 Markdown 转成 Slack `mrkdwn`；若输出里包含 ```` ```md ```` / ```` ```markdown ```` 源码块，会先解包再渲染
-- 长消息按段落优先分片发送；Slack API 限流时最多自动重试 3 次
-- 线程内文本命令继续支持 `/clear`、`/restart`、`/shutdown`
+- Socket Mode (`@slack/bolt`) — suitable for private deployments; no public webhook required.
+- Listens to `message.im` and `app_mention`.
+- DM session ID: `slack-dm-<teamId>-<channelId>`
+- Thread session ID: `slack-thread-<teamId>-<channelId>-<threadTs|ts>`
+- Channel replies are always sent back to the originating thread. If the mention occurs on a non-thread message, that message's `ts` is used to start a new thread.
+- Filters out bot/self messages, system messages with a subtype, and non-mention messages.
+- Strips the leading bot mention from the text before forwarding to the agent. If nothing remains after stripping, a short prompt is returned.
+- Adds a `:eyes:` reaction to acknowledge receipt before processing.
+- **Only the final result is sent**; `thinking_delta` / `tool_start` / `tool_end` events are not exposed.
+- Markdown is converted to Slack `mrkdwn` before sending; ` ```md ` / ` ```markdown ` blocks are unwrapped and rendered inline.
+- Long messages are split by paragraph and sent sequentially; Slack API rate limits trigger up to 3 automatic retries.
+- Text commands `/clear`, `/restart`, `/shutdown` are supported inside threads.
 
-### Slack App 准备要求
+### Slack App Requirements
 
-- 开启 Socket Mode
-- 创建 app-level token，并授予 `connections:write`
-- Bot scopes 至少包含 `chat:write`、`im:history`、`app_mentions:read`、`reactions:write`
-- 事件订阅至少包含 `message.im`、`app_mention`
-- 配置 slash commands：`/skillpack-clear`、`/skillpack-restart`、`/skillpack-shutdown`
+- Socket Mode must be enabled.
+- An app-level token with the `connections:write` scope is required.
+- Bot scopes must include at least: `chat:write`, `im:history`, `app_mentions:read`, `reactions:write`.
+- Event subscriptions must include at least: `message.im`, `app_mention`.
+- Slash commands to configure: `/skillpack-clear`, `/skillpack-restart`, `/skillpack-shutdown`.
 
-## 新增 Adapter 指南
+## Adding a New Adapter
 
-1. 在 `src/adapters/` 下新建 `xxx.ts`
-2. 实现 `PlatformAdapter` 接口（`name`、`start(ctx)`、`stop()`）
-3. 在 `src/index.ts` 的 `startAdapters()` 中根据 `dataConfig.adapters.xxx` 条件启动
-4. 构建：`npm run build`（`cd runtime/server && tsc`）
-
-## 构建 & 分发流程
-
-```
-开发者:  npm run build
-         └─ build:runtime: cd runtime/server && tsc  →  dist/
-         └─ tsup: 构建 CLI  →  dist/cli.js
-         npm publish
-         └─ runtime/server/dist/ 进入 npm 包
-         └─ runtime/server/src/  被 .npmignore 排除
-
-用户:    npx skillpack init
-         └─ 复制 runtime/（含 dist/）到目标目录
-         npx skillpack bundle
-         └─ addRuntimeFiles 排除 server/src/ 和 server/tsconfig.json
-         └─ zip 只含 dist/
-
-终端用户: 解压 zip → start.sh → node dist/index.js
-```
+1. Create `src/runtime/adapters/xxx.ts`.
+2. Implement the `PlatformAdapter` interface (`name`, `start(ctx)`, `stop()`).
+3. In `src/runtime/server.ts`, conditionally call the adapter inside `startAdapters()` based on `dataConfig.adapters.xxx`.
+4. Run `npm run build` to compile.

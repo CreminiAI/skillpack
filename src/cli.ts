@@ -1,10 +1,8 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { createCommand } from "./commands/create.js";
-import { initCommand } from "./commands/init.js";
-import { registerSkillsCommand } from "./commands/skills-cmd.js";
-import { registerPromptsCommand } from "./commands/prompts-cmd.js";
-import { bundle } from "./core/bundler.js";
+import { runCommand } from "./commands/run.js";
+import { zipCommand } from "./commands/zip.js";
 import fs from "node:fs";
 
 const packageJson = JSON.parse(
@@ -22,39 +20,30 @@ program
 program
   .command("create [directory]")
   .description("Create a skills pack interactively")
-  .action(async (directory?: string) => {
-    await createCommand(directory);
+  .option("--config <path-or-url>", "Initialize from a local or remote skillpack.json")
+  .action(async (directory?: string, options?: { config?: string }) => {
+    await createCommand(directory, options);
   });
 
+// run command
 program
-  .command("init [directory]")
-  .description(
-    "Initialize a skills pack from a local config file or URL and expand runtime files",
-  )
-  .requiredOption("--config <path-or-url>", "Path or URL to a skillpack.json file")
-  .option("--bundle", "Bundle as a zip after initialization")
-  .action(
-    async (
-      directory: string | undefined,
-      options: { config: string; bundle?: boolean },
-    ) => {
-      await initCommand(directory, options);
-    },
-  );
+  .command("run [directory]")
+  .description("Start the SkillPack runtime server")
+  .option("--port <port>", "Port to listen on")
+  .option("--host <host>", "Host to bind to")
+  .action(async (directory?: string, options?: { port?: string; host?: string }) => {
+    if (options?.port) process.env.PORT = options.port;
+    if (options?.host) process.env.HOST = options.host;
+    await runCommand(directory);
+  });
 
-// skills subcommands
-registerSkillsCommand(program);
-
-// prompts subcommands
-registerPromptsCommand(program);
-
-// build command
+// zip command
 program
-  .command("build")
-  .description("Package the current pack as a zip file")
+  .command("zip")
+  .description("Package the current pack as a zip file (skillpack.json + skills/ + start scripts)")
   .action(async () => {
     try {
-      await bundle(process.cwd());
+      await zipCommand(process.cwd());
     } catch (err) {
       console.error(chalk.red(`Packaging failed: ${err}`));
       process.exit(1);
