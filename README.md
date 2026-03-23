@@ -60,31 +60,6 @@ Produces `<pack-name>.zip` in the current directory.
 
 ---
 
-## Commands
-
-| Command              | Description                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `create [directory]` | Create a pack interactively, or initialize from a config file with `--config <path-or-url>` |
-| `run [directory]`    | Start the runtime server; auto-installs missing skills; prompts to create config if absent  |
-| `zip`                | Package `skillpack.json`, `skills/`, and start scripts into a distributable zip             |
-
-### `create` options
-
-| Option                   | Description                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| `[directory]`            | Target directory (created if it does not exist). Defaults to `cwd`.           |
-| `--config <path-or-url>` | Initialize from a local file or remote URL instead of the interactive wizard. |
-
-### `run` options
-
-| Option          | Description                               |
-| --------------- | ----------------------------------------- |
-| `[directory]`   | Pack root directory. Defaults to `cwd`.   |
-| `--port <port>` | Port to listen on. Default: `26313`.      |
-| `--host <host>` | Address to bind to. Default: `127.0.0.1`. |
-
----
-
 ## Skill Source Formats
 
 When adding skills through `create`, the source field accepts:
