@@ -7,24 +7,23 @@ import {
   loadConfig,
   PACK_FILE,
   saveConfig,
-} from "./pack-config.js";
+} from "../pack-config.js";
 import {
   installConfiguredSkills,
   syncSkillDescriptions,
-} from "./skill-manager.js";
-import { addRuntimeFiles, assertRuntimeDirExists, getRuntimeDir } from "./runtime-template.js";
+} from "../skill-manager.js";
 
 /**
- * Package the pack as a zip file.
+ * Package the pack as a lightweight zip file.
+ * Includes only: skillpack.json, start.sh, start.bat, skills/
+ * Does NOT include server/, web/, or any other runtime files.
  */
-export async function bundle(workDir: string): Promise<string> {
+export async function zipCommand(workDir: string): Promise<string> {
   const config = loadConfig(workDir);
   const zipName = `${config.name}.zip`;
   const zipPath = path.join(workDir, zipName);
-  const runtimeDir = getRuntimeDir();
 
-  assertRuntimeDirExists(runtimeDir);
-
+  // Reinstall and sync skills before packaging
   installConfiguredSkills(workDir, config);
   syncSkillDescriptions(workDir, config);
   saveConfig(workDir, config);
@@ -60,8 +59,17 @@ export async function bundle(workDir: string): Promise<string> {
       archive.directory(skillsDir, `${prefix}/skills`);
     }
 
-    // 3. runtime directory, excluding node_modules
-    addRuntimeFiles(archive, runtimeDir, prefix);
+    // 3. start.sh (with execute bit)
+    const startSh = path.join(workDir, "start.sh");
+    if (fs.existsSync(startSh)) {
+      archive.file(startSh, { name: `${prefix}/start.sh`, mode: 0o755 });
+    }
+
+    // 4. start.bat
+    const startBat = path.join(workDir, "start.bat");
+    if (fs.existsSync(startBat)) {
+      archive.file(startBat, { name: `${prefix}/start.bat` });
+    }
 
     archive.finalize();
   });
