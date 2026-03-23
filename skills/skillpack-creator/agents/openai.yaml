@@ -1,0 +1,4 @@
+interface:
+  display_name: "SkillPack Creator"
+  short_description: "Convert a successful task into a reusable SkillPack."
+  default_prompt: "Analyze the completed task, extract a stable workflow, create the local skill and skillpack.json, and prepare the pack for zipping."
