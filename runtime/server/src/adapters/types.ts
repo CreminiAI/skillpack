@@ -6,7 +6,7 @@ import type { Express } from "express";
 // ---------------------------------------------------------------------------
 
 /** Unified bot commands supported by all adapters */
-export type BotCommand = "clear" | "restart" | "shutdown";
+export type BotCommand = "new" | "clear" | "restart" | "shutdown";
 
 /** Result of a command execution */
 export interface CommandResult {

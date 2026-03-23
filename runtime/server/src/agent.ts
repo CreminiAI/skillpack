@@ -1,7 +1,9 @@
 import path from "node:path";
+import fs from "node:fs";
 import {
   AuthStorage,
   createAgentSession,
+  createCodingTools,
   ModelRegistry,
   SessionManager,
   DefaultResourceLoader,
@@ -108,7 +110,24 @@ export class PackAgent implements IPackAgent {
       const modelRegistry = new ModelRegistry(authStorage);
       const model = modelRegistry.find(provider, modelId);
 
-      const sessionManager = SessionManager.inMemory();
+      const sessionDir = path.resolve(
+        rootDir,
+        "data",
+        "sessions",
+        channelId,
+      );
+      fs.mkdirSync(sessionDir, { recursive: true });
+      const sessionManager = SessionManager.continueRecent(rootDir, sessionDir);
+      log(`[PackAgent] Session dir: ${sessionDir}`);
+
+      const workspaceDir = path.resolve(
+        rootDir,
+        "data",
+        "workspaces",
+        channelId,
+      );
+      fs.mkdirSync(workspaceDir, { recursive: true });
+      log(`[PackAgent] Workspace dir: ${workspaceDir}`);
 
       const skillsPath = path.resolve(rootDir, "skills");
       log(`[PackAgent] Loading skills from: ${skillsPath}`);
@@ -119,13 +138,16 @@ export class PackAgent implements IPackAgent {
       });
       await resourceLoader.reload();
 
+      const tools = createCodingTools(workspaceDir);
+
       const { session } = await createAgentSession({
-        cwd: rootDir,
+        cwd: workspaceDir,
         authStorage,
         modelRegistry,
         sessionManager,
         resourceLoader,
         model,
+        tools,
       });
 
       const channelSession: ChannelSession = {
@@ -281,13 +303,23 @@ export class PackAgent implements IPackAgent {
     channelId: string,
   ): Promise<CommandResult> {
     switch (command) {
+      case "new":
       case "clear": {
         const cs = this.channels.get(channelId);
         if (cs) {
           cs.session.dispose();
           this.channels.delete(channelId);
         }
-        return { success: true, message: "Session cleared." };
+        const { rootDir } = this.options;
+        const sessionDir = path.resolve(rootDir, "data", "sessions", channelId);
+        if (fs.existsSync(sessionDir)) {
+          fs.rmSync(sessionDir, { recursive: true, force: true });
+          log(`[PackAgent] Cleared session dir: ${sessionDir}`);
+        }
+        return {
+          success: true,
+          message: command === "new" ? "New session started." : "Session cleared.",
+        };
       }
 
       case "restart":

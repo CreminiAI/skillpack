@@ -22,6 +22,7 @@ function getPackConfig(rootDir: string): any {
 }
 
 const COMMANDS: Record<string, BotCommand> = {
+  "/new": "new",
   "/clear": "clear",
   "/restart": "restart",
   "/shutdown": "shutdown",
@@ -227,7 +228,7 @@ export class WebAdapter implements PlatformAdapter {
               ...result,
             }),
           );
-          if (command === "clear") {
+          if (command === "clear" || command === "new") {
             ws.send(JSON.stringify({ done: true }));
           }
           return;
