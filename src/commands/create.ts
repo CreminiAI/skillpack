@@ -7,14 +7,20 @@ import {
   configExists,
   createDefaultConfig,
   saveConfig,
+  validateConfigShape,
   type SkillEntry,
-} from "../core/pack-config.js";
-import { bundle } from "../core/bundler.js";
+  type PackConfig,
+} from "../pack-config.js";
+import { zipCommand } from "./zip.js";
 import {
   installConfiguredSkills,
   refreshDescriptionsAndSave,
   upsertSkills,
-} from "../core/skill-manager.js";
+} from "../skill-manager.js";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function parseSkillNames(value: string): string[] {
   return value
@@ -55,13 +61,127 @@ function parseSourceInput(value: string): {
   };
 }
 
-export async function createCommand(directory?: string): Promise<void> {
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function readConfigSource(source: string): Promise<PackConfig> {
+  let raw = "";
+
+  if (isHttpUrl(source)) {
+    const response = await fetch(source);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to download config: ${response.status} ${response.statusText}`,
+      );
+    }
+    raw = await response.text();
+  } else {
+    const filePath = path.resolve(source);
+    raw = fs.readFileSync(filePath, "utf-8");
+  }
+
+  const parsed = JSON.parse(raw) as unknown;
+  validateConfigShape(parsed, source);
+  return parsed;
+}
+
+/**
+ * Copy templates/start.sh and templates/start.bat to workDir.
+ */
+function copyStartTemplates(workDir: string): void {
+  const templateDir = path.resolve(
+    new URL("../templates", import.meta.url).pathname,
+  );
+
+  for (const file of ["start.sh", "start.bat"]) {
+    const src = path.join(templateDir, file);
+    const dest = path.join(workDir, file);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dest);
+      if (file === "start.sh") {
+        fs.chmodSync(dest, 0o755);
+      }
+    } else {
+      console.warn(chalk.yellow(`  [warn] Template not found: ${src}`));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// create command
+// ---------------------------------------------------------------------------
+
+export interface CreateCommandOptions {
+  config?: string;
+}
+
+export async function createCommand(
+  directory?: string,
+  options: CreateCommandOptions = {},
+): Promise<void> {
   const workDir = directory ? path.resolve(directory) : process.cwd();
 
   if (directory) {
     fs.mkdirSync(workDir, { recursive: true });
   }
 
+  // --config mode: initialize from remote/local skillpack.json
+  if (options.config) {
+    await initFromConfig(workDir, options.config);
+    return;
+  }
+
+  // Interactive creation mode
+  await interactiveCreate(workDir);
+}
+
+// ---------------------------------------------------------------------------
+// --config mode (formerly init command)
+// ---------------------------------------------------------------------------
+
+async function initFromConfig(workDir: string, configSource: string): Promise<void> {
+  if (configExists(workDir)) {
+    const { overwrite } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "overwrite",
+        message: `A ${PACK_FILE} file already exists in this directory. Overwrite it?`,
+        default: false,
+      },
+    ]);
+
+    if (!overwrite) {
+      console.log(chalk.yellow("Cancelled"));
+      return;
+    }
+  }
+
+  const config = await readConfigSource(configSource);
+  saveConfig(workDir, config);
+
+  console.log(chalk.blue(`\n  Initialize ${config.name} from ${configSource}\n`));
+
+  installConfiguredSkills(workDir, config);
+  refreshDescriptionsAndSave(workDir, config);
+  copyStartTemplates(workDir);
+
+  console.log(chalk.green(`\n  ${PACK_FILE} saved`));
+  console.log(chalk.green(`  start.sh / start.bat created`));
+  console.log(chalk.green(`  Initialization complete.\n`));
+  console.log(chalk.dim(`  Run npx @cremini/skillpack run . to start\n`));
+}
+
+// ---------------------------------------------------------------------------
+// Interactive creation mode
+// ---------------------------------------------------------------------------
+
+async function interactiveCreate(workDir: string): Promise<void> {
   if (configExists(workDir)) {
     const { overwrite } = await inquirer.prompt([
       {
@@ -168,16 +288,12 @@ export async function createCommand(directory?: string): Promise<void> {
         type: "input",
         name: "prompt",
         message: isFirst
-          ? `Prompt #${promptIndex} (required):`
+          ? `Prompt #${promptIndex} (leave blank to skip):`
           : `Prompt #${promptIndex} (leave blank to finish):`,
-        validate: isFirst
-          ? (value: string) =>
-              value.trim() ? true : "The first Prompt cannot be empty"
-          : undefined,
       },
     ]);
 
-    if (!isFirst && !prompt.trim()) {
+    if (!prompt.trim()) {
       break;
     }
 
@@ -185,31 +301,36 @@ export async function createCommand(directory?: string): Promise<void> {
     promptIndex++;
   }
 
-  const { shouldBundle } = await inquirer.prompt([
+  const { shouldZip } = await inquirer.prompt([
     {
       type: "confirm",
-      name: "shouldBundle",
-      message: "Bundle as a zip now?",
+      name: "shouldZip",
+      message: "Package as a zip now?",
       default: true,
     },
   ]);
 
   saveConfig(workDir, config);
-  console.log(chalk.green(`\n  ${PACK_FILE} saved\n`));
+  copyStartTemplates(workDir);
+  console.log(chalk.green(`\n  ${PACK_FILE} saved`));
+  console.log(chalk.green(`  start.sh / start.bat created\n`));
 
   if (requestedSkills.length > 0) {
     installConfiguredSkills(workDir, config);
     refreshDescriptionsAndSave(workDir, config);
   }
 
-  if (shouldBundle) {
-    await bundle(workDir);
+  if (shouldZip) {
+    await zipCommand(workDir);
   }
 
   console.log(chalk.green("\n  Done!"));
-  if (!shouldBundle) {
+  if (!shouldZip) {
     console.log(
-      chalk.dim("  Run npx @cremini/skillpack build to create the zip\n"),
+      chalk.dim(
+        "  Run npx @cremini/skillpack run . to start\n" +
+        "  Run npx @cremini/skillpack zip to create the zip\n",
+      ),
     );
   }
 }

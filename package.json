@@ -1,6 +1,6 @@
 {
   "name": "@cremini/skillpack",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "description": "Pack AI Skills into Local Agents",
   "type": "module",
   "repository": {
@@ -16,7 +16,8 @@
   },
   "files": [
     "dist",
-    "runtime",
+    "web",
+    "templates",
     "README.md",
     "LICENSE"
   ],
@@ -24,14 +25,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run build:runtime && tsup",
-    "build:runtime": "cd runtime/server && npx tsc",
+    "build": "tsup",
     "dev": "tsup --watch",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
-    "create": "node dist/cli.js create",
-    "verify-release": "npm run check && npm run build && npm pack --dry-run",
-    "prepublishOnly": "npm run verify-release"
+    "create": "tsup && node dist/cli.js create",
+    "run": "tsup && node dist/cli.js run",
+    "zip": "tsup && node dist/cli.js zip"
   },
   "keywords": [
     "skills",
@@ -42,15 +42,23 @@
   "author": "Finpeak Inc",
   "license": "MIT",
   "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.57.1",
+    "@slack/bolt": "^4.6.0",
     "archiver": "^7.0.1",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
-    "inquirer": "^13.3.0"
+    "express": "^5.1.0",
+    "inquirer": "^13.3.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/archiver": "^7.0.0",
+    "@types/express": "^5.0.0",
     "@types/inquirer": "^9.0.9",
     "@types/node": "^25.5.0",
+    "@types/node-telegram-bot-api": "^0.64.0",
+    "@types/ws": "^8.18.0",
     "prettier": "^3.8.1",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"

@@ -1,4 +1,4 @@
-# skillpack Release Checklist
+# SkillPack Release Checklist
 
 Use this checklist before running `npm publish` to confirm the npm package contents, runtime behavior, and sensitive-data boundaries are ready for release.
 
@@ -6,7 +6,7 @@ Use this checklist before running `npm publish` to confirm the npm package conte
 
 - Publish the `@cremini/skillpack` npm CLI package
 - Generate a publicly installable npm tarball
-- Verify that the `runtime/` directory is suitable for distribution
+- Verify that the published package is correct and complete
 
 ## Required Checks Before Release
 
@@ -48,10 +48,10 @@ npm pack --dry-run
 Make sure the tarball:
 
 - Includes `dist/`
-- Includes `runtime/`
+- Includes `web/`
+- Includes `templates/`
 - Includes `README.md` and `LICENSE`
 - Does not include `src/`, `docs/`, or `output/`
-- Does not include `runtime/server/node_modules/`
 - Does not include log files or local build artifacts
 
 If the dry run is wrong, fix `.npmignore`, the `files` field, or leftover workspace artifacts before continuing.
@@ -86,15 +86,15 @@ trufflehog git file://$(pwd)
 
 Confirm that the runtime server listens only on 127.0.0.1 by default:
 
-- [runtime/server/index.js](/Users/yava/myspace/finpeak/skill-pack/runtime/server/index.js) should default to `127.0.0.1`
+- `src/runtime/server.ts` should default to `127.0.0.1`
 - Documentation should state that API keys are only stored in runtime memory on the local machine
 
-Review the launcher scripts:
+Review the launcher script templates:
 
-- [runtime/start.sh](/Users/yava/myspace/finpeak/skill-pack/runtime/start.sh)
-- [runtime/start.bat](/Users/yava/myspace/finpeak/skill-pack/runtime/start.bat)
+- `templates/start.sh`
+- `templates/start.bat`
 
-They should install dependencies with a lockfile-backed command so users get reproducible results.
+They should invoke `npx -y @cremini/skillpack run .` so users run the published version.
 
 ### 6. Run a Real Install Smoke Test
 
@@ -112,8 +112,8 @@ npx @cremini/skillpack --version
 Confirm that:
 
 - The CLI runs
-- The `create` and `build` commands start successfully
-- Generated zip files preserve the `runtime/` template's relative paths and exclude any `node_modules/` directories
+- `create` and `run` commands start successfully
+- `zip` produces an archive containing only `skillpack.json`, `skills/`, `start.sh`, and `start.bat`
 
 ## Recommended Release Flow
 
@@ -124,7 +124,7 @@ npm run verify-release
 npm publish
 ```
 
-`verify-release` should run:
+`verify-release` runs:
 
 ```bash
 npm run check && npm run build && npm pack --dry-run

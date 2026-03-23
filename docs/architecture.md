@@ -1,54 +1,56 @@
-# SkillPack 当前实现架构说明
+# SkillPack Architecture
 
+## Project Overview
 
-## 项目描述
+`@cremini/skillpack` is a Node.js CLI that packages a set of AI skills, prompt templates, and a built-in runtime into a single distributable local web application.
 
-`@cremini/skillpack` 是一个 Node.js CLI，用来把一组 skills、提示词模板和内置运行时打包成一个可直接分发的本地 Web 应用 zip。
+End users run `npx @cremini/skillpack run` (or extract a generated zip and execute `start.sh` / `start.bat`). A browser page opens locally, and the runtime's built-in `pi-coding-agent` executes the packaged skills on their behalf.
 
-最终用户拿到 zip 后，解压并运行 `start.sh` 或 `start.bat`，浏览器会打开本地页面，通过运行时中的 `pi-coding-agent` 调用已打包好的 skills。
+> If this document conflicts with the source code, the source code takes precedence.  
+> "Pack" throughout this document refers to one distributable SkillPack application.
 
-- 如果本文与源码不一致，以源码为准
-- 文中提到的 pack 统一指一个可分发的 SkillPack 应用
+---
 
-## 当前代码结构
+## Source Tree
 
 ```text
 skill-pack/
 ├── src/
-│   ├── cli.ts                    # CLI 入口
+│   ├── cli.ts                    # CLI entry point
 │   ├── commands/
-│   │   ├── create.ts            # 交互式创建 pack
-│   │   ├── init.ts              # 从本地/远程配置初始化 pack
-│   │   ├── prompts-cmd.ts       # prompts 子命令
-│   │   └── skills-cmd.ts        # skills 子命令
-│   └── core/
-│       ├── bundler.ts           # zip 打包
-│       ├── pack-config.ts       # skillpack.json 读写与校验
-│       ├── prompts.ts           # prompts 增删查
-│       ├── runtime-template.ts  # runtime 模板复制/归档
-│       └── skill-manager.ts     # skills 安装、扫描、删除、描述同步
-├── runtime/
-│   ├── server/                  # 运行时后端，直接以 JS 形式分发
-│   ├── web/                     # 运行时前端静态资源
-│   ├── start.sh                 # macOS / Linux 启动脚本
-│   ├── start.bat                # Windows 启动脚本
-│   └── README.md                # 运行时使用说明
-├── examples/                    # skillpack.json 示例
-├── docs/
-└── dist/                        # tsup 构建后的 CLI
+│   │   ├── create.ts             # Interactive pack creation (+ --config <url>)
+│   │   ├── run.ts                # Start the runtime server
+│   │   └── zip.ts                # Lightweight zip packaging
+│   ├── pack-config.ts            # skillpack.json read / write / validate
+│   ├── skill-manager.ts          # Skill install, scan, remove, description sync
+│   └── runtime/                  # Server runtime (compiled into dist/)
+│       ├── server.ts             # Exports startServer()
+│       ├── agent.ts              # PackAgent — platform-agnostic agent layer
+│       ├── config.ts             # Runtime config loading
+│       ├── lifecycle.ts          # Graceful shutdown / restart
+│       └── adapters/
+│           ├── types.ts          # Shared interfaces
+│           ├── web.ts            # WebAdapter (HTTP + WebSocket)
+│           ├── telegram.ts       # TelegramAdapter (polling)
+│           ├── slack.ts          # SlackAdapter (Socket Mode)
+│           └── markdown.ts       # Markdown → platform text converter
+├── web/                          # Frontend static assets
+├── templates/                    # start.sh / start.bat templates
+├── package.json                  # Merged dependencies
+├── tsconfig.json
+└── tsup.config.ts
 ```
 
+---
 
-## 核心数据模型
+## Core Data Model
 
 ### `skillpack.json`
-
-当前配置结构如下：
 
 ```json
 {
   "name": "Comic Explainer",
-  "description": "A skill App, powered by SkillApp.sh",
+  "description": "A skill App, powered by SkillPack.sh",
   "version": "1.0.0",
   "prompts": [
     "Prompt 1",
@@ -64,223 +66,147 @@ skill-pack/
 }
 ```
 
-字段约束：
+Field constraints:
 
-- `name` 必填
-- `description` 必须为字符串
-- `version` 必须为字符串
-- `prompts` 必须为字符串数组
-- `skills` 必须为数组
-- `skills[].name` 大小写不敏感去重
-- `skills[].source` 必填
-- `skills[].description` 必须存在，允许为空字符串
+- `name` — required
+- `description` — must be a string
+- `version` — must be a string
+- `prompts` — must be a string array
+- `skills` — must be an array
+- `skills[].name` — deduplicated case-insensitively
+- `skills[].source` — required
+- `skills[].description` — must exist; empty string is allowed
 
-### Prompt 语义
+### Prompt semantics
 
-当前实现里，`prompts` 主要承担两类职责：
+`prompts` serves two roles in the current runtime:
 
-- 作为 pack 的预设任务模板
-- 为前端首页提供可点击的快捷输入内容
+- Acts as preset task templates for the pack.
+- Populates the frontend homepage with quick-input shortcuts.
 
-现有 UI 行为：
+UI behavior:
 
-- 只有 1 条 prompt 时，页面会自动预填到输入框
-- 多于 1 条 prompt 时，首页会展示 prompt cards，点击后回填输入框
+- If there is exactly one prompt, it is pre-filled into the input box.
+- If there are multiple prompts, the homepage shows prompt cards that fill the input box on click.
 
-## CLI 设计
+---
 
-CLI 入口在 `src/cli.ts`，基于 `commander` 注册如下命令：
+## CLI Design
 
-| 命令 | 作用 |
+The CLI entry point is `src/cli.ts`, built on `commander`:
+
+| Command | Description |
 | --- | --- |
-| `skillpack create [directory]` | 交互式创建一个 pack |
-| `skillpack init [directory] --config <path-or-url>` | 从本地文件或远程 URL 初始化 pack |
-| `skillpack skills add <source> --skill <names...>` | 安装一个或多个 skill |
-| `skillpack skills remove <name>` | 删除 skill |
-| `skillpack skills list` | 列出当前 skills |
-| `skillpack prompts add <text>` | 添加 prompt |
-| `skillpack prompts remove <index>` | 删除 prompt，索引从 1 开始 |
-| `skillpack prompts list` | 列出 prompts |
-| `skillpack build` | 打包当前目录为 zip |
+| `skillpack create [directory]` | Interactively create a new pack (also accepts `--config <url>` to initialize from a remote or local config file) |
+| `skillpack run [directory]` | Start the runtime server; prompts to create `skillpack.json` if missing; auto-installs missing remote skills |
+| `skillpack zip` | Package `skillpack.json`, `start.sh`, `start.bat`, and `skills/` into a zip |
 
-## 关键流程
+---
+
+## Key Flows
 
 ### 1. `create`
 
-`src/commands/create.ts` 的实际行为：
+`src/commands/create.ts`:
 
-1. 解析目标目录；如果传了 `directory` 则先创建目录
-2. 如果目标目录已存在 `skillpack.json`，先确认是否覆盖
-3. 交互式采集 `name`、`description`
-4. 循环采集 skill source 和 skill names
-5. 循环采集 prompts，其中第 1 条必填
-6. 询问是否立即打包 zip
-7. 保存 `skillpack.json`
-8. 如果声明了 skills，则安装 skills 并回填 description
-9. 如果用户选择打包，则调用 `bundle`
+1. Resolves the target directory; creates it if a `directory` argument is passed.
+2. If `skillpack.json` already exists in the target, prompts for confirmation before overwriting.
+3. If `--config <url|path>` is supplied, fetches and validates the remote or local config file (replaces the old `init` command).
+4. Otherwise, interactively collects `name`, `description`, skill sources and names, and prompts (first prompt required).
+5. Saves `skillpack.json`.
+6. Installs declared skills and syncs descriptions back into `skillpack.json`.
+7. Copies `templates/start.sh` and `templates/start.bat` into the target directory.
 
-这里有一个实现细节很重要：
+### 2. `run`
 
-- `create` 会生成配置并可直接打包
-- 但它不会像 `init` 一样把 `runtime/` 模板展开到当前工作目录
-- zip 中的 runtime 来自打包阶段直接读取项目自带的 `runtime/` 模板
+`src/commands/run.ts`:
 
-### 2. `init`
+1. Resolves the working directory (defaults to `process.cwd()`).
+2. If `skillpack.json` is missing, prompts for `name` and `description`, generates a default config, saves it, and copies start scripts.
+3. Loads the config and detects missing remote skills.
+4. Auto-installs any missing remote skills.
+5. Calls `startServer({ rootDir })` to launch the runtime.
 
-`src/commands/init.ts` 适合“有现成配置文件，快速初始化工作目录”的场景。
+### 3. Skill management
 
-实际行为：
+Skill management is centralized in `src/skill-manager.ts`.
 
-1. 支持从本地路径或 HTTP/HTTPS URL 读取 `skillpack.json`
-2. 对配置执行严格结构校验
-3. 写入目标目录的 `skillpack.json`
-4. 按配置安装所有 skills
-5. 扫描 `skills/` 中的 `SKILL.md` frontmatter，回填 description
-6. 把 `runtime/` 模板完整复制到目标目录
-7. 为 `start.sh` / `start.bat` 补执行位
-8. 可选直接打包 zip
-
-因此，`init` 产出的工作目录是一个“可本地直接运行，也可再打包”的完整目录。
-
-### 3. `skills` 管理
-
-skills 管理集中在 `src/core/skill-manager.ts`。
-
-#### 安装
-
-CLI 最终会调用：
+**Installation** — the CLI ultimately invokes:
 
 ```bash
 npx -y skills add <source> --agent openclaw --copy -y --skill <name>
 ```
 
-实现特点：
+- Multiple skills from the same source are grouped and installed together.
+- The install target is `skills/` in the working directory.
+- An install failure aborts the current flow.
 
-- 同一个 source 的多个 skill 会被分组后一次安装
-- 安装目标是当前工作目录下的 `skills/`
-- 安装失败会直接终止当前流程
+**Scan and description sync** — after installation, `skills/` is recursively scanned for `SKILL.md` files. Frontmatter fields `name` and `description` are read back and written into `skillpack.json`.
 
-#### 扫描与描述同步
+### 4. `zip`
 
-安装后，程序会递归扫描 `skills/` 目录下所有 `SKILL.md`，读取 frontmatter 中的：
+`src/commands/zip.ts`:
 
-- `name`
-- `description`
+Packages only the essentials for distribution:
 
-然后用扫描出的 description 回写 `skillpack.json`。因此：
+- `skillpack.json`
+- `skills/` directory
+- `start.sh` / `start.bat`
 
-- `skillpack.json` 中的 description 既是配置字段，也是安装后同步得到的展示字段
-- 配置中的 skill 名称需要和实际 skill frontmatter 名称匹配，才能正确回填
+The runtime is no longer bundled inside the zip. The start scripts invoke `npx @cremini/skillpack run` so the runtime is resolved from npm at startup.
 
-#### 删除
+---
 
-`skills remove <name>` 会：
+## Runtime Architecture
 
-1. 从 `skillpack.json` 中移除同名 skill
-2. 扫描 `skills/` 目录中匹配的已安装 skill
-3. 删除对应的 skill 目录
+The runtime source lives in `src/runtime/`. It is compiled into `dist/` by `tsup` and shipped as part of the npm package. See [runtime/runtime-architecture.md](./runtime/runtime-architecture.md) for the detailed server-side design.
 
-删除依据是 skill frontmatter 的 `name`，并按大小写不敏感处理。
+### Distributed pack structure
 
-### 4. `prompts` 管理
-
-`src/core/prompts.ts` 只做非常轻量的配置操作：
-
-- `add`：直接追加到 `config.prompts`
-- `remove`：按 1-based index 删除
-- `list`：返回当前 prompt 列表
-
-这部分没有额外的语义加工，也没有单独的数据文件。
-
-### 5. `build`
-
-`src/core/bundler.ts` 的当前打包流程如下：
-
-1. 读取并校验 `skillpack.json`
-2. 重新安装配置中声明的全部 skills
-3. 再次扫描并同步 skills description
-4. 确认项目内置 `runtime/` 模板存在
-5. 生成 `<config.name>.zip`
-6. zip 根目录使用 pack 名作为前缀目录
-7. 写入 `skillpack.json`
-8. 写入整个 `skills/` 目录
-9. 写入整个 `runtime/` 模板，但跳过其中的 `node_modules/`
-
-这一设计意味着：
-
-- `build` 是幂等偏重型操作，会再次触发 skill 安装
-- zip 内不会预装 `server/node_modules`
-- 运行时依赖由解压后的启动脚本首次执行时安装
-
-## 运行时架构
-
-运行时服务端以 TypeScript 开发，在构建阶段编译为 JS，`runtime/server/dist/` 进入分发包。详见 [im-adapters.md](./im-adapters.md)。
-
-### 运行时产物结构
+The zip produced by `skillpack zip` contains:
 
 ```text
 <pack-name>/
 ├── skillpack.json
 ├── skills/
-├── data/                        # 用户本地配置（不打包进 zip）
-│   └── config.json
-├── server/
-│   ├── dist/                    # 编译产物（入口为 dist/index.js）
-│   │   ├── index.js
-│   │   ├── agent.js
-│   │   └── adapters/
-│   │       ├── types.js
-│   │       ├── web.js
-│   │       └── telegram.js
-│   ├── package.json
-│   └── package-lock.json
-├── web/                         # 前端静态资源（不变）
-│   ├── index.html
-│   ├── styles.css
-│   ├── app.js
-│   └── marked.min.js
 ├── start.sh
-├── start.bat
-└── README.md
+└── start.bat
 ```
 
-### 启动脚本
+The start scripts run `npx @cremini/skillpack run .` so users need only Node.js installed.
 
-- `start.sh` / `start.bat`：如果 `server/node_modules` 不存在，先执行 `npm install --omit=dev`
-- 然后进入 `server/` 执行 `node dist/index.js`
+### Start scripts
 
-运行时要求：Node.js >= 20
+`templates/start.sh`:
 
-### 服务端
+```bash
+#!/bin/bash
+cd "$(dirname "$0")"
+npx -y @cremini/skillpack run .
+```
 
-服务端基于 **Adapter 模式**，支持多 IM 平台接入：
+`templates/start.bat`:
 
-- **`dist/index.ts`**：读取 `data/config.json` + 环境变量，创建 `PackAgent`，按配置启动各 Adapter
-- **`dist/agent.js`**：`PackAgent`，平台无关的 Agent 层，管理 per-channel 的 `AgentSession`
-- **`dist/adapters/web.js`**：`WebAdapter`，HTTP API + WebSocket，与前端协议保持兼容
-- **`dist/adapters/telegram.js`**：`TelegramAdapter`，Telegram Bot polling 模式
+```bat
+@echo off
+cd /d "%~dp0"
+npx -y @cremini/skillpack run .
+```
 
-#### HTTP API（由 WebAdapter 提供）
+Node.js >= 20 is required.
 
-| 端点 | 方法 | 作用 |
-| --- | --- | --- |
-| `/api/config` | GET | pack 名称、描述、prompts、skills、provider、是否有 API key |
-| `/api/skills` | GET | skills 列表 |
-| `/api/config/key` | POST | 内存中设置 API key 和 provider |
-| `/api/chat` | WebSocket | 聊天主通道（流式事件推送） |
-| `/api/sessions` | GET | 会话列表（预留） |
+---
 
-#### API key 优先级
+## npm Package Contents
 
-1. `data/config.json` 中的 `apiKey`（首先读取）
-2. 环境变量 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`（覆盖配置文件）
-3. 前端调用 `/api/config/key`（进一步覆盖，内存中生效）
+Files published to npm (`"files"` in `package.json`):
 
-### 前端
+| Path | Purpose |
+| --- | --- |
+| `dist/` | Compiled CLI and runtime |
+| `web/` | Frontend static assets |
+| `templates/` | start.sh / start.bat templates |
+| `README.md` | — |
+| `LICENSE` | — |
 
-前端为纯静态 HTML/CSS/JavaScript，不依赖前端框架，与原版完全相同。
-
-- 左侧 sidebar：pack 名称、描述、skills 列表、provider 选择、API key 输入
-- 右侧主区：welcome view、chat view、输入框
-- 聊天采用 WebSocket 长连接，流式渲染 assistant 输出、tool 调用卡片、thinking 卡片
-- markdown 由 `marked.min.js` 渲染
+Source files (`src/`), docs, and local build artifacts are excluded.

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Skills Pack Chat" />
+  <title>Skills Pack</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h1 id="pack-name">Skills Pack</h1>
+        <p id="pack-desc">Loading...</p>
+      </div>
+
+      <div class="sidebar-actions-group">
+        <button id="open-chatapps-btn" class="action-btn chatapps-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="action-btn-icon">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span class="action-btn-label">Connect Chat Apps</span>
+        </button>
+        <button id="open-apikey-btn" class="action-btn apikey-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="action-btn-icon">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+          </svg>
+          <span class="action-btn-label">Provide Model API Key</span>
+        </button>
+      </div>
+
+      <div class="sidebar-skills-section">
+        <h3>Skills</h3>
+        <ul id="skills-list"></ul>
+      </div>
+
+      <div class="sidebar-settings-section">
+        <button id="open-settings-btn" class="settings-trigger-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Settings
+        </button>
+      </div>
+    </aside>
+
+    <main id="chat-area" class="mode-welcome">
+      <div id="welcome-view">
+        <div id="welcome-content"></div>
+      </div>
+      <div id="chat-view">
+        <div id="messages"></div>
+      </div>
+      <div id="input-area">
+        <div class="input-container">
+          <textarea id="user-input" placeholder="Type a message..." rows="1"></textarea>
+          <button id="send-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+            </svg>
+          </button>
+        </div>
+        <p class="powered-by">
+          Powered by
+          <a href="https://skillpack.sh" target="_blank" rel="noopener noreferrer">SkillPack.sh</a>
+        </p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Settings Dialog -->
+  <dialog id="settings-dialog" class="settings-modal">
+    <div class="settings-modal-header">
+      <h2>Settings</h2>
+      <button id="close-settings-btn" class="close-btn" aria-label="Close">
+         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="settings-modal-body">
+      <div class="settings-sections">
+        <!-- General Section -->
+        <div class="settings-section">
+          <h3 class="section-title">General</h3>
+          <div class="form-group">
+            <label>Provider</label>
+            <div class="provider-select-wrapper">
+              <select id="provider-select">
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="api-key-input" placeholder="sk-..." class="form-input" />
+          </div>
+        </div>
+
+        <!-- IM Bots Section -->
+        <div class="settings-section">
+          <h3 class="section-title">IM Bots</h3>
+          <div class="form-group">
+            <label>Telegram Bot Token</label>
+            <input type="password" id="telegram-token-input" placeholder="123456:ABC-DEF..." class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>Slack Bot Token</label>
+            <input type="password" id="slack-bot-token-input" placeholder="xoxb-..." class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>Slack App Token</label>
+            <input type="password" id="slack-app-token-input" placeholder="xapp-..." class="form-input" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-modal-footer">
+      <p id="key-status" class="status-text"></p>
+      <button id="restart-service-btn" class="secondary-btn" hidden>Restart Service</button>
+      <button id="save-settings-btn" class="primary-btn">Save Settings</button>
+    </div>
+  </dialog>
+
+  <!-- API Key Dialog -->
+  <dialog id="apikey-dialog" class="settings-modal compact-modal">
+    <div class="settings-modal-header">
+      <h2>Model API Key</h2>
+      <button id="close-apikey-btn" class="close-btn" aria-label="Close">
+         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="settings-modal-body">
+      <div class="settings-sections">
+        <div class="form-group">
+          <label>Provider</label>
+          <div class="provider-select-wrapper">
+            <select id="apikey-provider-select">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" id="apikey-input" placeholder="sk-..." class="form-input" />
+        </div>
+      </div>
+    </div>
+    <div class="settings-modal-footer">
+      <p id="apikey-status" class="status-text"></p>
+      <button id="restart-apikey-btn" class="secondary-btn" hidden>Restart Service</button>
+      <button id="save-apikey-btn" class="primary-btn">Save API Key</button>
+    </div>
+  </dialog>
+
+  <!-- Chat Apps Dialog -->
+  <dialog id="chatapps-dialog" class="settings-modal">
+    <div class="settings-modal-header">
+      <h2>Connect Chat Apps</h2>
+      <button id="close-chatapps-btn" class="close-btn" aria-label="Close">
+         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="settings-modal-body">
+      <div class="settings-sections">
+        <div class="settings-section">
+          <h3 class="section-title">Telegram</h3>
+          <div class="form-group">
+            <label>Bot Token</label>
+            <input type="password" id="chatapps-telegram-token" placeholder="123456:ABC-DEF..." class="form-input" />
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3 class="section-title">Slack</h3>
+          <div class="form-group">
+            <label>Bot Token</label>
+            <input type="password" id="chatapps-slack-bot-token" placeholder="xoxb-..." class="form-input" />
+          </div>
+          <div class="form-group">
+            <label>App Token</label>
+            <input type="password" id="chatapps-slack-app-token" placeholder="xapp-..." class="form-input" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-modal-footer">
+      <p id="chatapps-status" class="status-text"></p>
+      <button id="restart-chatapps-btn" class="secondary-btn" hidden>Restart Service</button>
+      <button id="save-chatapps-btn" class="primary-btn">Save & Connect</button>
+    </div>
+  </dialog>
+
+  <script src="marked.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
