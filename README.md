@@ -22,13 +22,12 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
 3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
 
-#### Mac OS
 ```bash
-./start.sh 
-```
-#### Windows, double-click start.bat, or run:
-```bash
-./start.bat 
+# macOS / Linux
+./start.sh
+
+# Windows
+start.bat
 ```
 
 ### 2. Create a new skillpack
