@@ -49,21 +49,19 @@ Download [Company Deep Research](https://github.com/FinpeakInc/downloads/release
 
 ### Run a skillpack 
 1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
-2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows, the server starts and opens http://127.0.0.1:26313 in your browser
+2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
+3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
 
 #### Mac OS
 ```bash
 ./start.sh 
 ```
-#### Windows， Double-click start.bat, or run:
+#### Windows, double-click start.bat, or run:
 ```bash
 ./start.bat 
 ```
 
-3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
-
-
-### Create a new pack interactively
+### Create a new skillpack interactively
 
 ```bash
 npx @cremini/skillpack create
@@ -76,7 +74,7 @@ Step by step:
 3. Add prompts to tell the agent how to orchestrate those skills.
 4. Optionally package the result as a zip immediately.
 
-### Initialize from an existing config
+### Create a skillpack from an existing config
 
 ```bash
 # From a local file
@@ -86,18 +84,7 @@ npx @cremini/skillpack create --config ./skillpack.json
 npx @cremini/skillpack create comic-explainer --config https://raw.githubusercontent.com/CreminiAI/skillpack/refs/heads/main/examples/comic_explainer.json
 ```
 
-Downloads and validates the config, installs all declared skills, and copies the start scripts — ready to run in one step.
-
-### Run a pack
-
-```bash
-npx @cremini/skillpack run
-npx @cremini/skillpack run ./comic-explainer
-```
-
-- If `skillpack.json` is missing, you are prompted to create one on the spot.
-- Any remote skills declared in the config but not yet installed are installed automatically.
-- The server starts and opens [http://127.0.0.1:26313](http://127.0.0.1:26313) in your browser.
+Ready to run using "Run a skillpack" part
 
 ### Package a pack for distribution
 
