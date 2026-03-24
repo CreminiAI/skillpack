@@ -54,14 +54,15 @@ Download [Company Deep Research](https://github.com/FinpeakInc/downloads/release
 ```bash
 ./start.sh 
 ```
-#### Windows
-Double-click start.bat, or run:
+#### Windows， Double-click start.bat, or run:
 ```bash
 ./start.bat 
 ```
+
 The server starts and opens http://127.0.0.1:26313 in your browser
 
-3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
+3. **Enter an LLM API key (OpenAI or Claude API Key)** in the left menu, use the prompt example to try it!
+
 
 ### Create a new pack interactively
 
