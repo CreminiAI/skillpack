@@ -149,6 +149,38 @@ export class WebAdapter implements PlatformAdapter {
       res.status(501).json({ error: "Not implemented yet" });
     });
 
+    // -- File download endpoint (for outbound attachments) -------------------
+
+    app.get("/api/files/*", (req, res) => {
+      // Extract file path from URL (everything after /api/files/)
+      const filePath = req.path.replace(/^\/api\/files\//, "");
+      if (!filePath) {
+        res.status(400).json({ error: "Missing file path" });
+        return;
+      }
+
+      // Security: only allow files under data/ directory
+      const resolvedPath = path.resolve(filePath);
+      const dataDir = path.resolve(rootDir, "data");
+      if (!resolvedPath.startsWith(dataDir)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+
+      if (!fs.existsSync(resolvedPath)) {
+        res.status(404).json({ error: "File not found" });
+        return;
+      }
+
+      const filename = path.basename(resolvedPath);
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      fs.createReadStream(resolvedPath).pipe(res);
+    });
+
     // -- WebSocket ----------------------------------------------------------
 
     this.wss = new WebSocketServer({ noServer: true });

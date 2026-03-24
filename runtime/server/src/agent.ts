@@ -9,6 +9,16 @@ import {
   DefaultResourceLoader,
 } from "@mariozechner/pi-coding-agent";
 
+import {
+  formatAttachmentsPrompt,
+  attachmentsToImageContent,
+  isImageMime,
+} from "./adapters/attachment-utils.js";
+import {
+  createSendFileTool,
+  type FileOutputCallback,
+} from "./tools/send-file-tool.js";
+
 import type {
   IPackAgent,
   PackAgentOptions,
@@ -16,6 +26,7 @@ import type {
   AgentEvent,
   BotCommand,
   CommandResult,
+  ChannelAttachment,
   LifecycleTrigger,
   SessionInfo,
 } from "./adapters/types.js";
@@ -84,6 +95,10 @@ export class PackAgent implements IPackAgent {
   private options: PackAgentOptions;
   private channels = new Map<string, ChannelSession>();
   private pendingSessionCreations = new Map<string, Promise<ChannelSession>>();
+  private fileOutputCallbackRef: { current: FileOutputCallback | null } = {
+    current: null,
+  };
+  private sendFileToolDef = createSendFileTool(this.fileOutputCallbackRef);
 
   constructor(options: PackAgentOptions) {
     this.options = options;
@@ -148,6 +163,7 @@ export class PackAgent implements IPackAgent {
         resourceLoader,
         model,
         tools,
+        customTools: [this.sendFileToolDef as any],
       });
 
       const channelSession: ChannelSession = {
@@ -172,12 +188,18 @@ export class PackAgent implements IPackAgent {
     channelId: string,
     text: string,
     onEvent: (event: AgentEvent) => void,
+    attachments?: ChannelAttachment[],
   ): Promise<HandleResult> {
     const cs = await this.getOrCreateSession(channelId);
     const run = async (): Promise<HandleResult> => {
       cs.running = true;
 
       let turnHadVisibleOutput = false;
+
+      // Wire up file output callback for this run
+      this.fileOutputCallbackRef.current = (event) => {
+        onEvent(event);
+      };
 
       // Subscribe to agent events and forward to adapter
       const unsubscribe = cs.session.subscribe((event: any) => {
@@ -261,7 +283,30 @@ export class PackAgent implements IPackAgent {
       });
 
       try {
-        await cs.session.prompt(text);
+        // Build prompt with attachments
+        let promptText = text;
+        const promptOptions: { images?: Array<{ type: "image"; data: string; mimeType: string }> } = {};
+
+        if (attachments && attachments.length > 0) {
+          // Separate image vs non-image attachments
+          const imageAttachments = attachments.filter((a) => isImageMime(a.mimeType));
+          const nonImageAttachments = attachments.filter((a) => !isImageMime(a.mimeType));
+
+          // Images → ImageContent[] for direct LLM vision
+          if (imageAttachments.length > 0) {
+            promptOptions.images = attachmentsToImageContent(imageAttachments);
+            log(`[PackAgent] Passing ${imageAttachments.length} image(s) to LLM`);
+          }
+
+          // Non-images → text description prepended to prompt
+          if (nonImageAttachments.length > 0) {
+            const attachmentPrompt = formatAttachmentsPrompt(nonImageAttachments);
+            promptText = `${attachmentPrompt}\n\n${text}`;
+            log(`[PackAgent] Injecting ${nonImageAttachments.length} non-image attachment(s) into prompt`);
+          }
+        }
+
+        await cs.session.prompt(promptText, promptOptions);
 
         const lastMessage = cs.session.state.messages.at(-1);
         const diagnostics = getAssistantDiagnostics(lastMessage);
@@ -289,6 +334,7 @@ export class PackAgent implements IPackAgent {
         return { stopReason: diagnostics?.stopReason ?? "unknown" };
       } finally {
         cs.running = false;
+        this.fileOutputCallbackRef.current = null;
         unsubscribe();
       }
     };
@@ -360,7 +406,6 @@ export class PackAgent implements IPackAgent {
 
   /** Reserved: list all sessions */
   listSessions(): SessionInfo[] {
-    // TODO: Implement session persistence and listing
     return [];
   }
 
