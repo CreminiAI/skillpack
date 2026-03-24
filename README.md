@@ -100,8 +100,8 @@ The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prer
 
 ## Slack/Telegram Integrations
 
-- Slack Configuration: Add Slack App Token and Bot Token using "Connect to Chat Apps" button (Web UI)
-- Telegram configuration: Add Bot Token using "Connect to Chat App" button (Web UI)
+**Slack Configuration**: requires Slack `App Token` and `Bot Token` 
+**Telegram configuration**: requires `Bot Token`
 
 ### Slack App Setup and how to get `App Token` and `Bot Token`
 1. Create a new Slack app at https://api.slack.com/apps
@@ -134,6 +134,7 @@ Check Allow users to send Slash commands and messages from the messages tab
 
 7. Install the app to your workspace. Get the Bot User OAuth Token. This is **`Bot Token`**
 8. Add the app to any channels where you want the agent to operate (it'll only see messages in channels it's added to)
+9. On the buit-in UI http://127.0.0.1:26313, Tap "Connect to Chat App" button and Enter the **`Bot Token`** and **`App Token`**, Save
 
 ### Telegram Setup and how to get `Bot Token`
 1. **Open Telegram** and search for the official account **`@BotFather`** (it will have a blue verified checkmark).
@@ -141,8 +142,8 @@ Check Allow users to send Slash commands and messages from the messages tab
 3. **Send the command** `/newbot` to the BotFather.
 4. **Follow the prompts** to choose a display name and a unique username for your bot. The username must end with the word "bot" (e.g., `MyHelperBot` or `My_Helper_bot`).
 5. **Receive the token**. Once the bot is successfully created, the BotFather will provide you with a message containing your unique API token. 
-
 The token will look like a long string of numbers and letters, formatted as `123456789:AABBCCddEeff.... `
+6. On the buit-in UI http://127.0.0.1:26313, Tap "Connect to Chat App" button and Enter the **`Bot Token`**, Save
 
 ### (Optional) Put tokens into data/config.json if you don't use Web UI
 Or Once you have telegram or slack tokens, you can also configure them in `data/config.json` (created at runtime, not included in the zip):
