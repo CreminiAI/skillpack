@@ -74,6 +74,7 @@ interface IPackAgent {
     channelId: string,
     text: string,
     onEvent: (e: AgentEvent) => void,
+    attachments?: ChannelAttachment[],
   ): Promise<HandleResult>;
 
   /** Handle a unified command (/clear /restart /shutdown) */
@@ -100,7 +101,8 @@ type AgentEvent =
   | { type: "text_delta"; delta: string }
   | { type: "thinking_delta"; delta: string }
   | { type: "tool_start"; toolName: string; toolInput: unknown }
-  | { type: "tool_end"; toolName: string; isError: boolean; result: unknown };
+  | { type: "tool_end"; toolName: string; isError: boolean; result: unknown }
+  | { type: "file_output"; filePath: string; filename: string; mimeType?: string; caption?: string };
 ```
 
 ## Configuration
@@ -237,6 +239,43 @@ Command result:
 - Bot scopes must include at least: `chat:write`, `im:history`, `app_mentions:read`, `reactions:write`.
 - Event subscriptions must include at least: `message.im`, `app_mention`.
 - Slash commands to configure: `/skillpack-clear`, `/skillpack-restart`, `/skillpack-shutdown`.
+
+## Attachment Handling
+
+### Inbound (User → Agent)
+
+All IM adapters extract file attachments from incoming messages, download them to the session directory, and pass them to the agent:
+
+- **Storage path**: `data/sessions/<channelId>/attachments/<timestamp>-<filename>`
+- **Image attachments** (`image/*`): converted to `ImageContent` (base64) and passed directly to the LLM via `session.prompt(text, { images })` — the model can "see" the image natively.
+- **Non-image attachments** (PDF, CSV, etc.): a text description with the local file path is prepended to the prompt. The agent can then use `read` / `bash` tools to access the file content.
+
+| Adapter | Supported types |
+| --- | --- |
+| Telegram | `photo`, `document`, `audio`, `video`, `voice` |
+| Slack | `event.files` (all file types, downloaded via Bot Token) |
+| Web | Planned (Phase 2) |
+
+### Outbound (Agent → User)
+
+A custom LLM tool `send_file` is registered via `createAgentSession({ customTools })`. When the agent generates a file and wants to deliver it to the user, it calls `send_file` with the file path. This emits a `file_output` AgentEvent, which each adapter handles:
+
+| Adapter | Send method |
+| --- | --- |
+| Telegram | `bot.sendDocument(chatId, filePath)` |
+| Slack | `client.files.uploadV2({ channel, file, filename })` |
+| Web | `file_output` event via WebSocket + `GET /api/files/*` download endpoint |
+
+### File structure
+
+```
+src/runtime/
+├── adapters/
+│   ├── attachment-utils.ts      # Shared download/save/format helpers
+│   ...
+└── tools/
+    └── send-file-tool.ts        # send_file customTool definition
+```
 
 ## Adding a New Adapter
 

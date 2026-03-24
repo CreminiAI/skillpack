@@ -97,7 +97,8 @@ Defines all types shared across adapters:
 - `IPackAgent`: agent interface (`handleMessage`, `handleCommand`, `abort`, `isRunning`, `dispose`, `listSessions`, `restoreSession`)
 - `AgentEvent`: union of 8 event types
 - `BotCommand`: `"clear" | "restart" | "shutdown"`
-- `ChannelMessage` / `ChannelAttachment` / `SessionInfo`: reserved extension interfaces
+- `ChannelMessage` / `ChannelAttachment`: attachment handling interfaces (inbound download + outbound `send_file` tool)
+- `SessionInfo`: reserved extension interface
 
 ### `adapters/telegram.ts`
 
