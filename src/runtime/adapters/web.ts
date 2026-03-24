@@ -151,11 +151,10 @@ export class WebAdapter implements PlatformAdapter {
 
     // -- File download endpoint (for outbound attachments) -------------------
 
-    app.get("/api/files/*", (req, res) => {
-      // Extract file path from URL (everything after /api/files/)
-      const filePath = req.path.replace(/^\/api\/files\//, "");
+    app.get("/api/files", (req, res) => {
+      const filePath = req.query.path as string;
       if (!filePath) {
-        res.status(400).json({ error: "Missing file path" });
+        res.status(400).json({ error: "Missing 'path' query parameter" });
         return;
       }
 

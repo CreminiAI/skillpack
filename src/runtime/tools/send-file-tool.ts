@@ -88,10 +88,13 @@ export function createSendFileTool(
     label: "Send File",
     description:
       "Send a file to the user via the current chat channel (Telegram, Slack, or Web). " +
-      "Use this tool when you have generated a file (e.g. analysis result, chart, document) " +
-      "that should be delivered directly to the user as an attachment rather than as inline text.",
+      "IMPORTANT: Do NOT proactively send files. Only use this tool when the user EXPLICITLY " +
+      "asks you to send, share, or deliver a file (e.g. '把文件发给我', 'send me the file', " +
+      "'share the result'). Never send intermediate/temporary files. When the user asks, " +
+      "send only the specific file(s) the user requested, not all generated files.",
     promptSnippet:
-      "send_file: Send a file to the user as a chat attachment.",
+      "send_file: Send a file to the user ONLY when they explicitly request it. " +
+      "Never send files proactively or automatically.",
     parameters: SendFileParams,
     async execute(
       _toolCallId,
