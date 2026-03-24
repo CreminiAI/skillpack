@@ -136,8 +136,13 @@ Check Allow users to send Slash commands and messages from the messages tab
 8. Add the app to any channels where you want the agent to operate (it'll only see messages in channels it's added to)
 
 ### Telegram Setup and how to get `Bot Token`
+1. **Open Telegram** and search for the official account **`@BotFather`** (it will have a blue verified checkmark).
+2. **Start a chat** by tapping "Start" or sending the `/start` command.
+3. **Send the command** `/newbot` to the BotFather.
+4. **Follow the prompts** to choose a display name and a unique username for your bot. The username must end with the word "bot" (e.g., `MyHelperBot` or `My_Helper_bot`).
+5. **Receive the token**. Once the bot is successfully created, the BotFather will provide you with a message containing your unique API token. 
 
-
+The token will look like a long string of numbers and letters, formatted as `123456789:AABBCCddEeff.... `
 
 ### (Optional) Put tokens into data/config.json if you don't use Web UI
 Or Once you have telegram or slack tokens, you can also configure them in `data/config.json` (created at runtime, not included in the zip):
