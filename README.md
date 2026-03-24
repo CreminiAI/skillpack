@@ -100,48 +100,48 @@ The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prer
 
 ## Slack/Telegram Integrations
 
-The runtime supports **Slack** and **Telegram** in addition to the built-in web UI. 
+- Slack Configuration: Add Slack App Token and Bot Token using "Connect to Chat Apps" button (Web UI)
+- Telegram configuration: Add Bot Token using "Connect to Chat App" button (Web UI)
 
-### Slack Configuration: Add Slack App Token and Bot Token using "Connect to Chat Apps" button
-
-### Slack App Setup and how to get App Token and Bot Token
+### Slack App Setup and how to get `App Token` and `Bot Token`
 1. Create a new Slack app at https://api.slack.com/apps
 2. Enable Socket Mode (Settings → Socket Mode → Enable)
-3. Generate an App-Level Token with connections:write scope. This is **App Token**
+3. Generate an App-Level Token with `connections:write` scope. This is **`App Token`**
 4. Add Bot Token Scopes (OAuth & Permissions):
-```app_mentions:read
-channels:history
-channels:read
-chat:write
-files:read
-files:write
-groups:history
-groups:read
-im:history
-im:read
-im:write
-users:read```
+- `app_mentions:read`
+- `channels:history`
+- `channels:read`
+- `chat:write`
+- `files:read`
+- `files:write`
+- `groups:history`
+- `groups:read`
+- `im:history`
+- `im:read`
+- `im:write`
+- `users:read`
 
 5. Subscribe to Bot Events (Event Subscriptions):
-```app_mention
-message.channels
-message.groups
-message.im```
+- `app_mention`
+- `message.channels`
+- `message.groups`
+- `message.im`
 
 6. Enable Direct Messages (App Home):
 Go to App Home in the left sidebar
 Under Show Tabs, enable the Messages Tab
 Check Allow users to send Slash commands and messages from the messages tab
 
-7. Install the app to your workspace. Get the Bot User OAuth Token. This is **Bot Token**
+7. Install the app to your workspace. Get the Bot User OAuth Token. This is **`Bot Token`**
 8. Add the app to any channels where you want the agent to operate (it'll only see messages in channels it's added to)
 
-### Telegram Configuration: Add Telegram bot token using "Connect to Chat Apps" button
+### Telegram Setup and how to get `Bot Token`
 
 
 
-
+### (Optional) Put tokens into data/config.json if you don't use Web UI
 Or Once you have telegram or slack tokens, you can also configure them in `data/config.json` (created at runtime, not included in the zip):
+The runtime supports **Slack** and **Telegram** in addition to the built-in web UI. 
 
 ```json
 {
