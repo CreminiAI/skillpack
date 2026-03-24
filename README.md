@@ -20,9 +20,6 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 ### 1. Run a skillpack 
 1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
 2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
-3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
-4. (Optional) Refer to the instructions **Slack/Telegram Integrations** below to integrate with Slack and Telegram.
-
 ```bash
 # macOS / Linux
 ./start.sh
@@ -30,6 +27,9 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 # Windows
 start.bat
 ```
+3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
+4. (Optional) Refer to the instructions **Slack/Telegram Integrations** below to integrate with Slack and Telegram.
+
 
 ### 2. Create a new skillpack
 
