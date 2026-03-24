@@ -6,7 +6,6 @@ Skillpack helps teams turn AI skills into trusted local agents that can run in t
 
 Skillpack is an open-source way to package AI skills into runnable local agents.
 Instead of juggling prompts, scripts, docs, and one-off automations, Skillpack gives you a simple way to:
-
 - package AI skills into reusable agents
 - run them locally
 - keep sensitive data in your own environment
@@ -16,9 +15,7 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 
 ## Why use SkillPack
 
-AI workflows are easy to prototype, but hard to use across a team.
-
-Today, most teams deal with:
+AI workflows are easy to prototype, but hard to use across a team. Today, most teams deal with:
 - scattered prompts and scripts
 - unclear setup steps
 - no standard way to reuse workflows
@@ -29,29 +26,16 @@ Skillpack solves this by making AI Skillpacks:
 
 **Trusted**
 Use packaged agents instead of piecing together random prompts and tools by hand.
-
 **Local**
 Run agents in your own machine or environment so sensitive data stays local.
-
 **Team-ready**
 Use agents directly from Slack and Telegram, where work already happens.
-
 **Fast**
 Pack and deploy local agents in seconds.
 
 ## Who is SkillPack for
 
-Skillpack is designed for:
-- startup teams
-- founders and operators
-- e-commerce teams
-- sales and growth teams
-- support teams
-- marketing teams
-- recruiting teams
-- developers building reusable AI workflows
-
-If your team has repeatable work that AI can help with, Skillpack gives you a better way to package and run it.
+Skillpack is designed for: startup teams, founders and operators, e-commerce teams, sales and growth teams, support teams, marketing teams, recruiting teams, developers building reusable AI workflows, If your team has repeatable work that AI can help with, Skillpack gives you a better way to package and run it.
 
 ## Use Case
 
