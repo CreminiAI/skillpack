@@ -1,10 +1,10 @@
-# SkillPack.sh — Pack and deploy local AI agents for your team in minutes
+# SkillPack — Pack and deploy local AI agents for your team in minutes
 
 Skillpack helps teams turn AI skills into trusted local agents that can run in their own environment and be used directly from **Slack** and **Telegram**. Our vision is to achieve distributed intelligence network, much like cremini mushrooms that grow from a vast, interconnected mycelial network.
 
 ## What is SkillPack
 
-Skillpack is an open-source way to package AI skills into runnable local agents.
+[skillpack.sh](https://skillpack.sh) is an open-source way to package AI skills into runnable local agents.
 Instead of juggling prompts, scripts, docs, and one-off automations, Skillpack gives you a simple way to:
 - package AI skills into reusable agents
 - run them locally
