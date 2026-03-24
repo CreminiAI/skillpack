@@ -17,7 +17,7 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 
 ## Quick Start
 
-### Run a skillpack 
+### 1. Run a skillpack 
 1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
 2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
 3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
@@ -31,7 +31,7 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 ./start.bat 
 ```
 
-### Create a new skillpack interactively
+### 2. Create a new skillpack
 
 ```bash
 npx @cremini/skillpack create
@@ -44,7 +44,7 @@ Step by step:
 3. Add prompts to tell the agent how to orchestrate those skills.
 4. Optionally package the result as a zip immediately.
 
-### Create a skillpack from an existing config
+### 3. Create a new skillpack from an existing config
 
 ```bash
 # From a local file
@@ -56,7 +56,7 @@ npx @cremini/skillpack create comic-explainer --config https://raw.githubusercon
 
 Ready to run using "Run a skillpack" part
 
-### Package a pack for distribution
+### 4. Package a pack for distribution
 
 ```bash
 npx @cremini/skillpack zip
@@ -66,7 +66,7 @@ Produces `<pack-name>.zip` in the current directory.
 
 ---
 
-## Skill Source Formats
+## Skill Source URL Formats
 
 When adding skills through `create`, the source field accepts:
 
@@ -113,9 +113,50 @@ The browser opens [http://127.0.0.1:26313](http://127.0.0.1:26313) automatically
 
 ---
 
-## IM Integrations
+## Slack/Telegram Integrations
 
-The runtime supports **Slack** and **Telegram** in addition to the built-in web UI. Configure them in `data/config.json` (created at runtime, not included in the zip):
+The runtime supports **Slack** and **Telegram** in addition to the built-in web UI. 
+
+### Slack Configuration: Add Slack App Token and Bot Token using "Connect to Chat Apps" button
+
+### Slack App Setup and how to get App Token and Bot Token
+1. Create a new Slack app at https://api.slack.com/apps
+2. Enable Socket Mode (Settings → Socket Mode → Enable)
+3. Generate an App-Level Token with connections:write scope. This is **App Token**
+4. Add Bot Token Scopes (OAuth & Permissions):
+```app_mentions:read
+channels:history
+channels:read
+chat:write
+files:read
+files:write
+groups:history
+groups:read
+im:history
+im:read
+im:write
+users:read```
+
+5. Subscribe to Bot Events (Event Subscriptions):
+```app_mention
+message.channels
+message.groups
+message.im```
+
+6. Enable Direct Messages (App Home):
+Go to App Home in the left sidebar
+Under Show Tabs, enable the Messages Tab
+Check Allow users to send Slash commands and messages from the messages tab
+
+7. Install the app to your workspace. Get the Bot User OAuth Token. This is **Bot Token**
+8. Add the app to any channels where you want the agent to operate (it'll only see messages in channels it's added to)
+
+### Telegram Configuration: Add Telegram bot token using "Connect to Chat Apps" button
+
+
+
+
+Or Once you have telegram or slack tokens, you can also configure them in `data/config.json` (created at runtime, not included in the zip):
 
 ```json
 {
@@ -130,8 +171,6 @@ The runtime supports **Slack** and **Telegram** in addition to the built-in web 
   }
 }
 ```
-
-See [docs/runtime/im-adapters.md](docs/runtime/im-adapters.md) for setup requirements.
 
 ---
 
