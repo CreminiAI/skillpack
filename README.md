@@ -13,36 +13,6 @@ Instead of juggling prompts, scripts, docs, and one-off automations, Skillpack g
 
 Skillpack is built for teams that want AI Agents to be deployable, trusted, and easy to use. 
 
-## Why use SkillPack
-
-AI workflows are easy to prototype, but hard to use across a team. Today, most teams deal with:
-- scattered prompts and scripts
-- unclear setup steps
-- no standard way to reuse workflows
-- poor team adoption
-- sensitive company data leaving their environment
-
-Skillpack solves this by making AI Skillpacks:
-
-**Trusted**
-Use packaged agents instead of piecing together random prompts and tools by hand.
-**Local**
-Run agents in your own machine or environment so sensitive data stays local.
-**Team-ready**
-Use agents directly from Slack and Telegram, where work already happens.
-**Fast**
-Pack and deploy local agents in seconds.
-
-## Who is SkillPack for
-
-Skillpack is designed for: startup teams, founders and operators, e-commerce teams, sales and growth teams, support teams, marketing teams, recruiting teams, developers building reusable AI workflows, If your team has repeatable work that AI can help with, Skillpack gives you a better way to package and run it.
-
-## Example Use Cases
-
-The main use case is to **run local agents on your computer and integrate them with Slack or Telegram** so they can work for you and your team — operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills. Each SkillPack organizes skills around a well-defined job — for example: research a company by gathering information from multiple sources and produce a PowerPoint presentation from the findings. 
-
-Download [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip) and try it! More examples can be found at [skillpack.sh](https://skillpack.sh)
-
 ---
 
 ## Quick Start
@@ -164,6 +134,37 @@ The runtime supports **Slack** and **Telegram** in addition to the built-in web 
 See [docs/runtime/im-adapters.md](docs/runtime/im-adapters.md) for setup requirements.
 
 ---
+
+## Why use SkillPack
+
+AI workflows are easy to prototype, but hard to use across a team. Today, most teams deal with:
+- scattered prompts and scripts
+- unclear setup steps
+- no standard way to reuse workflows
+- poor team adoption
+- sensitive company data leaving their environment
+
+Skillpack solves this by making AI Skillpacks:
+
+**Trusted**
+Use packaged agents instead of piecing together random prompts and tools by hand.
+**Local**
+Run agents in your own machine or environment so sensitive data stays local.
+**Team-ready**
+Use agents directly from Slack and Telegram, where work already happens.
+**Fast**
+Pack and deploy local agents in seconds.
+
+## Who is SkillPack for
+
+Skillpack is designed for: startup teams, founders and operators, e-commerce teams, sales and growth teams, support teams, marketing teams, recruiting teams, developers building reusable AI workflows, If your team has repeatable work that AI can help with, Skillpack gives you a better way to package and run it.
+
+## Example Use Cases
+
+The main use case is to **run local agents on your computer and integrate them with Slack or Telegram** so they can work for you and your team — operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills. Each SkillPack organizes skills around a well-defined job — for example: research a company by gathering information from multiple sources and produce a PowerPoint presentation from the findings. 
+
+Download [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip) and try it! More examples can be found at [skillpack.sh](https://skillpack.sh)
+
 
 ## Development
 
