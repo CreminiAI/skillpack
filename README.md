@@ -67,7 +67,7 @@ Produces `<pack-name>.zip` in the current directory.
 
 ## Skill Source URL Formats
 
-When adding skills through `create`, the source field accepts:
+When adding skills through `create`, the source accepts:
 
 ```bash
 # GitHub shorthand
@@ -97,20 +97,6 @@ The archive produced by `zip` is intentionally minimal:
 ```
 
 The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prerequisite — no pre-bundled server directory is included.
-
-### Run a distributed pack
-
-```bash
-# macOS / Linux
-./start.sh
-
-# Windows
-start.bat
-```
-
-The browser opens [http://127.0.0.1:26313](http://127.0.0.1:26313) automatically. Enter your API key and start working.
-
----
 
 ## Slack/Telegram Integrations
 
