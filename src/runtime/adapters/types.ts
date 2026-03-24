@@ -112,6 +112,7 @@ export interface IPackAgent {
     channelId: string,
     text: string,
     onEvent: (event: AgentEvent) => void,
+    attachments?: ChannelAttachment[],
   ): Promise<HandleResult>;
 
   /** Handle a built-in bot command */
@@ -154,6 +155,13 @@ export type AgentEvent =
       toolName: string;
       isError: boolean;
       result: unknown;
+    }
+  | {
+      type: "file_output";
+      filePath: string;
+      filename: string;
+      mimeType?: string;
+      caption?: string;
     };
 
 // ---------------------------------------------------------------------------

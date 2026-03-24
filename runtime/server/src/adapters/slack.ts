@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { App, LogLevel } from "@slack/bolt";
 
 import type {
@@ -5,9 +7,11 @@ import type {
   AdapterContext,
   AgentEvent,
   BotCommand,
+  ChannelAttachment,
   IPackAgent,
 } from "./types.js";
 import { formatSlackMessage } from "./markdown.js";
+import { downloadAndSaveAttachment } from "./attachment-utils.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -50,6 +54,7 @@ export class SlackAdapter implements PlatformAdapter {
   private readonly options: SlackAdapterOptions;
   private botUserId: string | null = null;
   private lastThreadByChannel = new Map<string, string>();
+  private rootDir = "";
 
   constructor(options: SlackAdapterOptions) {
     this.options = options;
@@ -57,6 +62,7 @@ export class SlackAdapter implements PlatformAdapter {
 
   async start(ctx: AdapterContext): Promise<void> {
     this.agent = ctx.agent;
+    this.rootDir = ctx.rootDir;
 
     this.app = new App({
       token: this.options.botToken,
@@ -138,19 +144,23 @@ export class SlackAdapter implements PlatformAdapter {
     }
 
     const text = (event.text || "").trim();
-    if (!text) return;
-
     const teamId = this.getTeamId(body, context);
     const channelId = `slack-dm-${teamId}-${event.channel}`;
     const route: SlackRoute = { channel: event.channel };
 
+    // Extract file attachments
+    const attachments = await this.extractSlackFiles(event, channelId, client);
+
+    if (!text && attachments.length === 0) return;
+
     await this.tryAckReaction(client, event);
 
-    if (await this.tryHandleInlineCommand(text, channelId, client, route)) {
+    if (text && await this.tryHandleInlineCommand(text, channelId, client, route)) {
       return;
     }
 
-    await this.runAgent(channelId, text, client, route);
+    const userText = text || "(User sent an attachment)";
+    await this.runAgent(channelId, userText, client, route, attachments);
   }
 
   private async handleMention({
@@ -178,7 +188,11 @@ export class SlackAdapter implements PlatformAdapter {
     );
 
     const text = this.stripBotMention(event.text || "").trim();
-    if (!text) {
+
+    // Extract file attachments
+    const attachments = await this.extractSlackFiles(event, channelId, client);
+
+    if (!text && attachments.length === 0) {
       await this.sendSafe(
         client,
         route,
@@ -189,11 +203,12 @@ export class SlackAdapter implements PlatformAdapter {
 
     await this.tryAckReaction(client, event);
 
-    if (await this.tryHandleInlineCommand(text, channelId, client, route)) {
+    if (text && await this.tryHandleInlineCommand(text, channelId, client, route)) {
       return;
     }
 
-    await this.runAgent(channelId, text, client, route);
+    const userText = text || "(User sent an attachment)";
+    await this.runAgent(channelId, userText, client, route, attachments);
   }
 
   private async handleSlashCommand({
@@ -235,21 +250,33 @@ export class SlackAdapter implements PlatformAdapter {
     text: string,
     client: any,
     route: SlackRoute,
+    attachments: ChannelAttachment[] = [],
   ): Promise<void> {
     if (!this.agent) return;
 
     let finalText = "";
     let hasError = false;
     let errorMessage = "";
+    const pendingFiles: Array<{ filePath: string; caption?: string }> = [];
 
     const onEvent = (event: AgentEvent) => {
       if (event.type === "text_delta") {
         finalText += event.delta;
+      } else if (event.type === "file_output") {
+        pendingFiles.push({
+          filePath: event.filePath,
+          caption: event.caption,
+        });
       }
     };
 
     try {
-      const result = await this.agent.handleMessage(channelId, text, onEvent);
+      const result = await this.agent.handleMessage(
+        channelId,
+        text,
+        onEvent,
+        attachments.length > 0 ? attachments : undefined,
+      );
       if (result.errorMessage) {
         hasError = true;
         errorMessage = result.errorMessage;
@@ -264,12 +291,16 @@ export class SlackAdapter implements PlatformAdapter {
       return;
     }
 
-    if (!finalText.trim()) {
+    if (finalText.trim()) {
+      await this.sendLongMessage(client, route, finalText);
+    } else if (pendingFiles.length === 0) {
       await this.sendSafe(client, route, "(No response generated)");
-      return;
     }
 
-    await this.sendLongMessage(client, route, finalText);
+    // Send outbound files
+    for (const file of pendingFiles) {
+      await this.sendFileSafe(client, route, file.filePath, file.caption);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -510,5 +541,85 @@ export class SlackAdapter implements PlatformAdapter {
 
   private escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // -------------------------------------------------------------------------
+  // Attachment extraction & sending
+  // -------------------------------------------------------------------------
+
+  /**
+   * Extract file attachments from a Slack event.
+   * Downloads files using the Bot Token for private URL access.
+   */
+  private async extractSlackFiles(
+    event: any,
+    channelId: string,
+    _client: any,
+  ): Promise<ChannelAttachment[]> {
+    const files = event.files;
+    if (!Array.isArray(files) || files.length === 0) return [];
+
+    const attachments: ChannelAttachment[] = [];
+
+    for (const file of files) {
+      try {
+        const downloadUrl =
+          file.url_private_download || file.url_private;
+        if (!downloadUrl) {
+          console.warn(
+            `[Slack] No download URL for file: ${file.name || file.id}`,
+          );
+          continue;
+        }
+
+        const attachment = await downloadAndSaveAttachment(
+          this.rootDir,
+          channelId,
+          downloadUrl,
+          file.name || file.title || "file",
+          file.mimetype,
+          { Authorization: `Bearer ${this.options.botToken}` },
+        );
+        attachments.push(attachment);
+      } catch (err) {
+        console.error(
+          `[Slack] Failed to download file ${file.name || file.id}:`,
+          err,
+        );
+      }
+    }
+
+    return attachments;
+  }
+
+  /**
+   * Send a file to the Slack channel/thread.
+   */
+  private async sendFileSafe(
+    client: any,
+    route: SlackRoute,
+    filePath: string,
+    caption?: string,
+  ): Promise<void> {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error(`[Slack] File not found for sending: ${filePath}`);
+        return;
+      }
+
+      const filename = path.basename(filePath);
+      const fileContent = fs.readFileSync(filePath);
+
+      await client.files.uploadV2({
+        channel_id: route.channel,
+        thread_ts: route.threadTs,
+        filename,
+        file: fileContent,
+        title: caption || filename,
+        initial_comment: caption || undefined,
+      });
+    } catch (err) {
+      console.error("[Slack] Failed to send file:", err);
+    }
   }
 }

@@ -1,20 +1,37 @@
-# SkillPack.sh — Pack AI Skills into Local Agents
+# SkillPack — Pack and deploy local AI agents for your team in minutes
 
-Skillpack by Cremini is built on the idea of distributed intelligence, much like cremini mushrooms that grow from a vast, interconnected mycelial network.
+Skillpack helps teams turn AI skills into trusted local agents that can run in their own environment and be used directly from **Slack** and **Telegram**. Our vision is to achieve distributed intelligence network, much like cremini mushrooms that grow from a vast, interconnected mycelial network.
 
-## Use Case
+## What is SkillPack
 
-The main use case is to **run local agents on your computer and integrate them with Slack or Telegram** so they can work for you and your team — operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills.
+[skillpack.sh](https://skillpack.sh) is an open-source way to package AI skills into runnable local agents. If skills and tools are like LEGO pieces, a SkillPack is the finished product that assembles them into a complete solution.
+Instead of juggling prompts, scripts, docs, and one-off automations, Skillpack gives you a simple way to:
+- package AI skills into reusable agents
+- run them locally
+- keep sensitive data in your own environment
+- use agents from tools your team already uses, like Slack and Telegram
 
-If skills and tools are like LEGO pieces, a SkillPack is the finished product that assembles them into a complete solution. Go to [skillpack.sh](https://skillpack.sh) to download ready-made packs.
-
-Each SkillPack organizes skills around a well-defined job — for example: research a company by gathering information from multiple sources and produce a PowerPoint presentation from the findings.
+Skillpack is built for teams that want AI Agents to be deployable, trusted, and easy to use. 
 
 ---
 
 ## Quick Start
 
-### Create a new pack interactively
+### 1. Run a skillpack 
+1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
+2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
+```bash
+# macOS / Linux
+./start.sh
+
+# Windows
+start.bat
+```
+3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
+4. (Optional) Refer to the instructions **Slack/Telegram Integrations** below to integrate with Slack and Telegram.
+
+
+### 2. Create a new skillpack
 
 ```bash
 npx @cremini/skillpack create
@@ -27,7 +44,7 @@ Step by step:
 3. Add prompts to tell the agent how to orchestrate those skills.
 4. Optionally package the result as a zip immediately.
 
-### Initialize from an existing config
+### 3. Create a new skillpack from an existing config
 
 ```bash
 # From a local file
@@ -37,20 +54,9 @@ npx @cremini/skillpack create --config ./skillpack.json
 npx @cremini/skillpack create comic-explainer --config https://raw.githubusercontent.com/CreminiAI/skillpack/refs/heads/main/examples/comic_explainer.json
 ```
 
-Downloads and validates the config, installs all declared skills, and copies the start scripts — ready to run in one step.
+Ready to run using "Run a skillpack" part
 
-### Run a pack
-
-```bash
-npx @cremini/skillpack run
-npx @cremini/skillpack run ./comic-explainer
-```
-
-- If `skillpack.json` is missing, you are prompted to create one on the spot.
-- Any remote skills declared in the config but not yet installed are installed automatically.
-- The server starts and opens [http://127.0.0.1:26313](http://127.0.0.1:26313) in your browser.
-
-### Package a pack for distribution
+### 4. Package a pack for distribution
 
 ```bash
 npx @cremini/skillpack zip
@@ -60,9 +66,9 @@ Produces `<pack-name>.zip` in the current directory.
 
 ---
 
-## Skill Source Formats
+## Skill Source URL Formats
 
-When adding skills through `create`, the source field accepts:
+When adding skills through `create`, the source accepts:
 
 ```bash
 # GitHub shorthand
@@ -93,23 +99,56 @@ The archive produced by `zip` is intentionally minimal:
 
 The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prerequisite — no pre-bundled server directory is included.
 
-### Run a distributed pack
+## Slack/Telegram Integrations
 
-```bash
-# macOS / Linux
-./start.sh
+**Slack Configuration**: requires Slack `App Token` and `Bot Token`<br>
+**Telegram configuration**: requires `Bot Token`
 
-# Windows
-start.bat
-```
+### Slack App Setup and how to get `App Token` and `Bot Token`
+1. Create a new Slack app at https://api.slack.com/apps
+2. Enable Socket Mode (Settings → Socket Mode → Enable)
+3. Generate an App-Level Token with `connections:write` scope. This is **`App Token`**
+4. Add Bot Token Scopes (OAuth & Permissions):
+- `app_mentions:read`
+- `channels:history`
+- `channels:read`
+- `chat:write`
+- `files:read`
+- `files:write`
+- `groups:history`
+- `groups:read`
+- `im:history`
+- `im:read`
+- `im:write`
+- `users:read`
 
-The browser opens [http://127.0.0.1:26313](http://127.0.0.1:26313) automatically. Enter your API key and start working.
+5. Subscribe to Bot Events (Event Subscriptions):
+- `app_mention`
+- `message.channels`
+- `message.groups`
+- `message.im`
 
----
+6. Enable Direct Messages (App Home):
+Go to App Home in the left sidebar
+Under Show Tabs, enable the Messages Tab
+Check Allow users to send Slash commands and messages from the messages tab
 
-## IM Integrations
+7. Install the app to your workspace. Get the Bot User OAuth Token. This is **`Bot Token`**
+8. Add the app to any channels where you want the agent to operate (it'll only see messages in channels it's added to)
+9. On the SkillPack buit-in UI http://127.0.0.1:26313, Tap "Connect to Chat App" button and Enter the **`Bot Token`** and **`App Token`**, Save
 
-The runtime supports **Slack** and **Telegram** in addition to the built-in web UI. Configure them in `data/config.json` (created at runtime, not included in the zip):
+### Telegram Setup and how to get `Bot Token`
+1. **Open Telegram** and search for the official account **`@BotFather`** (it will have a blue verified checkmark).
+2. **Start a chat** by tapping "Start" or sending the `/start` command.
+3. **Send the command** `/newbot` to the BotFather.
+4. **Follow the prompts** to choose a display name and a unique username for your bot. The username must end with the word "bot" (e.g., `MyHelperBot` or `My_Helper_bot`).
+5. **Receive the token**. Once the bot is successfully created, the BotFather will provide you with a message containing your unique API token. 
+The token will look like a long string of numbers and letters, formatted as `123456789:AABBCCddEeff.... `
+6. On the SkillPack buit-in UI http://127.0.0.1:26313, Tap "Connect to Chat App" button and Enter the **`Bot Token`**, Save
+
+### (Optional) Put tokens into data/config.json if you don't use Web UI
+Or Once you have telegram or slack tokens, you can also configure them in `data/config.json` (created at runtime, not included in the zip):
+The runtime supports **Slack** and **Telegram** in addition to the built-in web UI. 
 
 ```json
 {
@@ -125,9 +164,38 @@ The runtime supports **Slack** and **Telegram** in addition to the built-in web 
 }
 ```
 
-See [docs/runtime/im-adapters.md](docs/runtime/im-adapters.md) for setup requirements.
-
 ---
+
+## Why use SkillPack
+
+AI workflows are easy to prototype, but hard to use across a team. Today, most teams deal with:
+- scattered prompts and scripts
+- unclear setup steps
+- no standard way to reuse workflows
+- poor team adoption
+- sensitive company data leaving their environment
+
+Skillpack solves this by making AI Skillpacks:
+
+**Trusted**
+Use packaged agents instead of piecing together random prompts and tools by hand.
+**Local**
+Run agents in your own machine or environment so sensitive data stays local.
+**Team-ready**
+Use agents directly from Slack and Telegram, where work already happens.
+**Fast**
+Pack and deploy local agents in seconds.
+
+## Who is SkillPack for
+
+Skillpack is designed for: startup teams, founders and operators, e-commerce teams, sales and growth teams, support teams, marketing teams, recruiting teams, developers building reusable AI workflows, If your team has repeatable work that AI can help with, Skillpack gives you a better way to package and run it.
+
+## Example Use Cases
+
+The main use case is to **run local agents on your computer and integrate them with Slack or Telegram** so they can work for you and your team — operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills. Each SkillPack organizes skills around a well-defined job — for example: research a company by gathering information from multiple sources and produce a PowerPoint presentation from the findings. 
+
+Download [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip) and try it! More examples can be found at [skillpack.sh](https://skillpack.sh)
+
 
 ## Development
 

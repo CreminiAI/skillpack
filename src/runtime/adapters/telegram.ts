@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import TelegramBot from "node-telegram-bot-api";
 
 import type {
@@ -5,9 +6,11 @@ import type {
   AdapterContext,
   AgentEvent,
   BotCommand,
+  ChannelAttachment,
   IPackAgent,
 } from "./types.js";
 import { formatTelegramMessage } from "./markdown.js";
+import { downloadAndSaveAttachment } from "./attachment-utils.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -39,6 +42,7 @@ export class TelegramAdapter implements PlatformAdapter {
   private bot: TelegramBot | null = null;
   private agent: IPackAgent | null = null;
   private options: TelegramAdapterOptions;
+  private rootDir = "";
 
   constructor(options: TelegramAdapterOptions) {
     this.options = options;
@@ -46,6 +50,7 @@ export class TelegramAdapter implements PlatformAdapter {
 
   async start(ctx: AdapterContext): Promise<void> {
     this.agent = ctx.agent;
+    this.rootDir = ctx.rootDir;
 
     this.bot = new TelegramBot(this.options.token, { polling: true });
 
@@ -83,43 +88,60 @@ export class TelegramAdapter implements PlatformAdapter {
 
     const chatId = msg.chat.id;
     const messageId = msg.message_id;
-    const text = msg.text?.trim();
-    if (!text) return;
+    const text = (msg.text || msg.caption || "").trim();
 
     const channelId = `telegram-${chatId}`;
+
+    // --- Extract attachments ---
+    const attachments = await this.extractAttachments(msg, channelId);
+
+    // Skip messages with no text and no attachments
+    if (!text && attachments.length === 0) return;
 
     await this.tryAckReaction(chatId, messageId);
 
     // --- Command handling ---
-    const commandKey = text.split(/\s/)[0].toLowerCase();
-    const command = COMMANDS[commandKey];
+    if (text) {
+      const commandKey = text.split(/\s/)[0].toLowerCase();
+      const command = COMMANDS[commandKey];
 
-    if (command) {
-      const result = await this.agent.handleCommand(command, channelId);
-      await this.sendSafe(chatId, result.message || `/${command} executed.`);
-      return;
+      if (command) {
+        const result = await this.agent.handleCommand(command, channelId);
+        await this.sendSafe(chatId, result.message || `/${command} executed.`);
+        return;
+      }
     }
 
     // --- Regular message → agent ---
-    // Send a "thinking" indicator
     await this.bot.sendChatAction(chatId, "typing");
 
     let finalText = "";
     let hasError = false;
     let errorMessage = "";
+    const pendingFiles: Array<{ filePath: string; caption?: string }> = [];
 
     const onEvent = (event: AgentEvent) => {
-      // Only collect final text; skip thinking/tool intermediate events
       switch (event.type) {
         case "text_delta":
           finalText += event.delta;
           break;
-        // We intentionally ignore thinking_delta, tool_start, tool_end
+        case "file_output":
+          pendingFiles.push({
+            filePath: event.filePath,
+            caption: event.caption,
+          });
+          break;
       }
     };
 
     try {
-      const result = await this.agent.handleMessage(channelId, text, onEvent);
+      const userText = text || "(User sent an attachment)";
+      const result = await this.agent.handleMessage(
+        channelId,
+        userText,
+        onEvent,
+        attachments.length > 0 ? attachments : undefined,
+      );
 
       if (result.errorMessage) {
         hasError = true;
@@ -136,13 +158,16 @@ export class TelegramAdapter implements PlatformAdapter {
       return;
     }
 
-    if (!finalText.trim()) {
+    if (finalText.trim()) {
+      await this.sendLongMessage(chatId, finalText);
+    } else if (pendingFiles.length === 0) {
       await this.sendSafe(chatId, "(No response generated)");
-      return;
     }
 
-    // Split and send the final text
-    await this.sendLongMessage(chatId, finalText);
+    // --- Send outbound files ---
+    for (const file of pendingFiles) {
+      await this.sendFileSafe(chatId, file.filePath, file.caption);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -256,6 +281,133 @@ export class TelegramAdapter implements PlatformAdapter {
       await this.sendWithRetry(chatId, text);
     } catch (err) {
       console.error("[Telegram] Failed to send message:", err);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Attachment extraction
+  // -------------------------------------------------------------------------
+
+  /**
+   * Extract attachments from a Telegram message (photo, document, audio, video, voice).
+   */
+  private async extractAttachments(
+    msg: TelegramBot.Message,
+    channelId: string,
+  ): Promise<ChannelAttachment[]> {
+    if (!this.bot) return [];
+
+    const attachments: ChannelAttachment[] = [];
+
+    try {
+      // Photo (take highest resolution)
+      if (msg.photo && msg.photo.length > 0) {
+        const photo = msg.photo[msg.photo.length - 1];
+        const attachment = await this.downloadTelegramFile(
+          photo.file_id,
+          channelId,
+          "photo.jpg",
+          "image/jpeg",
+        );
+        if (attachment) attachments.push(attachment);
+      }
+
+      // Document
+      if (msg.document) {
+        const attachment = await this.downloadTelegramFile(
+          msg.document.file_id,
+          channelId,
+          msg.document.file_name || "document",
+          msg.document.mime_type,
+        );
+        if (attachment) attachments.push(attachment);
+      }
+
+      // Audio
+      if (msg.audio) {
+        const attachment = await this.downloadTelegramFile(
+          msg.audio.file_id,
+          channelId,
+          (msg.audio as any).file_name || "audio.mp3",
+          msg.audio.mime_type,
+        );
+        if (attachment) attachments.push(attachment);
+      }
+
+      // Video
+      if (msg.video) {
+        const attachment = await this.downloadTelegramFile(
+          msg.video.file_id,
+          channelId,
+          (msg.video as any).file_name || "video.mp4",
+          msg.video.mime_type,
+        );
+        if (attachment) attachments.push(attachment);
+      }
+
+      // Voice
+      if (msg.voice) {
+        const attachment = await this.downloadTelegramFile(
+          msg.voice.file_id,
+          channelId,
+          "voice.ogg",
+          msg.voice.mime_type || "audio/ogg",
+        );
+        if (attachment) attachments.push(attachment);
+      }
+    } catch (err) {
+      console.error("[Telegram] Error extracting attachments:", err);
+    }
+
+    return attachments;
+  }
+
+  /**
+   * Download a file from Telegram and save it locally.
+   */
+  private async downloadTelegramFile(
+    fileId: string,
+    channelId: string,
+    filename: string,
+    mimeType?: string,
+  ): Promise<ChannelAttachment | null> {
+    if (!this.bot) return null;
+
+    try {
+      const fileLink = await this.bot.getFileLink(fileId);
+      return await downloadAndSaveAttachment(
+        this.rootDir,
+        channelId,
+        fileLink,
+        filename,
+        mimeType,
+      );
+    } catch (err) {
+      console.error(`[Telegram] Failed to download file ${fileId}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * Send a file to the Telegram chat.
+   */
+  private async sendFileSafe(
+    chatId: number,
+    filePath: string,
+    caption?: string,
+  ): Promise<void> {
+    if (!this.bot) return;
+
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error(`[Telegram] File not found for sending: ${filePath}`);
+        return;
+      }
+      await this.bot.sendDocument(chatId, filePath, {
+        caption: caption || undefined,
+      });
+    } catch (err) {
+      console.error("[Telegram] Failed to send file:", err);
     }
   }
 }

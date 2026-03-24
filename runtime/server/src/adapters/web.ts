@@ -90,7 +90,7 @@ export class WebAdapter implements PlatformAdapter {
       const { key, provider, adapters } = req.body;
       const updates: any = {};
       const beforeConfig = JSON.parse(JSON.stringify(configManager.getConfig()));
-      
+
       if (key !== undefined) {
         updates.apiKey = key;
         apiKey = key;
@@ -104,10 +104,6 @@ export class WebAdapter implements PlatformAdapter {
       }
 
       configManager.save(rootDir, updates);
-
-      // Note: PackAgent instances need to be recreated or have their keys updated dynamically, 
-      // but if the design is to restart to take effect or if we only need it persisted, this covers the save.
-      // Depending on agent implementation, we might need agent.updateConfig({ apiKey: key, provider: currentProvider })
 
       const newConf = configManager.getConfig();
       const requiresRestart =
@@ -151,6 +147,37 @@ export class WebAdapter implements PlatformAdapter {
     app.get("/api/sessions/:id", (_req, res) => {
       // TODO: restore session by id
       res.status(501).json({ error: "Not implemented yet" });
+    });
+
+    // -- File download endpoint (for outbound attachments) -------------------
+
+    app.get("/api/files", (req, res) => {
+      const filePath = req.query.path as string;
+      if (!filePath) {
+        res.status(400).json({ error: "Missing 'path' query parameter" });
+        return;
+      }
+
+      // Security: only allow files under data/ directory
+      const resolvedPath = path.resolve(filePath);
+      const dataDir = path.resolve(rootDir, "data");
+      if (!resolvedPath.startsWith(dataDir)) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+
+      if (!fs.existsSync(resolvedPath)) {
+        res.status(404).json({ error: "File not found" });
+        return;
+      }
+
+      const filename = path.basename(resolvedPath);
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      fs.createReadStream(resolvedPath).pipe(res);
     });
 
     // -- WebSocket ----------------------------------------------------------
