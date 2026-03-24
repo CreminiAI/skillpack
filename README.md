@@ -4,14 +4,14 @@ Skillpack helps teams turn AI skills into trusted local agents that can run in t
 
 ## What is SkillPack
 
-[skillpack.sh](https://skillpack.sh) is an open-source way to package AI skills into runnable local agents.
+[skillpack.sh](https://skillpack.sh) is an open-source way to package AI skills into runnable local agents. If skills and tools are like LEGO pieces, a SkillPack is the finished product that assembles them into a complete solution.
 Instead of juggling prompts, scripts, docs, and one-off automations, Skillpack gives you a simple way to:
 - package AI skills into reusable agents
 - run them locally
 - keep sensitive data in your own environment
 - use agents from tools your team already uses, like Slack and Telegram
 
-Skillpack is built for teams that want AI Agents to be deployable, trusted, and easy to use.
+Skillpack is built for teams that want AI Agents to be deployable, trusted, and easy to use. 
 
 ## Why use SkillPack
 
@@ -37,17 +37,31 @@ Pack and deploy local agents in seconds.
 
 Skillpack is designed for: startup teams, founders and operators, e-commerce teams, sales and growth teams, support teams, marketing teams, recruiting teams, developers building reusable AI workflows, If your team has repeatable work that AI can help with, Skillpack gives you a better way to package and run it.
 
-## Use Case
+## Example Use Cases
 
-The main use case is to **run local agents on your computer and integrate them with Slack or Telegram** so they can work for you and your team — operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills.
+The main use case is to **run local agents on your computer and integrate them with Slack or Telegram** so they can work for you and your team — operating entirely on your machine to keep all team data local and private, while continuously improving by learning new skills. Each SkillPack organizes skills around a well-defined job — for example: research a company by gathering information from multiple sources and produce a PowerPoint presentation from the findings. 
 
-If skills and tools are like LEGO pieces, a SkillPack is the finished product that assembles them into a complete solution. Go to [skillpack.sh](https://skillpack.sh) to download ready-made packs.
-
-Each SkillPack organizes skills around a well-defined job — for example: research a company by gathering information from multiple sources and produce a PowerPoint presentation from the findings.
+Download [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip) and try it! More examples can be found at [skillpack.sh](https://skillpack.sh)
 
 ---
 
 ## Quick Start
+
+### Run a skillpack 
+1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
+2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows
+#### Mac OS
+```bash
+./start.sh 
+```
+#### Windows
+Double-click start.bat, or run:
+```bash
+./start.bat 
+```
+The server starts and opens http://127.0.0.1:26313 in your browser
+
+3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
 
 ### Create a new pack interactively
 
