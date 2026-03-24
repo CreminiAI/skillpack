@@ -49,7 +49,8 @@ Download [Company Deep Research](https://github.com/FinpeakInc/downloads/release
 
 ### Run a skillpack 
 1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
-2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows
+2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows, the server starts and opens http://127.0.0.1:26313 in your browser
+
 #### Mac OS
 ```bash
 ./start.sh 
@@ -59,9 +60,7 @@ Download [Company Deep Research](https://github.com/FinpeakInc/downloads/release
 ./start.bat 
 ```
 
-The server starts and opens http://127.0.0.1:26313 in your browser
-
-3. **Enter an LLM API key (OpenAI or Claude API Key)** in the left menu, use the prompt example to try it!
+3. Enter an LLM API key (OpenAI or Claude API Key) in the left menu, use the prompt example to try it!
 
 
 ### Create a new pack interactively
