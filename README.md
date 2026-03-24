@@ -101,7 +101,7 @@ The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prer
 
 ## Slack/Telegram Integrations
 
-**Slack Configuration**: requires Slack `App Token` and `Bot Token` 
+**Slack Configuration**: requires Slack `App Token` and `Bot Token`<br>
 **Telegram configuration**: requires `Bot Token`
 
 ### Slack App Setup and how to get `App Token` and `Bot Token`
