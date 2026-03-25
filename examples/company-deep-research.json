@@ -1,0 +1,30 @@
+{
+  "name": "Company Deep Research",
+  "description": "Conduct deep company research using web search, company data, and competitor analysis to fully evaluate any",
+  "version": "1.0.0",
+  "prompts": [
+    "Conduct deep research on OpenAI using web-search, company-research, and competitive-analysis. Summarize the findings and generate a PowerPoint presentation titled ‘OpenAI_company_deep_research.pptx’ using the pptx skill"
+  ],
+  "skills": [
+    {
+      "name": "company-research",
+      "source": "https://github.com/deanpeters/product-manager-skills",
+      "description": "Create a company research brief with executive quotes, product strategy, and org context. Use when preparing for interviews, competitive analysis, partnerships, or market-entry work."
+    },
+    {
+      "name": "web-research",
+      "source": "https://github.com/langchain-ai/deepagents",
+      "description": "Use this skill for requests related to web research; it provides a structured approach to conducting comprehensive web research"
+    },
+    {
+      "name": "competitive-analysis",
+      "source": "https://github.com/refoundai/lenny-skills",
+      "description": "Help users understand and respond to competition. Use when someone is positioning against competitors, evaluating market threats, running competitive war games, or deciding how much to focus on competitors versus customers."
+    },
+    {
+      "name": "pptx",
+      "source": "https://github.com/anthropics/skills",
+      "description": "\"Use this skill any time a .pptx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations; reading, parsing, or extracting text from any .pptx file (even if the extracted content will be used elsewhere, like in an email or summary); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates, layouts, speaker notes, or comments. Trigger whenever the user mentions \\\"deck,\\\" \\\"slides,\\\" \\\"presentation,\\\" or references a .pptx filename, regardless of what they plan to do with the content afterward. If a .pptx file needs to be opened, created, or touched, use this skill.\""
+    }
+  ]
+}

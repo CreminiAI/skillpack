@@ -1,0 +1,15 @@
+{
+  "name": "garry-tan",
+  "description": "Skill by Garry Tan",
+  "version": "1.0.0",
+  "prompts": [
+    "use gstack plan-ceo-review to evaluate \"If everyone is creating different AI agents, should we build a payment network for Agents?\""
+  ],
+  "skills": [
+    {
+      "name": "gstack",
+      "source": "https://github.com/garrytan/gstack",
+      "description": "|"
+    }
+  ]
+}

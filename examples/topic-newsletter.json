@@ -1,0 +1,25 @@
+{
+  "name": "Topic Newsletter",
+  "description": "Topic Newsletter helps you discover and subscribe to newsletters about the topics you care about",
+  "version": "1.0.0",
+  "prompts": [
+    "Search for “AI” news using news-aggregator-skill, translate all retrieved articles into English, then use the copywriting skill to craft a newsletter that provides deep insights, thoughtful analysis, and uncovers the underlying truths behind the news. Finally, generate a PDF version of the newsletter using the pdf skill."
+  ],
+  "skills": [
+    {
+      "name": "news-aggregator-skill",
+      "source": "https://github.com/cclank/news-aggregator-skill",
+      "description": "\"Comprehensive news aggregator that fetches, filters, and deeply analyzes real-time content from 28 sources including Hacker News, GitHub, Hugging Face Papers, AI Newsletters, WallStreetCN, Weibo, and Podcasts. Use when user requests 'daily scans', 'tech news', 'finance updates', 'AI briefings', 'deep analysis', or says '如意如意' to open the interactive menu.\""
+    },
+    {
+      "name": "copywriting",
+      "source": "https://github.com/coreyhaines31/marketingskills",
+      "description": "When the user wants to write, rewrite, or improve marketing copy for any page — including homepage, landing pages, pricing pages, feature pages, about pages, or product pages. Also use when the user says \"write copy for,\" \"improve this copy,\" \"rewrite this page,\" \"marketing copy,\" \"headline help,\" \"CTA copy,\" \"value proposition,\" \"tagline,\" \"subheadline,\" \"hero section copy,\" \"above the fold,\" \"this copy is weak,\" \"make this more compelling,\" or \"help me describe my product.\" Use this whenever someone is working on website text that needs to persuade or convert. For email copy, see email-sequence. For popup copy, see popup-cro. For editing existing copy, see copy-editing."
+    },
+    {
+      "name": "pdf",
+      "source": "https://github.com/anthropics/skills",
+      "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill."
+    }
+  ]
+}
