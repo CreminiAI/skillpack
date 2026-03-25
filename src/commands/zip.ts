@@ -20,7 +20,8 @@ import {
  */
 export async function zipCommand(workDir: string): Promise<string> {
   const config = loadConfig(workDir);
-  const zipName = `${config.name}.zip`;
+  const slug = config.name.toLowerCase().replace(/\s+/g, "-");
+  const zipName = `${slug}.zip`;
   const zipPath = path.join(workDir, zipName);
 
   // Reinstall and sync skills before packaging
@@ -46,7 +47,7 @@ export async function zipCommand(workDir: string): Promise<string> {
     archive.on("error", (err) => reject(err));
     archive.pipe(output);
 
-    const prefix = config.name;
+    const prefix = slug;
 
     // 1. skillpack.json
     archive.file(getPackPath(workDir), {
