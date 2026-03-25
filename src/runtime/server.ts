@@ -75,12 +75,14 @@ export async function startServer(options: ServerOptions): Promise<void> {
   // Start adapters
   // ---------------------------------------------------------------------------
 
-  const adapters = [];
+  const adapters: import("./adapters/types.js").PlatformAdapter[] = [];
+  const adapterMap = new Map<string, import("./adapters/types.js").PlatformAdapter>();
 
   // Web adapter is always enabled
   const webAdapter = new WebAdapter();
-  await webAdapter.start({ agent, server, app, rootDir, lifecycle });
+  await webAdapter.start({ agent, server, app, rootDir, lifecycle, adapterMap });
   adapters.push(webAdapter);
+  adapterMap.set(webAdapter.name, webAdapter);
 
   // Telegram adapter (conditional)
   if (dataConfig.adapters?.telegram?.token) {
@@ -91,6 +93,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
       });
       await telegramAdapter.start({ agent, server, app, rootDir, lifecycle });
       adapters.push(telegramAdapter);
+      adapterMap.set(telegramAdapter.name, telegramAdapter);
     } catch (err) {
       console.error("[Telegram] Failed to start:", err);
     }
@@ -112,10 +115,56 @@ export async function startServer(options: ServerOptions): Promise<void> {
         });
         await slackAdapter.start({ agent, server, app, rootDir, lifecycle });
         adapters.push(slackAdapter);
+        adapterMap.set(slackAdapter.name, slackAdapter);
       } catch (err) {
         console.error("[Slack] Failed to start:", err);
       }
     }
+  }
+
+  // Build the unified notify function for scheduler → IM push
+  const { isMessageSender } = await import("./adapters/types.js");
+  const notifyFn = async (adapterName: string, channelId: string, text: string) => {
+    const adapter = adapterMap.get(adapterName);
+    if (!adapter || !isMessageSender(adapter)) {
+      console.warn(
+        `[Scheduler] Target adapter "${adapterName}" not found or doesn't support sendMessage`,
+      );
+      return;
+    }
+    await adapter.sendMessage(channelId, text);
+  };
+
+  // Scheduler adapter (conditional – starts AFTER all IM adapters)
+  const scheduledJobs = dataConfig.scheduledJobs || [];
+  let schedulerAdapter: import("./adapters/scheduler.js").SchedulerAdapter | null = null;
+
+  // Always import scheduler so that the Agent tool can manage jobs dynamically
+  try {
+    const { SchedulerAdapter } = await import("./adapters/scheduler.js");
+    schedulerAdapter = new SchedulerAdapter();
+    await schedulerAdapter.start({
+      agent,
+      server,
+      app,
+      rootDir,
+      lifecycle,
+      notify: notifyFn,
+      adapterMap,
+    });
+    adapters.push(schedulerAdapter);
+    adapterMap.set(schedulerAdapter.name, schedulerAdapter);
+
+    if (scheduledJobs.length > 0) {
+      console.log(`[Server] Scheduler started with ${scheduledJobs.length} job(s)`);
+    }
+  } catch (err) {
+    console.error("[Scheduler] Failed to start:", err);
+  }
+
+  // Inject scheduler reference into agent for the manage_scheduled_task tool
+  if (schedulerAdapter) {
+    agent.setScheduler(schedulerAdapter);
   }
 
   lifecycle.registerAdapters(adapters);

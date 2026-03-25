@@ -18,6 +18,8 @@ import {
   createSendFileTool,
   type FileOutputCallback,
 } from "./tools/send-file-tool.js";
+import { createManageScheduleTool } from "./tools/manage-schedule-tool.js";
+import type { SchedulerAdapter } from "./adapters/scheduler.js";
 
 import type {
   IPackAgent,
@@ -99,9 +101,24 @@ export class PackAgent implements IPackAgent {
     current: null,
   };
   private sendFileToolDef = createSendFileTool(this.fileOutputCallbackRef);
+  private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
+  private rootDirRef: { current: string };
+  private scheduleToolDef: ReturnType<typeof createManageScheduleTool>;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
+    this.rootDirRef = { current: options.rootDir };
+    this.scheduleToolDef = createManageScheduleTool(
+      this.schedulerRef,
+      this.rootDirRef,
+    );
+  }
+
+  /**
+   * Inject scheduler reference (called by server.ts after adapter init).
+   */
+  setScheduler(scheduler: SchedulerAdapter): void {
+    this.schedulerRef.current = scheduler;
   }
 
   /**
@@ -163,7 +180,7 @@ export class PackAgent implements IPackAgent {
         resourceLoader,
         model,
         tools,
-        customTools: [this.sendFileToolDef as any],
+        customTools: [this.sendFileToolDef as any, this.scheduleToolDef as any],
       });
 
       const channelSession: ChannelSession = {

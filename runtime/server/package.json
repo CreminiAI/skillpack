@@ -10,6 +10,7 @@
     "@mariozechner/pi-coding-agent": "^0.57.1",
     "@slack/bolt": "^4.6.0",
     "express": "^5.1.0",
+    "node-cron": "^4.2.1",
     "node-telegram-bot-api": "^0.66.0",
     "ws": "^8.19.0"
   },

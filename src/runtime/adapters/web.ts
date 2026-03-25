@@ -180,6 +180,85 @@ export class WebAdapter implements PlatformAdapter {
       fs.createReadStream(resolvedPath).pipe(res);
     });
 
+    // -- Scheduler management API -------------------------------------------
+
+    // Helper: get SchedulerAdapter from adapterMap
+    const getScheduler = () => {
+      const schedulerAdapter = ctx.adapterMap?.get("scheduler");
+      if (!schedulerAdapter) return null;
+      // Dynamic import type to avoid circular dep
+      return schedulerAdapter as import("./scheduler.js").SchedulerAdapter;
+    };
+
+    app.get("/api/scheduler/jobs", (_req, res) => {
+      const scheduler = getScheduler();
+      if (!scheduler) {
+        res.json([]);
+        return;
+      }
+      res.json(scheduler.listJobs());
+    });
+
+    app.post("/api/scheduler/jobs", (req, res) => {
+      const scheduler = getScheduler();
+      if (!scheduler) {
+        res.status(503).json({ success: false, message: "Scheduler not available" });
+        return;
+      }
+      const { name, cron: cronExpr, prompt, notify, enabled, timezone } = req.body;
+      if (!name || !cronExpr || !prompt || !notify?.adapter || !notify?.channelId) {
+        res.status(400).json({
+          success: false,
+          message: "Required fields: name, cron, prompt, notify.adapter, notify.channelId",
+        });
+        return;
+      }
+      const result = scheduler.addJob({
+        name,
+        cron: cronExpr,
+        prompt,
+        notify,
+        enabled: enabled !== false,
+        timezone,
+      });
+      res.json(result);
+    });
+
+    app.delete("/api/scheduler/jobs/:name", (req, res) => {
+      const scheduler = getScheduler();
+      if (!scheduler) {
+        res.status(503).json({ success: false, message: "Scheduler not available" });
+        return;
+      }
+      const result = scheduler.removeJob(req.params.name);
+      res.json(result);
+    });
+
+    app.post("/api/scheduler/jobs/:name/trigger", async (req, res) => {
+      const scheduler = getScheduler();
+      if (!scheduler) {
+        res.status(503).json({ success: false, message: "Scheduler not available" });
+        return;
+      }
+      const result = await scheduler.triggerJob(req.params.name);
+      res.json(result);
+    });
+
+    app.patch("/api/scheduler/jobs/:name", (req, res) => {
+      const scheduler = getScheduler();
+      if (!scheduler) {
+        res.status(503).json({ success: false, message: "Scheduler not available" });
+        return;
+      }
+      const { enabled } = req.body;
+      if (typeof enabled !== "boolean") {
+        res.status(400).json({ success: false, message: "Field 'enabled' (boolean) is required" });
+        return;
+      }
+      const result = scheduler.setEnabled(req.params.name, enabled);
+      res.json(result);
+    });
+
     // -- WebSocket ----------------------------------------------------------
 
     this.wss = new WebSocketServer({ noServer: true });

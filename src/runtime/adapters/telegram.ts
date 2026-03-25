@@ -8,6 +8,7 @@ import type {
   BotCommand,
   ChannelAttachment,
   IPackAgent,
+  MessageSender,
 } from "./types.js";
 import { formatTelegramMessage } from "./markdown.js";
 import { downloadAndSaveAttachment } from "./attachment-utils.js";
@@ -36,7 +37,7 @@ const ACK_REACTION = {
 // TelegramAdapter
 // ---------------------------------------------------------------------------
 
-export class TelegramAdapter implements PlatformAdapter {
+export class TelegramAdapter implements PlatformAdapter, MessageSender {
   readonly name = "telegram";
 
   private bot: TelegramBot | null = null;
@@ -77,6 +78,23 @@ export class TelegramAdapter implements PlatformAdapter {
       this.bot = null;
     }
     console.log("[TelegramAdapter] Stopped");
+  }
+
+  // -------------------------------------------------------------------------
+  // MessageSender – proactive message sending
+  // -------------------------------------------------------------------------
+
+  /**
+   * Public method: send a message to a specific Telegram chat.
+   * channelId format: telegram-<chatId>
+   */
+  async sendMessage(channelId: string, text: string): Promise<void> {
+    if (!this.bot) throw new Error("[Telegram] Bot not initialized");
+    const chatId = Number(channelId.replace("telegram-", ""));
+    if (isNaN(chatId)) {
+      throw new Error(`[Telegram] Invalid channelId: ${channelId}`);
+    }
+    await this.sendLongMessage(chatId, text);
   }
 
   // -------------------------------------------------------------------------

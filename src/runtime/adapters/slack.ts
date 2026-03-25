@@ -9,6 +9,7 @@ import type {
   BotCommand,
   ChannelAttachment,
   IPackAgent,
+  MessageSender,
 } from "./types.js";
 import { formatSlackMessage } from "./markdown.js";
 import { downloadAndSaveAttachment } from "./attachment-utils.js";
@@ -46,7 +47,7 @@ interface SlackRoute {
 // SlackAdapter
 // ---------------------------------------------------------------------------
 
-export class SlackAdapter implements PlatformAdapter {
+export class SlackAdapter implements PlatformAdapter, MessageSender {
   readonly name = "slack";
 
   private app: App | null = null;
@@ -91,6 +92,22 @@ export class SlackAdapter implements PlatformAdapter {
       this.app = null;
     }
     console.log("[SlackAdapter] Stopped");
+  }
+
+  // -------------------------------------------------------------------------
+  // MessageSender – proactive message sending
+  // -------------------------------------------------------------------------
+
+  /**
+   * Public method: send a message to a specific Slack channel/DM.
+   * channelId formats:
+   *   - slack-dm-<teamId>-<channelId>
+   *   - slack-thread-<teamId>-<channel>-<threadTs>
+   */
+  async sendMessage(channelId: string, text: string): Promise<void> {
+    if (!this.app) throw new Error("[Slack] App not initialized");
+    const route = this.parseChannelId(channelId);
+    await this.sendLongMessage(this.app.client, route, text);
   }
 
   // -------------------------------------------------------------------------
@@ -541,6 +558,37 @@ export class SlackAdapter implements PlatformAdapter {
 
   private escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  /**
+   * Parse a skillpack channelId into a SlackRoute.
+   * Supports:
+   *   slack-dm-<teamId>-<channelId>       → { channel: <channelId> }
+   *   slack-thread-<teamId>-<ch>-<ts>     → { channel: <ch>, threadTs: <ts> }
+   */
+  private parseChannelId(channelId: string): SlackRoute {
+    if (channelId.startsWith("slack-thread-")) {
+      // slack-thread-<teamId>-<channel>-<threadTs>
+      const rest = channelId.replace("slack-thread-", "");
+      const parts = rest.split("-");
+      // teamId is parts[0], channel is parts[1], threadTs is parts[2+]
+      if (parts.length >= 3) {
+        const threadTs = parts.slice(2).join("-");
+        return { channel: parts[1], threadTs };
+      }
+    }
+
+    if (channelId.startsWith("slack-dm-")) {
+      // slack-dm-<teamId>-<channelId>
+      const rest = channelId.replace("slack-dm-", "");
+      const parts = rest.split("-");
+      if (parts.length >= 2) {
+        return { channel: parts.slice(1).join("-") };
+      }
+    }
+
+    // Fallback: treat as raw channel ID
+    return { channel: channelId };
   }
 
   // -------------------------------------------------------------------------
