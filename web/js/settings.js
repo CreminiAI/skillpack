@@ -13,13 +13,15 @@ let slackBotTokenInput;
 let slackAppTokenInput;
 let keyStatus;
 let restartBtn;
+let serverUrlInput;
+let agentTokenInput;
 
 export function initSettings() {
   dialog = document.getElementById("settings-dialog");
   settingsBtn = document.getElementById("open-settings-btn");
   closeBtn = document.getElementById("close-settings-btn");
   saveBtn = document.getElementById("save-settings-btn");
-  
+
   providerSelect = document.getElementById("provider-select");
   apiKeyInput = document.getElementById("api-key-input");
   telegramTokenInput = document.getElementById("telegram-token-input");
@@ -27,6 +29,8 @@ export function initSettings() {
   slackAppTokenInput = document.getElementById("slack-app-token-input");
   keyStatus = document.getElementById("key-status");
   restartBtn = document.getElementById("restart-service-btn");
+  serverUrlInput = document.getElementById("server-url-input");
+  agentTokenInput = document.getElementById("agent-token-input");
 
   if (!dialog) return;
 
@@ -110,6 +114,10 @@ function populateForm() {
     slackBotTokenInput.value = "";
     slackAppTokenInput.value = "";
   }
+
+  // Dashboard connection
+  if (serverUrlInput) serverUrlInput.value = config.serverUrl || "";
+  if (agentTokenInput) agentTokenInput.value = config.agentToken || "";
 }
 
 async function handleSave() {
@@ -119,12 +127,15 @@ async function handleSave() {
   const slackBotToken = slackBotTokenInput.value.trim();
   const slackAppToken = slackAppTokenInput.value.trim();
 
+  const serverUrl = serverUrlInput ? serverUrlInput.value.trim() : "";
+  const agentToken = agentTokenInput ? agentTokenInput.value.trim() : "";
+
   const adapters = {};
   if (telegramToken) adapters.telegram = { token: telegramToken };
   if (slackBotToken || slackAppToken) {
-    adapters.slack = { 
-       botToken: slackBotToken || undefined, 
-       appToken: slackAppToken || undefined 
+    adapters.slack = {
+       botToken: slackBotToken || undefined,
+       appToken: slackAppToken || undefined
     };
   }
 
@@ -132,6 +143,8 @@ async function handleSave() {
   if (key && key !== "***************************************************" && key !== state.config.apiKey) {
     updates.key = key;
   }
+  if (serverUrl) updates.serverUrl = serverUrl;
+  if (agentToken) updates.agentToken = agentToken;
 
   try {
     const res = await saveConfigData(updates);

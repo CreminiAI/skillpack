@@ -173,12 +173,36 @@ export async function startServer(options: ServerOptions): Promise<void> {
   // Listen
   // ---------------------------------------------------------------------------
 
-  server.once("listening", () => {
+  server.once("listening", async () => {
     const address = server.address();
     const actualPort = typeof address === "string" ? address : address?.port;
     const url = `http://${host}:${actualPort}`;
     console.log(`\n  Skills Pack Server`);
     console.log(`  Running at ${url}\n`);
+
+    // Start Server adapter (Dashboard connection) after listening
+    if (dataConfig.serverUrl && dataConfig.agentToken) {
+      try {
+        const { ServerAdapter } = await import("./adapters/server.js");
+        const serverAdapter = new ServerAdapter({
+          serverUrl: dataConfig.serverUrl,
+          agentToken: dataConfig.agentToken,
+        });
+        await serverAdapter.start({
+          agent,
+          server,
+          app,
+          rootDir,
+          lifecycle,
+          adapterMap,
+        });
+        adapters.push(serverAdapter);
+        adapterMap.set(serverAdapter.name, serverAdapter);
+        console.log(`[Server] Dashboard connection enabled (${dataConfig.serverUrl})`);
+      } catch (err) {
+        console.error("[ServerAdapter] Failed to start:", err);
+      }
+    }
 
     // Open the browser automatically on first run
     if (firstRun) {
