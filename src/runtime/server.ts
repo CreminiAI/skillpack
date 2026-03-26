@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { exec } from "node:child_process";
 
+import { ModelRegistry } from "@mariozechner/pi-coding-agent";
+
 import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
-import { configManager } from "./config.js";
+import { configManager, parseModelSpec } from "./config.js";
+import { authManager } from "./auth-manager.js";
 import { Lifecycle } from "./lifecycle.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,14 +36,41 @@ export async function startServer(options: ServerOptions): Promise<void> {
   } = options;
 
   // ---------------------------------------------------------------------------
-  // Read configuration: data/config.json first, env vars override
+  // Read configuration: data/config.json + data/auth.json
   // ---------------------------------------------------------------------------
 
   const dataConfig = configManager.load(rootDir);
-  const apiKey = dataConfig.apiKey || "";
-  const provider = dataConfig.provider || "openai";
+  const authStorage = authManager.init(rootDir);
 
-  const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
+  // Build ModelRegistry so we can resolve model dynamically
+  const modelRegistry = new ModelRegistry(authStorage);
+
+  // Resolve model: config.json "model" field → first available → fallback
+  let provider: string;
+  let modelId: string;
+
+  if (dataConfig.model) {
+    const parsed = parseModelSpec(dataConfig.model);
+    if (parsed) {
+      provider = parsed.provider;
+      modelId = parsed.modelId;
+    } else {
+      console.warn(`  [Server] Invalid model spec "${dataConfig.model}", using default`);
+      provider = "openai";
+      modelId = "gpt-5.4";
+    }
+  } else {
+    // No model configured — pick first available or fallback
+    const available = modelRegistry.getAvailable();
+    if (available.length > 0) {
+      const first = available[0];
+      provider = first.provider;
+      modelId = first.id;
+    } else {
+      provider = "openai";
+      modelId = "gpt-5.4";
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Create Express app & HTTP server
@@ -64,10 +94,10 @@ export async function startServer(options: ServerOptions): Promise<void> {
   // ---------------------------------------------------------------------------
 
   const agent = new PackAgent({
-    apiKey,
     rootDir,
     provider,
     modelId,
+    authStorage,
     lifecycleHandler: lifecycle,
   });
 
@@ -80,7 +110,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
 
   // Web adapter is always enabled
   const webAdapter = new WebAdapter();
-  await webAdapter.start({ agent, server, app, rootDir, lifecycle, adapterMap });
+  await webAdapter.start({ agent, server, app, rootDir, lifecycle, modelRegistry, adapterMap });
   adapters.push(webAdapter);
   adapterMap.set(webAdapter.name, webAdapter);
 

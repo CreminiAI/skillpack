@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
-import { configManager } from "../config.js";
+import { configManager, parseModelSpec } from "../config.js";
 import type { DataConfig } from "../config.js";
+import { authManager } from "../auth-manager.js";
 
 import type {
   PlatformAdapter,
@@ -35,8 +36,7 @@ function parseCommand(text: string): BotCommand | null {
 
 function getRuntimeConfigSignature(config: DataConfig): string {
   return JSON.stringify({
-    apiKey: config.apiKey || "",
-    provider: config.provider || "openai",
+    model: config.model || "",
     telegramToken: config.adapters?.telegram?.token || "",
     slackBotToken: config.adapters?.slack?.botToken || "",
     slackAppToken: config.adapters?.slack?.appToken || "",
@@ -54,28 +54,40 @@ export class WebAdapter implements PlatformAdapter {
   private agent: IPackAgent | null = null;
 
   async start(ctx: AdapterContext): Promise<void> {
-    const { agent, server, app, rootDir, lifecycle } = ctx;
+    const { agent, server, app, rootDir, lifecycle, modelRegistry } = ctx;
     this.agent = agent;
-
-    // -- API key & provider (in-memory, can be overridden by frontend) ------
-
-    const currentConf = configManager.getConfig();
-    let apiKey = currentConf.apiKey || "";
-    let currentProvider = currentConf.provider || "openai";
 
     // -- HTTP API routes ----------------------------------------------------
 
     app.get("/api/config", (_req, res) => {
       const config = getPackConfig(rootDir);
       const conf = configManager.getConfig();
+
+      // Build available models list from ModelRegistry
+      const availableModels = modelRegistry
+        ? modelRegistry.getAll().map((m: any) => ({
+            id: `${m.provider}/${m.id}`,
+            provider: m.provider,
+            modelId: m.id,
+            name: m.name || m.id,
+            hasAuth: authManager.hasAuth(m.provider),
+          }))
+        : [];
+
+      // Determine current model spec and whether auth is set up
+      const currentModel = conf.model || "";
+      const parsed = currentModel ? parseModelSpec(currentModel) : null;
+      const currentProvider = parsed?.provider || "";
+      const hasAuth = currentProvider ? authManager.hasAuth(currentProvider) : false;
+
       res.json({
         name: config.name,
         description: config.description,
         prompts: config.prompts || [],
         skills: config.skills || [],
-        hasApiKey: !!conf.apiKey,
-        apiKey: conf.apiKey || "",
-        provider: conf.provider || "openai",
+        model: currentModel,
+        hasAuth,
+        availableModels,
         adapters: conf.adapters || {},
         runtimeControl: lifecycle.getRuntimeControl(),
       });
@@ -87,17 +99,12 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     app.post("/api/config/update", (req, res) => {
-      const { key, provider, adapters } = req.body;
+      const { model, adapters } = req.body;
       const updates: any = {};
       const beforeConfig = JSON.parse(JSON.stringify(configManager.getConfig()));
 
-      if (key !== undefined) {
-        updates.apiKey = key;
-        apiKey = key;
-      }
-      if (provider !== undefined) {
-        updates.provider = provider;
-        currentProvider = provider;
+      if (model !== undefined) {
+        updates.model = model;
       }
       if (adapters !== undefined) {
         updates.adapters = adapters;
@@ -111,7 +118,7 @@ export class WebAdapter implements PlatformAdapter {
         getRuntimeConfigSignature(newConf);
       res.json({
         success: true,
-        provider: newConf.provider,
+        model: newConf.model,
         adapters: newConf.adapters,
         requiresRestart,
         runtimeControl: lifecycle.getRuntimeControl(),
@@ -134,6 +141,125 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     app.delete("/api/chat", (_req, res) => {
+      res.json({ success: true });
+    });
+
+    // -- Auth management API -------------------------------------------------
+
+    app.get("/api/auth/status", (_req, res) => {
+      res.json({
+        providers: authManager.listProvidersWithTypes(),
+      });
+    });
+
+    app.post("/api/auth/apikey", (req, res) => {
+      const { provider, apiKey } = req.body;
+      if (!provider || !apiKey) {
+        res.status(400).json({ success: false, message: "provider and apiKey are required" });
+        return;
+      }
+      authManager.setApiKey(provider, apiKey);
+      res.json({ success: true, provider, requiresRestart: true, runtimeControl: lifecycle.getRuntimeControl() });
+    });
+
+    app.delete("/api/auth/apikey", (req, res) => {
+      const { provider } = req.body;
+      if (!provider) {
+        res.status(400).json({ success: false, message: "provider is required" });
+        return;
+      }
+      authManager.removeAuth(provider);
+      res.json({ success: true });
+    });
+
+    app.get("/api/auth/oauth/providers", (_req, res) => {
+      const storage = authManager.getAuthStorage();
+      const oauthProviders = storage.getOAuthProviders().map((p) => ({
+        id: p.id,
+        name: p.name,
+      }));
+      res.json(oauthProviders);
+    });
+
+    // OAuth login state tracking
+    let oauthLoginState: {
+      status: "idle" | "pending" | "completed" | "error";
+      providerId?: string;
+      authUrl?: string;
+      error?: string;
+    } = { status: "idle" };
+
+    app.post("/api/auth/oauth/login", async (req, res) => {
+      const { provider: providerId } = req.body;
+      if (!providerId) {
+        res.status(400).json({ success: false, message: "provider is required" });
+        return;
+      }
+
+      oauthLoginState = { status: "pending", providerId };
+
+      const storage = authManager.getAuthStorage();
+      try {
+        // Start login — non-blocking from the HTTP perspective
+        const loginPromise = storage.login(providerId, {
+          onAuth: (info) => {
+            oauthLoginState.authUrl = info.url;
+          },
+          onPrompt: async (prompt) => {
+            // For device code flows that need user input
+            return "";
+          },
+          onProgress: (message) => {
+            console.log(`[OAuth] ${message}`);
+          },
+        });
+
+        // Wait briefly for authUrl to be populated
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // Return the auth URL immediately
+        res.json({
+          success: true,
+          authUrl: oauthLoginState.authUrl,
+          status: "pending",
+        });
+
+        // Let login complete in background
+        loginPromise
+          .then(() => {
+            oauthLoginState = { status: "completed", providerId };
+            console.log(`[OAuth] Login completed for ${providerId}`);
+          })
+          .catch((err) => {
+            oauthLoginState = {
+              status: "error",
+              providerId,
+              error: String(err),
+            };
+            console.error(`[OAuth] Login failed for ${providerId}:`, err);
+          });
+      } catch (err) {
+        oauthLoginState = {
+          status: "error",
+          providerId,
+          error: String(err),
+        };
+        res.status(500).json({ success: false, message: String(err) });
+      }
+    });
+
+    app.get("/api/auth/oauth/status", (_req, res) => {
+      res.json(oauthLoginState);
+    });
+
+    app.post("/api/auth/oauth/logout", (req, res) => {
+      const { provider: providerId } = req.body;
+      if (!providerId) {
+        res.status(400).json({ success: false, message: "provider is required" });
+        return;
+      }
+      authManager.removeAuth(providerId);
+      oauthLoginState = { status: "idle" };
       res.json({ success: true });
     });
 
@@ -274,15 +400,13 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     this.wss.on("connection", (ws: WebSocket, request) => {
-      const url = new URL(
-        request.url ?? "/",
-        `http://${request.headers.host || "127.0.0.1"}`,
-      );
-      const _reqProvider =
-        url.searchParams.get("provider") || currentProvider;
+      // Check that at least one provider has auth configured
+      const conf = configManager.getConfig();
+      const parsed = conf.model ? parseModelSpec(conf.model) : null;
+      const hasAuth = parsed ? authManager.hasAuth(parsed.provider) : authManager.listProviders().length > 0;
 
-      if (!apiKey) {
-        ws.send(JSON.stringify({ error: "Please set an API key first" }));
+      if (!hasAuth) {
+        ws.send(JSON.stringify({ error: "Please configure authentication first" }));
         ws.close();
         return;
       }

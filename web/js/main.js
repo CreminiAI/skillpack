@@ -1,6 +1,5 @@
 import { state, loadConfig } from "./config.js";
-import { initSettings } from "./settings.js";
-import { initApiKeyDialog, updateApiKeyButton } from "./api-key-dialog.js";
+import { initAuthDialog, updateAuthButton } from "./auth-dialog.js";
 import { initChatAppsDialog, updateChatAppsButton } from "./chat-apps-dialog.js";
 import { initChat, showWelcome } from "./chat.js";
 
@@ -41,14 +40,13 @@ async function init() {
     console.error("Initialization Failed:", err);
   }
   
-  // Initialize all dialog modules
-  initSettings();
-  initApiKeyDialog();
+  // Initialize dialog modules
+  initAuthDialog();
   initChatAppsDialog();
   initChat();
 
   // Update action button states based on config
-  updateApiKeyButton();
+  updateAuthButton();
   updateChatAppsButton();
 }
 

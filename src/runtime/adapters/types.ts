@@ -95,10 +95,10 @@ export interface HandleResult {
 }
 
 export interface PackAgentOptions {
-  apiKey: string;
   rootDir: string;
   provider: string;
   modelId: string;
+  authStorage: import("@mariozechner/pi-coding-agent").AuthStorage;
   lifecycleHandler: LifecycleHandler;
 }
 
@@ -174,6 +174,8 @@ export interface AdapterContext {
   app: Express;
   rootDir: string;
   lifecycle: LifecycleInfo & LifecycleHandler;
+  /** ModelRegistry for querying available models (used by Web API) */
+  modelRegistry?: import("@mariozechner/pi-coding-agent").ModelRegistry;
   /** Unified notify function for pushing messages via a named adapter */
   notify?: (adapter: string, channelId: string, text: string) => Promise<void>;
   /** Map of running adapters by name, for cross-adapter access */

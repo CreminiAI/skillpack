@@ -1,7 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
 import {
-  AuthStorage,
   createAgentSession,
   createCodingTools,
   ModelRegistry,
@@ -132,12 +131,7 @@ export class PackAgent implements IPackAgent {
     if (pendingCreation) return pendingCreation;
 
     const createSessionPromise = (async () => {
-      const { apiKey, rootDir, provider, modelId } = this.options;
-
-      const authStorage = AuthStorage.inMemory({
-        [provider]: { type: "api_key", key: apiKey },
-      });
-      (authStorage as any).setRuntimeApiKey(provider, apiKey);
+      const { rootDir, provider, modelId, authStorage } = this.options;
 
       const modelRegistry = new ModelRegistry(authStorage);
       const model = modelRegistry.find(provider, modelId);

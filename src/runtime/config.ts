@@ -28,8 +28,8 @@ export interface ScheduledJobConfig {
 // ---------------------------------------------------------------------------
 
 export interface DataConfig {
-  apiKey?: string;
-  provider?: string;
+  /** Model selection in "provider/modelId" format, e.g. "openai/gpt-5.4" */
+  model?: string;
   adapters?: {
     telegram?: { token?: string };
     slack?: {
@@ -39,6 +39,16 @@ export interface DataConfig {
     [key: string]: any;
   };
   scheduledJobs?: ScheduledJobConfig[];
+}
+
+/** Parse a "provider/modelId" string into its parts. */
+export function parseModelSpec(model: string): { provider: string; modelId: string } | null {
+  const slashIndex = model.indexOf("/");
+  if (slashIndex <= 0) return null;
+  return {
+    provider: model.slice(0, slashIndex),
+    modelId: model.slice(slashIndex + 1),
+  };
 }
 
 export class ConfigManager {
@@ -66,20 +76,6 @@ export class ConfigManager {
       }
     }
 
-    // Environment variables as fallback if not set in config file
-    let { apiKey = "", provider = "openai" } = this.configData;
-    if (!apiKey) {
-      if (process.env.OPENAI_API_KEY) {
-        apiKey = process.env.OPENAI_API_KEY;
-        provider = "openai";
-      } else if (process.env.ANTHROPIC_API_KEY) {
-        apiKey = process.env.ANTHROPIC_API_KEY;
-        provider = "anthropic";
-      }
-    }
-
-    this.configData.apiKey = apiKey;
-    this.configData.provider = provider;
     return this.configData;
   }
 
@@ -97,8 +93,7 @@ export class ConfigManager {
     }
 
     // Merge configuration
-    if (updates.apiKey !== undefined) this.configData.apiKey = updates.apiKey;
-    if (updates.provider !== undefined) this.configData.provider = updates.provider;
+    if (updates.model !== undefined) this.configData.model = updates.model;
 
     // Per-adapter key handling: null = delete, object = overwrite
     if (updates.adapters !== undefined) {
