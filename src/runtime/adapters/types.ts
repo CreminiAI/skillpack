@@ -174,6 +174,10 @@ export interface AdapterContext {
   app: Express;
   rootDir: string;
   lifecycle: LifecycleInfo & LifecycleHandler;
+  /** Unified notify function for pushing messages via a named adapter */
+  notify?: (adapter: string, channelId: string, text: string) => Promise<void>;
+  /** Map of running adapters by name, for cross-adapter access */
+  adapterMap?: Map<string, PlatformAdapter>;
 }
 
 export interface PlatformAdapter {
@@ -185,4 +189,26 @@ export interface PlatformAdapter {
 
   /** Stop the adapter gracefully */
   stop(): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Message Sender (for adapters that support proactive message sending)
+// ---------------------------------------------------------------------------
+
+/**
+ * Adapter that supports proactive message sending
+ * (e.g. pushing scheduled job results to IM channels).
+ */
+export interface MessageSender {
+  /** Send a text message to a specific channel/chat */
+  sendMessage(channelId: string, text: string): Promise<void>;
+  /** Send a file to a specific channel/chat */
+  sendFile?(channelId: string, filePath: string, caption?: string): Promise<void>;
+}
+
+/** Type guard to check if an adapter supports proactive message sending */
+export function isMessageSender(
+  adapter: PlatformAdapter,
+): adapter is PlatformAdapter & MessageSender {
+  return typeof (adapter as any).sendMessage === "function";
 }

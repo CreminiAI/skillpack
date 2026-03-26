@@ -1,6 +1,32 @@
 import fs from "node:fs";
 import path from "node:path";
 
+// ---------------------------------------------------------------------------
+// Scheduled Job Configuration
+// ---------------------------------------------------------------------------
+
+export interface ScheduledJobConfig {
+  /** Unique job name */
+  name: string;
+  /** Standard 5-field cron expression */
+  cron: string;
+  /** Prompt to send to the Agent when triggered */
+  prompt: string;
+  /** Where to push the result */
+  notify: {
+    adapter: string;   // "telegram" | "slack"
+    channelId: string; // e.g. "telegram-123456"
+  };
+  /** Defaults to true; set false to skip */
+  enabled?: boolean;
+  /** Optional timezone, e.g. "Asia/Shanghai" */
+  timezone?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Data Config
+// ---------------------------------------------------------------------------
+
 export interface DataConfig {
   apiKey?: string;
   provider?: string;
@@ -12,6 +38,7 @@ export interface DataConfig {
     };
     [key: string]: any;
   };
+  scheduledJobs?: ScheduledJobConfig[];
 }
 
 export class ConfigManager {
@@ -73,7 +100,7 @@ export class ConfigManager {
     if (updates.apiKey !== undefined) this.configData.apiKey = updates.apiKey;
     if (updates.provider !== undefined) this.configData.provider = updates.provider;
 
-    // 对每个 adapter key 单独处理：null 表示删除，有实际对象则直接覆写
+    // Per-adapter key handling: null = delete, object = overwrite
     if (updates.adapters !== undefined) {
       const merged: DataConfig["adapters"] = { ...(this.configData.adapters || {}) };
       for (const [adapterKey, adapterVal] of Object.entries(updates.adapters)) {
@@ -84,6 +111,11 @@ export class ConfigManager {
         }
       }
       this.configData.adapters = merged;
+    }
+
+    // Scheduled jobs: full replacement (array merge semantics are ambiguous)
+    if (updates.scheduledJobs !== undefined) {
+      this.configData.scheduledJobs = updates.scheduledJobs;
     }
 
     try {
