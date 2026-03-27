@@ -94,38 +94,36 @@ Dashboard（公网）                          SkillPack 节点（内网）
 
 ### 核心思路
 
-每个 `skillpack run` 启动/退出时，自动在公共注册表中签到/签离。节点管理器读取该注册表即可发现所有 Pack。
+每个 `skillpack run` 启动/退出时，自动维护自己对应的注册文件。节点管理器读取注册目录即可发现所有 Pack，并通过后台校验线程持续修正状态。
 
 ### 注册表位置
 
 ```
-~/.skillpack/registry.json
+~/.skillpack/registry.d/
 ```
 
 ### 数据结构
 
+每个 Pack 对应一个单独 JSON 文件，文件名为 `md5(canonicalDir).json`，例如：
+
+```text
+~/.skillpack/registry.d/
+├── 9a3d...c2.json   # /Users/me/packs/comic-explainer
+└── a1b4...9f.json   # /Users/me/packs/code-reviewer
+```
+
+单文件内容：
+
 ```json
 {
-  "packs": [
-    {
-      "dir": "/Users/me/packs/comic-explainer",
-      "name": "Comic Explainer",
-      "version": "1.0.0",
-      "port": 26313,
-      "pid": 12345,
-      "status": "running",
-      "startedAt": "2026-03-25T10:00:00Z"
-    },
-    {
-      "dir": "/Users/me/packs/code-reviewer",
-      "name": "Code Reviewer",
-      "version": "1.0.0",
-      "port": 26314,
-      "pid": null,
-      "status": "stopped",
-      "stoppedAt": "2026-03-25T10:30:00Z"
-    }
-  ]
+  "dir": "/Users/me/packs/comic-explainer",
+  "name": "Comic Explainer",
+  "version": "1.0.0",
+  "port": 26313,
+  "pid": 12345,
+  "status": "running",
+  "startedAt": "2026-03-25T10:00:00Z",
+  "updatedAt": "2026-03-25T10:00:00Z"
 }
 ```
 
@@ -160,27 +158,28 @@ Dashboard 侧数据模型：
 
 | 时机                     | 操作                                         | 触发位置                                                                                                      |
 | ------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `skillpack run` 启动成功 | 写入 `status: "running"`, `pid`, `port`      | [server.ts](file:///Users/yava/myspace/finpeak/skill-pack/src/runtime/server.ts) → `server.once("listening")` |
-| `skillpack run` 正常退出 | 更新 `status: "stopped"`, `pid: null`        | [server.ts](file:///Users/yava/myspace/finpeak/skill-pack/src/runtime/server.ts) → `SIGINT`/`SIGTERM` handler |
-| 进程崩溃（未能签离）或目录被物理删除 | 节点管理器通过 `validateEntriesAsync`（包含目录存在性校验、PID 存活检查及 `/api/health` 探活）检测到进程已死或孤立，自动将进程状态改写为 `stopped` 或移除孤立记录 | `skillpack-node` 获取状态或心跳轮询时触发 |
+| `skillpack run` 启动成功 | 覆盖自己的 entry 文件为 `status: "running"`，写入 `pid`、`port`、`updatedAt` | [server.ts](file:///Users/yava/myspace/finpeak/skillpack/skill-pack/src/runtime/server.ts) → `server.once("listening")` |
+| `skillpack run` 正常退出 | 若当前 entry 的 `pid` 仍等于当前进程，则更新为 `status: "stopped"`、`pid: null` | [server.ts](file:///Users/yava/myspace/finpeak/skillpack/skill-pack/src/runtime/server.ts) → `SIGINT`/`SIGTERM` handler |
+| 进程崩溃（未能签离）或目录被物理删除 | 节点管理器后台执行 `validateEntries`：目录缺失时删除 entry，目录存在时根据 `/api/health` 返回的 `dir + pid` 和进程存活情况双向修正 `running/stopped` | `skillpack-node` 启动后首轮校验 + 周期性后台校验 |
 
 ### 流程图
 
 ```mermaid
 sequenceDiagram
     participant Pack as skillpack run
-    participant Reg as ~/.skillpack/registry.json
+    participant Reg as ~/.skillpack/registry.d/<md5(dir)>.json
     participant Node as skillpack-node
 
     Pack->>Reg: 启动成功 → 写入 {status: running, pid, port}
 
     Note over Node: 节点管理器启动
-    Node->>Reg: 读取所有条目
-    Node->>Node: 执行 validateEntriesAsync (目录检查、PID、HTTP 探活)
-    Node->>Node: 上报最新清洗后的全量 Pack 状态给 Dashboard
+    Node->>Reg: 读取所有 entry
+    Node->>Node: 执行 validateEntries (目录检查 + /api/health dir/pid 校验)
+    Node->>Node: 刷新本地快照
+    Node->>Node: 周期性重复后台校验
+    Node->>Dashboard: register / heartbeat 只读取快照
 
     Pack->>Reg: 退出 → 更新 {status: stopped, pid: null}
-    Node->>Reg: 检测到变化 → 上报 Dashboard
 ```
 
 ---
@@ -242,7 +241,8 @@ skillpack-node stop-pack /path/to/pack
   "dashboardUrl": "wss://dashboard.cremini.ai",
   "nodeToken": "ntk_a1b2c3d4e5f6",
   "nodeName": "办公室-Mac-1",
-  "reportInterval": 30
+  "reportInterval": 30,
+  "validationInterval": 60
 }
 ```
 
@@ -251,18 +251,15 @@ skillpack-node stop-pack /path/to/pack
 ```mermaid
 flowchart TD
     A[skillpack-node start] --> B[读取 node-config.json]
-    B --> C[读取 registry.json]
-    C --> D[校验每个条目]
-    D --> E{pid 存活?}
-    E -->|是| F[标记 running]
-    E -->|否| G[标记 stopped]
-    F --> H[连接 Dashboard (Socket.IO)]
-    G --> H
-    H --> I[上报所有 Pack 状态 (emit register)]
-    I --> J[进入主循环]
-    J --> K[定时心跳 (emit heartbeat)]
-    J --> L[监听下行指令 (on command)]
-    J --> M[监听 registry 变化]
+    B --> C[读取 registry.d]
+    C --> D[首轮 validateEntries]
+    D --> E[刷新本地快照]
+    E --> F[连接 Dashboard (Socket.IO)]
+    F --> G[上报快照状态 emit register]
+    G --> H[进入主循环]
+    H --> I[定时心跳 emit heartbeat]
+    H --> J[后台每 N 秒重新 validateEntries]
+    H --> K[监听下行指令 on command]
 ```
 
 ### 进程模型
@@ -272,7 +269,6 @@ skillpack-node (常驻守护进程, ~50MB内存)
 ├── WebSocket Client     → 连接 Dashboard
 ├── Process Manager      → 拉起独立运行的 Daemon Pack / 执行停止命令
 ├── Metrics Collector    → 采集节点指标
-├── Registry Watcher     → 监听 registry.json 变化
 │
 ├── 子进程: skillpack run ./pack-a --port 26313
 ├── 子进程: skillpack run ./pack-b --port 26314
@@ -309,6 +305,9 @@ skillpack-node (常驻守护进程, ~50MB内存)
 
 #### `heartbeat` — 每 N 秒定时发送 (`socket.emit("heartbeat", payload)`)
 
+> [!NOTE]
+> `register` 与 `heartbeat` 都只读取节点管理器最近一次校验后的本地快照，不会在发送路径上主动触发探活或写注册表。
+
 ```typescript
 {
   timestamp: "2026-03-25T10:00:30Z",
@@ -319,7 +318,7 @@ skillpack-node (常驻守护进程, ~50MB内存)
     uptimeSeconds: 3600
   },
   packs: [
-    { name: "Comic Explainer", port: 26313, status: "running", activeSessions: 2 },
+    { name: "Comic Explainer", port: 26313, status: "running" },
     { name: "Code Reviewer", port: 26314, status: "stopped" },
   ]
 }
@@ -463,6 +462,6 @@ skillpack-node/
 | **开源包零企业代码**       | 所有节点管理 / Dashboard 通信代码在 `@cremini/skillpack-node` 中                       |
 | **不影响 `skillpack run`** | 签到 registry 是附加行为，失败静默忽略                                                 |
 | **开源用户无感知**         | 不安装 `skillpack-node` 就完全无感                                                     |
-| **配置文件兼容**           | 新增的 `registry.json` / `node-config.json` 位于 `~/.skillpack/`，不影响 Pack 目录结构 |
+| **配置文件兼容**           | 新增的 `registry.d/` / `node-config.json` 位于 `~/.skillpack/`，不影响 Pack 目录结构 |
 | **Pack 无需内嵌 ID**       | Dashboard 使用 `nodeToken + dir` 复合键标识，`skillpack.json` 格式不变                 |
 | **独立发版**               | 两个包各自独立版本号，互不阻塞发布                                                     |

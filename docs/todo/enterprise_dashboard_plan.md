@@ -31,7 +31,7 @@ Enterprise Dashboard 是 SkillPack 商业生态的**中心管理平面**：
 1. 接受 `skillpack-node` 的 WS 连接，接收上行状态与指令回执，下发控制指令
 2. 为企业用户提供 Web UI，展示节点和 Pack 的实时状态
 3. 管理多租户（Organization）、用户认证、权限控制
-4. 存储历史指标、节点在线状态与指令结果日志
+4. 存储历史指标与节点在线状态
 
 ---
 
@@ -61,7 +61,6 @@ erDiagram
     Organization ||--o{ NodeToken : "issues tokens"
     Organization ||--o{ Node : "owns nodes"
     Node ||--o{ Pack : "hosts packs"
-    Node ||--o{ NodeEvent : "has logs"
     Node ||--o{ MetricSnapshot : "reports metrics"
 
     Organization {
@@ -112,18 +111,9 @@ erDiagram
         string version
         int port
         string status "running|stopped|crashed"
-        int activeSessions
         timestamp lastSeenAt
     }
 
-    NodeEvent {
-        uuid id PK
-        uuid nodeId FK
-        string kind "error|node_online|node_offline|command_result"
-        string packName
-        string detail
-        timestamp createdAt
-    }
 
     MetricSnapshot {
         uuid id PK
@@ -132,7 +122,6 @@ erDiagram
         float memoryMB
         float memoryPercent
         int uptimeSeconds
-        jsonb packMetrics "每个 Pack 的 activeSessions 等"
         timestamp recordedAt
     }
 ```
@@ -179,10 +168,10 @@ sequenceDiagram
         SI-->>Node: connect
         Node->>SI: socket.emit("register", {...})
         SI->>DB: UPSERT Node 记录, UPSERT 每个 Pack
-        SI->>DB: 插入 node_online 事件
 
         loop 每 30 秒
             Node->>SI: socket.emit("heartbeat", {...})
+            Note over Node: heartbeat 读取 node 本地最近一次 registry 校验快照
             SI->>DB: 更新 Node.lastHeartbeatAt, 更新 Pack 状态
             SI->>DB: 插入 MetricSnapshot
         end
@@ -192,6 +181,10 @@ sequenceDiagram
         Node->>SI: socket.emit("command_ack", { commandId: "cmd_xxx", success: true })
     end
 ```
+
+> [!NOTE]
+> `skillpack-node` 本地会定期校验 `~/.skillpack/registry.d/*.json` 中的每个 Pack entry。
+> Dashboard 不直接参与节点本地探活，只消费节点上报的最新快照状态。
 
 #### 消息处理规则
 
@@ -205,7 +198,6 @@ sequenceDiagram
 
 - 启动定时任务（BullMQ repeatable job），每 60 秒扫描 `lastHeartbeatAt`
 - 若 `now - lastHeartbeatAt > 3 × heartbeatInterval`，标记 `Node.status = offline`
-- 插入 `node_offline` 事件
 
 ### 4.2 REST API — 前端通信
 
@@ -240,7 +232,6 @@ DELETE /api/tokens/:tokenId      # 吊销 token
 ```
 GET    /api/packs                # 列出所有 Pack（跨节点，含节点名称）
 GET    /api/packs/:packId        # Pack 详情（含所属节点信息）
-GET    /api/packs/:packId/events # Pack 相关事件日志（分页）
 ```
 
 #### 节点（辅助查询）
@@ -249,7 +240,6 @@ GET    /api/packs/:packId/events # Pack 相关事件日志（分页）
 GET    /api/nodes                # 列出所有节点
 GET    /api/nodes/:nodeId        # 节点详情
 GET    /api/nodes/:nodeId/metrics # 节点历史指标（时间范围查询）
-GET    /api/nodes/:nodeId/events # 节点事件日志（分页）
 ```
 
 #### 远程控制
@@ -330,7 +320,6 @@ graph LR
     Login[登录/注册] --> Dashboard[总览]
     Dashboard --> PackList[Pack 列表]
     PackList --> PackDetail[Pack 详情]
-    Dashboard --> Events[事件日志]
     Dashboard --> Settings[组织设置]
     Settings --> Tokens[Token 管理]
     Settings --> Members[成员管理]
@@ -359,12 +348,6 @@ graph LR
 │  Image Gen         ⚠️ 崩溃  测试机 🔴        🔄         │
 │                                                          │
 │  ─ 可按 状态 / 节点 筛选排序 ─                           │
-│                                                          │
-│  📋 最近日志                                              │
-│  ────────────────────────────────────────────────────    │
-│  10:30  ✅  restart 指令执行成功           (测试机)      │
-│  10:28  ✅  stop 指令执行成功              (服务器-Linux)│
-│  10:15  🔴  测试机 went offline                          │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -380,18 +363,9 @@ graph LR
 │  所属节点   办公室-Mac-1 🟢                               │
 │  目录      /Users/me/packs/comic-explainer               │
 │  端口      26313                                         │
-│  活跃会话   2                                             │
 │  最后更新   30 秒前                                       │
 ├──────────────────────────────────────────────────────────┤
 │  操作：  [⏹️ 停止]  [🔄 重启]                             │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  [状态同步]  [节点指标]                                   │
-│  ────────────────────────────────────────────────────    │
-│  10:30  状态同步：running                                │
-│  10:28  状态同步：stopped                                │
-│  10:25  状态同步：running                                │
-│  09:00  状态同步：running                                │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -465,7 +439,6 @@ skillpack-dashboard/
 │   │   │   ├── Login.tsx
 │   │   │   ├── Dashboard.tsx       # 总览（Pack 列表为核心）
 │   │   │   ├── PackDetail.tsx      # Pack 详情（含节点标签）
-│   │   │   ├── Events.tsx
 │   │   │   └── Settings/
 │   │   │       ├── Tokens.tsx
 │   │   │       ├── Members.tsx
@@ -475,7 +448,6 @@ skillpack-dashboard/
 │   │       ├── PackTable.tsx        # Pack 列表表格
 │   │       ├── NodeBadge.tsx        # 节点名称标签（小组件）
 │   │       ├── MetricsChart.tsx
-│   │       ├── EventTimeline.tsx
 │   │       └── StatusBadge.tsx
 │   └── package.json
 └── tests/
@@ -544,9 +516,8 @@ async function checkNodeHealth() {
     )
     .returning();
 
-  // 为每个新离线节点插入事件
+  // 广播节点离线状态通知
   for (const node of offlineNodes) {
-    await insertEvent(node.id, "node_offline");
     dashboardHub.broadcast({
       type: "node_status",
       nodeId: node.id,
@@ -570,13 +541,13 @@ sequenceDiagram
     API->>API: 鉴权 + 检查 node 是否 online
     API->>Hub: sendCommand(nodeId, action)
     Hub->>Hub: 生成 commandId, 记录 pending
-    Hub->>Node: {"type": "command", "commandId": "cmd_xxx", ...}
+    Hub->>Node: socket.emit("command", { commandId: "cmd_xxx", ... })
     API-->>UI: {"commandId": "cmd_xxx", "status": "sent"}
 
     Node->>Node: 执行 restart
-    Node->>Hub: {"type": "command_ack", "commandId": "cmd_xxx", "success": true}
+    Node->>Hub: socket.emit("command_ack", { commandId: "cmd_xxx", success: true })
     Hub->>Hub: 清理 pending, 判定结果
-    Hub->>WS2: {"type": "command_result", "commandId": "cmd_xxx", ...}
+    Hub->>WS2: socket.emit("command_result", { commandId: "cmd_xxx", ... })
     WS2-->>UI: 实时显示执行结果
 ```
 
@@ -668,12 +639,11 @@ cd web && npm run dev  # Vite 热重载
 - [ ] WS 节点连接端点：token 验证 + register 处理
 - [ ] WS heartbeat 处理 + Node/Pack 状态更新
 
-### Phase 2：远程控制 + 日志系统
+### Phase 2：远程控制
 
-> **目标**：能下发指令并追踪结果，记录状态与控制日志
+> **目标**：能下发指令并追踪结果
 
 - [ ] 指令下发 API + WS 转发 + ack 处理
-- [ ] 状态/控制日志记录 + REST 查询 API
 - [ ] 在线检测定时任务（Health Checker）
 - [ ] MetricSnapshot 存储 + 查询 API
 
@@ -683,8 +653,7 @@ cd web && npm run dev  # Vite 热重载
 
 - [ ] 登录/注册页
 - [ ] Dashboard 总览页（Pack 列表 + 节点标签 + 状态筛选 + 实时状态）
-- [ ] Pack 详情页（状态/操作/状态同步记录/节点信息）
-- [ ] 日志页（时间线 + 按 Pack/节点筛选）
+- [ ] Pack 详情页（状态/操作/节点信息）
 - [ ] 设置页（Token 管理 + 成员管理）
 - [ ] 前端 WS 实时推送集成
 

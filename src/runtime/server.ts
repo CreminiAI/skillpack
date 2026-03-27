@@ -9,7 +9,11 @@ import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
 import { configManager } from "./config.js";
 import { Lifecycle } from "./lifecycle.js";
-import { register as registryRegister, deregister as registryDeregister } from "./registry.js";
+import {
+  register as registryRegister,
+  deregister as registryDeregister,
+  canonicalizeDir,
+} from "./registry.js";
 import { loadConfig as loadPackConfig } from "../pack-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +45,8 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const dataConfig = configManager.load(rootDir);
   const apiKey = dataConfig.apiKey || "";
   const provider = dataConfig.provider || "openai";
+  const canonicalRootDir = canonicalizeDir(rootDir);
+  const packConfig = loadPackConfig(canonicalRootDir);
 
   const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
 
@@ -57,9 +63,21 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const app = express();
   app.use(express.json());
   app.use(express.static(webDir));
-  app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
   const server = createServer(app);
+  app.get("/api/health", (_req, res) => {
+    const address = server.address();
+    const actualPort = typeof address === "string" ? port : (address?.port ?? port);
+    res.json({
+      status: "ok",
+      dir: canonicalRootDir,
+      name: packConfig.name,
+      version: packConfig.version,
+      port: actualPort,
+      pid: process.pid,
+    });
+  });
+
   const lifecycle = new Lifecycle(server);
 
   // ---------------------------------------------------------------------------
@@ -185,9 +203,8 @@ export async function startServer(options: ServerOptions): Promise<void> {
 
     // Register in global registry for node-manager discovery
     try {
-      const packConfig = loadPackConfig(rootDir);
       registryRegister({
-        dir: rootDir,
+        dir: canonicalRootDir,
         name: packConfig.name,
         version: packConfig.version,
         port: typeof actualPort === "number" ? actualPort : port,
@@ -211,12 +228,12 @@ export async function startServer(options: ServerOptions): Promise<void> {
   });
 
   process.on("SIGINT", () => {
-    registryDeregister(rootDir);
+    registryDeregister(canonicalRootDir, process.pid);
     void lifecycle.requestShutdown("signal");
   });
 
   process.on("SIGTERM", () => {
-    registryDeregister(rootDir);
+    registryDeregister(canonicalRootDir, process.pid);
     void lifecycle.requestShutdown("signal");
   });
 
