@@ -164,7 +164,7 @@ Slack additionally exposes namespaced slash commands:
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
-| `/api/config` | GET | Pack metadata, provider, API key presence, adapter config, runtimeControl |
+| `/api/config` | GET | Pack metadata, provider, API key presence, adapter config |
 | `/api/skills` | GET | Skills list (reads `skillpack.json`) |
 | `/api/config/update` | POST | Save API key / provider / adapter config; returns `requiresRestart` |
 | `/api/runtime/restart` | POST | Triggers a managed restart under supported process managers |

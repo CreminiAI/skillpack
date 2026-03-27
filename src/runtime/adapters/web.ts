@@ -77,7 +77,6 @@ export class WebAdapter implements PlatformAdapter {
         apiKey: conf.apiKey || "",
         provider: conf.provider || "openai",
         adapters: conf.adapters || {},
-        runtimeControl: lifecycle.getRuntimeControl(),
       });
     });
 
@@ -114,23 +113,12 @@ export class WebAdapter implements PlatformAdapter {
         provider: newConf.provider,
         adapters: newConf.adapters,
         requiresRestart,
-        runtimeControl: lifecycle.getRuntimeControl(),
       });
     });
 
     app.post("/api/runtime/restart", async (_req, res) => {
-      const runtimeControl = lifecycle.getRuntimeControl();
-      if (!runtimeControl.canManagedRestart) {
-        res.status(409).json({
-          success: false,
-          message: "Managed restart is unavailable for this process.",
-          runtimeControl,
-        });
-        return;
-      }
-
       const result = await lifecycle.requestRestart("web");
-      res.status(202).json({ ...result, runtimeControl });
+      res.status(202).json(result);
     });
 
     app.delete("/api/chat", (_req, res) => {

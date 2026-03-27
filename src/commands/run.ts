@@ -94,5 +94,8 @@ export async function runCommand(directory?: string): Promise<void> {
   }
 
   // Start the runtime server
-  await startServer({ rootDir: workDir, firstRun: true });
+  await startServer({
+    rootDir: workDir,
+    daemonRun: process.env.DAEMON_RUN === "1",
+  });
 }

@@ -9,6 +9,8 @@ import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
 import { configManager } from "./config.js";
 import { Lifecycle } from "./lifecycle.js";
+import { register as registryRegister, deregister as registryDeregister } from "./registry.js";
+import { loadConfig as loadPackConfig } from "../pack-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,7 +18,7 @@ export interface ServerOptions {
   rootDir: string;
   host?: string;
   port?: number;
-  firstRun?: boolean;
+  daemonRun?: boolean;
 }
 
 /**
@@ -29,7 +31,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     rootDir,
     host = process.env.HOST || "127.0.0.1",
     port = Number(process.env.PORT) || 26313,
-    firstRun = true,
+    daemonRun = false,
   } = options;
 
   // ---------------------------------------------------------------------------
@@ -55,6 +57,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const app = express();
   app.use(express.json());
   app.use(express.static(webDir));
+  app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
   const server = createServer(app);
   const lifecycle = new Lifecycle(server);
@@ -180,8 +183,21 @@ export async function startServer(options: ServerOptions): Promise<void> {
     console.log(`\n  Skills Pack Server`);
     console.log(`  Running at ${url}\n`);
 
-    // Open the browser automatically on first run
-    if (firstRun) {
+    // Register in global registry for node-manager discovery
+    try {
+      const packConfig = loadPackConfig(rootDir);
+      registryRegister({
+        dir: rootDir,
+        name: packConfig.name,
+        version: packConfig.version,
+        port: typeof actualPort === "number" ? actualPort : port,
+      });
+    } catch (err) {
+      console.warn("  [Registry] Could not register pack:", err);
+    }
+
+    // Open the browser automatically if not a daemon run
+    if (!daemonRun) {
       const cmd =
         process.platform === "darwin"
           ? `open ${url}`
@@ -195,10 +211,12 @@ export async function startServer(options: ServerOptions): Promise<void> {
   });
 
   process.on("SIGINT", () => {
+    registryDeregister(rootDir);
     void lifecycle.requestShutdown("signal");
   });
 
   process.on("SIGTERM", () => {
+    registryDeregister(rootDir);
     void lifecycle.requestShutdown("signal");
   });
 

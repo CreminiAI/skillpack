@@ -6,8 +6,6 @@ import type {
   LifecycleInfo,
   LifecycleTrigger,
   PlatformAdapter,
-  ProcessManager,
-  RuntimeControl,
 } from "./adapters/types.js";
 
 export const SHUTDOWN_EXIT_CODE = 64;
@@ -17,33 +15,26 @@ const STOP_TIMEOUT_MS = 3_000;
 type StopReason = "restart" | "shutdown";
 type ExitFn = (code: number) => never | void;
 
-function detectProcessManager(): ProcessManager {
-  return process.env.PACK_ROOT ? "wrapper" : "none";
-}
+
 
 export class Lifecycle implements LifecycleHandler, LifecycleInfo {
   private readonly server: Server;
   private readonly exitFn: ExitFn;
-  private readonly processManager: ProcessManager;
+
   private adapters: PlatformAdapter[] = [];
   private stopReason: StopReason | null = null;
 
   constructor(server: Server, exitFn: ExitFn = (code) => process.exit(code)) {
     this.server = server;
     this.exitFn = exitFn;
-    this.processManager = detectProcessManager();
+
   }
 
   registerAdapters(adapters: PlatformAdapter[]): void {
     this.adapters = adapters;
   }
 
-  getRuntimeControl(): RuntimeControl {
-    return {
-      canManagedRestart: this.processManager === "wrapper",
-      processManager: this.processManager,
-    };
-  }
+
 
   async requestRestart(trigger: LifecycleTrigger): Promise<CommandResult> {
     return this.requestStop("restart", trigger);

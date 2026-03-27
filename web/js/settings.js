@@ -72,9 +72,7 @@ function populateForm() {
 
   if (state.restartRequired) {
     setStatus(
-      config.runtimeControl?.canManagedRestart
-        ? "Settings saved. Restart service to apply changes."
-        : "Settings saved. Restart the service manually to apply changes.",
+      "Settings saved. Restart service to apply changes.",
       "warning",
     );
     updateRestartButton(true);
@@ -139,7 +137,6 @@ async function handleSave() {
     // Update local config
     state.config.provider = res.provider;
     state.config.adapters = res.adapters;
-    state.config.runtimeControl = res.runtimeControl;
     if (updates.key) {
       state.config.hasApiKey = true;
       state.config.apiKey = updates.key;
@@ -156,12 +153,10 @@ async function handleSave() {
 
     if (res.requiresRestart) {
       setStatus(
-        res.runtimeControl.canManagedRestart
-          ? "Settings saved. Restart service to apply changes."
-          : "Settings saved. Restart the service manually to apply changes.",
+        "Settings saved. Restart service to apply changes.",
         "warning",
       );
-      updateRestartButton(res.runtimeControl.canManagedRestart);
+      updateRestartButton(true);
       return;
     }
 

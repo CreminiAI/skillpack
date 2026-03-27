@@ -7,6 +7,6 @@ output2/
 output3/
 *.log
 runtime/server/node_modules/
-docs/todo/*
+# docs/todo/*
 dist_examples/
 .build_examples/

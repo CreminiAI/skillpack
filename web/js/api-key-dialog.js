@@ -136,19 +136,17 @@ async function handleSave() {
       apiKeyInput.value = "";
     }
     
-    state.config.runtimeControl = res.runtimeControl;
+
     state.restartRequired = !!res.requiresRestart;
 
     updateApiKeyButton();
 
     if (res.requiresRestart) {
       setStatus(
-        res.runtimeControl?.canManagedRestart
-          ? "API key saved. Restart service to apply changes."
-          : "API key saved. Restart the service manually to apply changes.",
+        "API key saved. Restart service to apply changes.",
         "warning",
       );
-      updateRestartButton(!!res.runtimeControl?.canManagedRestart);
+      updateRestartButton(true);
     } else {
       setStatus("API key saved successfully", "success");
       // 延迟关闭让用户看到成功消息
