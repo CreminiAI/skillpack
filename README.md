@@ -20,7 +20,9 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 
 ### 1. Run a skillpack
 
-1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
+1. Download the example
+- [Garry Tan SkillPack](https://github.com/CreminiAI/skillpack-examples/releases/download/v.0.0.3/garry-tan.zip)
+- [Company Deep Research SkillPack](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
 2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
 
 ```bash
