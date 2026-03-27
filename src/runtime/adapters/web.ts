@@ -52,12 +52,10 @@ export class WebAdapter implements PlatformAdapter {
 
   private wss: WebSocketServer | null = null;
   private agent: IPackAgent | null = null;
-  private adapterMap: Map<string, PlatformAdapter> | undefined;
 
   async start(ctx: AdapterContext): Promise<void> {
     const { agent, server, app, rootDir, lifecycle } = ctx;
     this.agent = agent;
-    this.adapterMap = ctx.adapterMap;
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
 
@@ -79,8 +77,6 @@ export class WebAdapter implements PlatformAdapter {
         apiKey: conf.apiKey || "",
         provider: conf.provider || "openai",
         adapters: conf.adapters || {},
-        serverUrl: conf.serverUrl || "",
-        agentToken: conf.agentToken || "",
         runtimeControl: lifecycle.getRuntimeControl(),
       });
     });
@@ -91,7 +87,7 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     app.post("/api/config/update", (req, res) => {
-      const { key, provider, adapters, serverUrl, agentToken } = req.body;
+      const { key, provider, adapters } = req.body;
       const updates: any = {};
       const beforeConfig = JSON.parse(JSON.stringify(configManager.getConfig()));
 
@@ -105,12 +101,6 @@ export class WebAdapter implements PlatformAdapter {
       }
       if (adapters !== undefined) {
         updates.adapters = adapters;
-      }
-      if (serverUrl !== undefined) {
-        updates.serverUrl = serverUrl;
-      }
-      if (agentToken !== undefined) {
-        updates.agentToken = agentToken;
       }
 
       configManager.save(rootDir, updates);
@@ -354,11 +344,6 @@ export class WebAdapter implements PlatformAdapter {
         const onEvent = (event: AgentEvent) => {
           if (ws.readyState !== ws.OPEN) return;
           ws.send(JSON.stringify(event));
-          // Forward to server adapter (Dashboard) if connected
-          const serverAdapter = this.adapterMap?.get("server");
-          if (serverAdapter && "forwardEvent" in serverAdapter) {
-            (serverAdapter as any).forwardEvent(event);
-          }
         };
 
         const result = await agent.handleMessage(channelId, text, onEvent);

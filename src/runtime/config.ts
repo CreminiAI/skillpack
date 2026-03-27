@@ -30,10 +30,6 @@ export interface ScheduledJobConfig {
 export interface DataConfig {
   apiKey?: string;
   provider?: string;
-  /** Skillpack Dashboard server URL, e.g. "https://api.skillpack.sh" */
-  serverUrl?: string;
-  /** Agent token from Dashboard registration (used for Socket.IO auth) */
-  agentToken?: string;
   adapters?: {
     telegram?: { token?: string };
     slack?: {
@@ -103,8 +99,6 @@ export class ConfigManager {
     // Merge configuration
     if (updates.apiKey !== undefined) this.configData.apiKey = updates.apiKey;
     if (updates.provider !== undefined) this.configData.provider = updates.provider;
-    if (updates.serverUrl !== undefined) this.configData.serverUrl = updates.serverUrl;
-    if (updates.agentToken !== undefined) this.configData.agentToken = updates.agentToken;
 
     // Per-adapter key handling: null = delete, object = overwrite
     if (updates.adapters !== undefined) {
