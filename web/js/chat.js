@@ -49,14 +49,14 @@ export function showWelcome(config) {
     promptsHtml = `
       <div class="prompt-cards">
         ${config.prompts
-          .map(
-            (u, i) => `
+        .map(
+          (u, i) => `
           <div class="prompt-card" data-index="${i}" title="${u}">
             ${u.length > 60 ? u.substring(0, 60) + "..." : u}
           </div>
         `,
-          )
-          .join("")}
+        )
+        .join("")}
       </div>
     `;
   }
@@ -64,8 +64,8 @@ export function showWelcome(config) {
   if (welcomeContent) {
     welcomeContent.innerHTML = `
       <div class="welcome-message">
-        <h2>Turn Skills into a Standalone App with UI</h2>
-        <p>One command to orchestrate skills into a standalone app users can download and use on their computer</p>
+        <h2>Pack and deploy local AI agents for your team in minutes</h2>
+        <p>Deploy verified AI Skillpacks locally and use them directly from Slack and Telegram</p>
         ${promptsHtml}
       </div>
     `;
@@ -403,8 +403,8 @@ function handleAgentEvent(event) {
 
         const mdText =
           event.result &&
-          typeof event.result === "string" &&
-          (event.result.includes("\n") || event.result.length > 50)
+            typeof event.result === "string" &&
+            (event.result.includes("\n") || event.result.length > 50)
             ? "\`\`\`bash\n" + safeResult + "\n\`\`\`"
             : "\`\`\`json\n" + safeResult + "\n\`\`\`";
 
