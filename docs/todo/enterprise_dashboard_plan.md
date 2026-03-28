@@ -12,9 +12,9 @@ Enterprise Dashboard 是 SkillPack 商业生态的**中心管理平面**：
 ┌──────────────────────────────────────────────────────────┐
 │                  Enterprise Dashboard                     │
 │                                                          │
-│  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌───────────┐ │
-│  │ Web UI  │  │ REST API │  │ WS Hub  │  │ Job Queue │ │
-│  └────┬────┘  └────┬─────┘  └────┬────┘  └─────┬─────┘ │
+│  ┌─────────┐  ┌──────────┐  ┌──────────────┐  ┌───────────┐ │
+│  │ Web UI  │  │ REST API │  │ Socket.IO Hub│  │ Job Queue │ │
+│  └────┬────┘  └────┬─────┘  └────┬─────────┘  └─────┬─────┘ │
 │       └────────────┴─────────────┴──────────────┘       │
 │                         │                                │
 │                   ┌─────┴─────┐                         │
@@ -22,13 +22,13 @@ Enterprise Dashboard 是 SkillPack 商业生态的**中心管理平面**：
 │                   └───────────┘                         │
 └──────────────────────────────────────────────────────────┘
          ▲                              ▲
-         │ HTTPS                        │ WSS
+         │ HTTPS                        │ Socket.IO
     企业用户浏览器                 skillpack-node × N
 ```
 
 **核心职责：**
 
-1. 接受 `skillpack-node` 的 WS 连接，接收上行状态与指令回执，下发控制指令
+1. 接受 `skillpack-node` 的 Socket.IO 连接，接收上行状态与指令回执，下发控制指令
 2. 为企业用户提供 Web UI，展示节点和 Pack 的实时状态
 3. 管理多租户（Organization）、用户认证、权限控制
 4. 存储历史指标与节点在线状态
@@ -41,7 +41,7 @@ Enterprise Dashboard 是 SkillPack 商业生态的**中心管理平面**：
 | ------------- | ------------------------------- | ------------------------------------------ |
 | **运行时**    | Node.js (≥20)                   | 与 SkillPack 生态保持统一                  |
 | **Web 框架**  | Fastify                         | 高性能、插件体系完善、原生 TypeScript 支持 |
-| **WebSocket** | `socket.io` (via `fastify-socket.io`) | 稳定性高，自带断线重连、事件驱动、房间分组等功能 |
+| **通信协议**  | `socket.io` (via `fastify-socket.io`) | 稳定性高，自带断线重连、事件驱动、房间分组等功能 |
 | **数据库**    | PostgreSQL                      | JSONB 支持、成熟可靠、生态丰富             |
 | **ORM**       | Drizzle ORM                     | 类型安全、零抽象开销、SQL-first            |
 | **认证**      | JWT (access + refresh token)    | 无状态、易于横向扩展                       |
@@ -144,12 +144,12 @@ CREATE UNIQUE INDEX idx_pack_node_dir ON pack(node_id, dir);
 
 ## 四、API 设计
 
-### 4.1 WebSocket 端点 — 节点通信
+### 4.1 Socket.IO 端点 — 节点通信
 
 #### 端点
 
 ```
-wss://dashboard.cremini.ai/  (namespace 默认为 /, 连接时通过 auth 选项传递 token)
+https://api.skillpack.sh/  (namespace 默认为 /, 连接时通过 auth 选项传递 token)
 ```
 
 #### 连接生命周期
@@ -251,7 +251,7 @@ Body: {
 }
 Response: {
   "commandId": "cmd_abc123",
-  "status": "sent"                     // 异步，通过 WS 推送结果
+  "status": "sent"                     // 异步，通过 Socket.IO 推送结果
 }
 
 POST   /api/nodes/:nodeId/deploy
@@ -265,10 +265,10 @@ Response: {
 }
 ```
 
-### 4.3 WebSocket 端点 — 前端实时推送
+### 4.3 Socket.IO 端点 — 前端实时推送
 
 ```
-wss://dashboard.cremini.ai/ (前台 namespace, via Socket.IO, 使用 auth token 进行握手鉴权)
+https://api.skillpack.sh/ (前台 namespace, via Socket.IO, 使用 auth token 进行握手鉴权)
 ```
 
 前端建立 Socket.IO 连接后，监听相应的事件以实时接收数据：
@@ -417,9 +417,9 @@ skillpack-dashboard/
 │   │   ├── nodes.ts                # /api/nodes/*（辅助查询）
 │   │   └── commands.ts             # /api/packs/:id/command + /api/nodes/:id/deploy
 │   ├── ws/
-│   │   ├── node-hub.ts             # 节点 WS 连接管理（核心）
-│   │   ├── dashboard-hub.ts        # 前端 WS 推送
-│   │   └── types.ts                # WS 消息类型（与 client 对齐）
+│   │   ├── node-hub.ts             # 节点 Socket.IO 连接管理（核心）
+│   │   ├── dashboard-hub.ts        # 前端 Socket.IO 推送
+│   │   └── types.ts                # Socket.IO 消息类型（与 client 对齐）
 │   ├── services/
 │   │   ├── node-service.ts         # 节点业务逻辑
 │   │   ├── pack-service.ts         # Pack 业务逻辑
@@ -434,7 +434,7 @@ skillpack-dashboard/
 │   │   ├── main.tsx
 │   │   ├── App.tsx
 │   │   ├── api/                    # API 客户端
-│   │   ├── hooks/                  # WebSocket hooks
+│   │   ├── hooks/                  # Socket.IO hooks
 │   │   ├── pages/
 │   │   │   ├── Login.tsx
 │   │   │   ├── Dashboard.tsx       # 总览（Pack 列表为核心）
@@ -464,18 +464,18 @@ skillpack-dashboard/
 
 ## 八、核心模块设计
 
-### 8.1 Node Hub（节点 WS 管理器）
+### 8.1 Node Hub（节点 Socket.IO 管理器）
 
-这是 Dashboard 最核心的模块，管理所有 `skillpack-node` 的 WS 长连接。
+这是 Dashboard 最核心的模块，管理所有 `skillpack-node` 的 Socket.IO 长连接。
 
 ```typescript
 // 伪代码：核心数据结构
 class NodeHub {
-  // nodeToken → WebSocket 映射
-  private connections: Map<string, WebSocket>;
+  // nodeToken → Socket 映射
+  private connections: Map<string, Socket>;
 
   // 处理新连接
-  async handleConnection(ws: WebSocket, token: string): Promise<void>;
+  async handleConnection(socket: Socket, token: string): Promise<void>;
 
   // 处理上行消息
   async handleMessage(token: string, msg: UpstreamMessage): Promise<void>;
@@ -495,7 +495,7 @@ class NodeHub {
 | 同一 token 重复连接 | 踢掉旧连接，保留新连接                   |
 | 指令超时            | 30 秒未收到 ack 则标记失败               |
 | 并发写入            | heartbeat 触发的 DB 写入使用批量 upsert  |
-| 内存管理            | `connections` Map 中的 WS 断开后及时清理 |
+| 内存管理            | `connections` Map 中的 Socket 断开后及时清理 |
 
 ### 8.2 Health Checker（在线检测）
 
@@ -535,7 +535,7 @@ sequenceDiagram
     participant API as REST API
     participant Hub as Node Hub
     participant Node as skillpack-node
-    participant WS2 as Dashboard WS
+    participant SI2 as Dashboard Socket.IO
 
     UI->>API: POST /nodes/:id/command {action: "restart_pack", dir: "/..."}
     API->>API: 鉴权 + 检查 node 是否 online
@@ -547,8 +547,8 @@ sequenceDiagram
     Node->>Node: 执行 restart
     Node->>Hub: socket.emit("command_ack", { commandId: "cmd_xxx", success: true })
     Hub->>Hub: 清理 pending, 判定结果
-    Hub->>WS2: socket.emit("command_result", { commandId: "cmd_xxx", ... })
-    WS2-->>UI: 实时显示执行结果
+    Hub->>SI2: socket.emit("command_result", { commandId: "cmd_xxx", ... })
+    SI2-->>UI: 实时显示执行结果
 ```
 
 ---
@@ -557,7 +557,7 @@ sequenceDiagram
 
 | 维度           | 措施                                            |
 | -------------- | ----------------------------------------------- |
-| **传输加密**   | 全站 HTTPS/WSS                                  |
+| **传输加密**   | 全站 HTTPS                                     |
 | **节点认证**   | nodeToken 验证，支持吊销                        |
 | **用户认证**   | JWT + HttpOnly Refresh Cookie                   |
 | **密码存储**   | bcrypt (cost factor 12)                         |
@@ -589,9 +589,9 @@ graph LR
 
 | 问题           | 方案                                                                |
 | -------------- | ------------------------------------------------------------------- |
-| WS 连接粘性    | 同一 nodeToken 的连接固定到一个实例（IP Hash / Consistent Hashing） |
-| 跨实例指令下发 | 通过 Redis Pub/Sub 广播到持有目标 WS 连接的实例                     |
-| 前端 WS 推送   | 事件通过 Redis Pub/Sub 扇出到所有实例                               |
+| Socket.IO 连接粘性    | 同一 nodeToken 的连接固定到一个实例（IP Hash / Consistent Hashing） |
+| 跨实例指令下发 | 通过 Redis Pub/Sub 广播到持有目标 Socket.IO 连接的实例                     |
+| 前端 Socket.IO 推送   | 事件通过 Redis Pub/Sub 扇出到所有实例                               |
 
 ### 本地开发
 
@@ -615,7 +615,7 @@ cd web && npm run dev  # Vite 热重载
 | 数据库层（Schema + Migration） | ~300      |
 | 认证模块                       | ~200      |
 | REST API 路由                  | ~400      |
-| WebSocket Hub（节点 + 前端）   | ~500      |
+| Socket.IO Hub（节点 + 前端）  | ~500      |
 | 业务 Service 层                | ~300      |
 | 工具 + 配置                    | ~100      |
 | **后端合计**                   | **~1800** |
@@ -630,20 +630,20 @@ cd web && npm run dev  # Vite 热重载
 
 ### Phase 1：基础骨架
 
-> **目标**：服务端能接受节点 WS 连接、存储状态、提供基本 API
+> **目标**：服务端能接受节点 Socket.IO 连接、存储状态、提供基本 API
 
 - [ ] 项目初始化（Fastify + Drizzle + Docker Compose）
 - [ ] 数据库 Schema 建表（Organization, User, NodeToken, Node, Pack）
 - [ ] 用户注册/登录 API + JWT
 - [ ] NodeToken 生成/验证/吊销 API
-- [ ] WS 节点连接端点：token 验证 + register 处理
-- [ ] WS heartbeat 处理 + Node/Pack 状态更新
+- [ ] Socket.IO 节点连接端点：token 验证 + register 处理
+- [ ] Socket.IO heartbeat 处理 + Node/Pack 状态更新
 
 ### Phase 2：远程控制
 
 > **目标**：能下发指令并追踪结果
 
-- [ ] 指令下发 API + WS 转发 + ack 处理
+- [ ] 指令下发 API + Socket.IO 转发 + ack 处理
 - [ ] 在线检测定时任务（Health Checker）
 - [ ] MetricSnapshot 存储 + 查询 API
 
@@ -655,7 +655,7 @@ cd web && npm run dev  # Vite 热重载
 - [ ] Dashboard 总览页（Pack 列表 + 节点标签 + 状态筛选 + 实时状态）
 - [ ] Pack 详情页（状态/操作/节点信息）
 - [ ] 设置页（Token 管理 + 成员管理）
-- [ ] 前端 WS 实时推送集成
+- [ ] 前端 Socket.IO 实时推送集成
 
 ### Phase 4：商业化 + 运营
 

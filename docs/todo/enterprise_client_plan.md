@@ -78,7 +78,7 @@ graph TB
 ```
 Dashboard（公网）                          SkillPack 节点（内网）
 
-  wss://dashboard.cremini.ai    ◀════════  skillpack node 主动连接
+  https://api.skillpack.sh        ◀════════  skillpack node 主动连接
 
   ❌ Dashboard 无法主动连接内网节点
   ✅ 所有通信由内网 → 公网发起
@@ -216,7 +216,7 @@ skillpack
 ```bash
 # 首次配置
 skillpack-node start \
-  --dashboard wss://dashboard.cremini.ai \
+  --dashboard https://api.skillpack.sh \
   --token ntk_a1b2c3d4
 
 # 后续启动（读取已保存的配置）
@@ -238,7 +238,7 @@ skillpack-node stop-pack /path/to/pack
 
 ```json
 {
-  "dashboardUrl": "wss://dashboard.cremini.ai",
+  "dashboardUrl": "https://api.skillpack.sh",
   "nodeToken": "ntk_a1b2c3d4e5f6",
   "nodeName": "办公室-Mac-1",
   "reportInterval": 30,
@@ -266,7 +266,7 @@ flowchart TD
 
 ```
 skillpack-node (常驻守护进程, ~50MB内存)
-├── WebSocket Client     → 连接 Dashboard
+├── Socket.IO Client     → 连接 Dashboard
 ├── Process Manager      → 拉起独立运行的 Daemon Pack / 执行停止命令
 ├── Metrics Collector    → 采集节点指标
 │
@@ -361,13 +361,13 @@ skillpack-node (常驻守护进程, ~50MB内存)
 
 ---
 
-## 六、Dashboard 侧需提供的 WS/Socket.IO 端点
+## 六、Dashboard 侧需提供的 Socket.IO 端点
 
 > Dashboard 服务端不在本文档设计范围内，但需要约定清楚接口规范，方便后续对接。
 
 | 端点                                               | 说明                   |
 | -------------------------------------------------- | ---------------------- |
-| `wss://dashboard.cremini.ai/`                  | 节点管理器 Socket.IO 连接寻址端点（连接伴随 auth handshake） |
+| `https://api.skillpack.sh/`                  | 节点管理器 Socket.IO 连接寻址端点（连接伴随 auth handshake） |
 
 Dashboard 需要实现：
 
@@ -398,13 +398,13 @@ skillpack-node/
 ├── src/
 │   ├── cli.ts                     # CLI 入口（start/list/start-pack/stop-pack）  (~60行)
 │   ├── node-manager/
-│   │   ├── types.ts               # 类型定义 + WS 协议消息类型                   (~80行)
-│   │   ├── enterprise-link.ts     # WS 长连接管理器 + 自动重连                   (~200行)
+│   │   ├── types.ts               # 类型定义 + Socket.IO 协议消息类型             (~80行)
+│   │   ├── dashboard-client.ts     # Socket.IO 长连接管理器 + 自动重连             (~200行)
 │   │   ├── process-manager.ts     # 子进程管理（spawn/kill）                     (~120行)
 │   │   ├── metrics.ts             # 节点指标采集                                 (~60行)
 │   │   └── index.ts               # 模块入口                                    (~20行)
 │   └── utils/
-│       └── registry-reader.ts     # 复用 @cremini/skillpack 的 registry 工具     (~20行)
+│       └── registry-manager.ts     # 复用 @cremini/skillpack 的 registry 工具     (~20行)
 ```
 
 ### 代码量估算
@@ -445,9 +445,9 @@ skillpack-node/
 
 ### Phase 3：Dashboard 通信
 
-> **目标**：节点管理器通过 WS 连接 Dashboard 并双向通信
+> **目标**：节点管理器通过 Socket.IO 连接 Dashboard 并双向通信
 
-- [ ] 实现 `enterprise-link.ts` — Socket.IO 长连接 + 自动重连
+- [ ] 实现 `dashboard-client.ts` — Socket.IO 长连接 + 自动重连
 - [ ] 实现 `types.ts` — 消息协议类型（唯一标识 = `nodeToken + dir`）
 - [ ] 实现上行消息（register/heartbeat/ack）的 emit 机制
 - [ ] 实现下行指令监听处理（start_pack/stop_pack/restart_pack/deploy_pack）
