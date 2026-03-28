@@ -99,6 +99,7 @@ export interface PackAgentOptions {
   rootDir: string;
   provider: string;
   modelId: string;
+  baseUrl?: string;
   lifecycleHandler: LifecycleHandler;
 }
 

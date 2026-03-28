@@ -30,6 +30,7 @@ export interface ScheduledJobConfig {
 export interface DataConfig {
   apiKey?: string;
   provider?: string;
+  baseUrl?: string;
   adapters?: {
     telegram?: { token?: string };
     slack?: {
@@ -67,7 +68,7 @@ export class ConfigManager {
     }
 
     // Environment variables as fallback if not set in config file
-    let { apiKey = "", provider = "openai" } = this.configData;
+    let { apiKey = "", provider = "openai", baseUrl = "" } = this.configData;
     if (!apiKey) {
       if (process.env.OPENAI_API_KEY) {
         apiKey = process.env.OPENAI_API_KEY;
@@ -80,6 +81,7 @@ export class ConfigManager {
 
     this.configData.apiKey = apiKey;
     this.configData.provider = provider;
+    this.configData.baseUrl = baseUrl?.trim() || undefined;
     return this.configData;
   }
 
@@ -99,6 +101,9 @@ export class ConfigManager {
     // Merge configuration
     if (updates.apiKey !== undefined) this.configData.apiKey = updates.apiKey;
     if (updates.provider !== undefined) this.configData.provider = updates.provider;
+    if (updates.baseUrl !== undefined) {
+      this.configData.baseUrl = updates.baseUrl?.trim() || undefined;
+    }
 
     // Per-adapter key handling: null = delete, object = overwrite
     if (updates.adapters !== undefined) {

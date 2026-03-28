@@ -39,6 +39,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const dataConfig = configManager.load(rootDir);
   const apiKey = dataConfig.apiKey || "";
   const provider = dataConfig.provider || "openai";
+  const baseUrl = dataConfig.baseUrl?.trim() || undefined;
 
   const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
 
@@ -68,6 +69,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     rootDir,
     provider,
     modelId,
+    baseUrl,
     lifecycleHandler: lifecycle,
   });
 

@@ -37,6 +37,7 @@ function getRuntimeConfigSignature(config: DataConfig): string {
   return JSON.stringify({
     apiKey: config.apiKey || "",
     provider: config.provider || "openai",
+    baseUrl: config.baseUrl || "",
     telegramToken: config.adapters?.telegram?.token || "",
     slackBotToken: config.adapters?.slack?.botToken || "",
     slackAppToken: config.adapters?.slack?.appToken || "",
@@ -76,6 +77,7 @@ export class WebAdapter implements PlatformAdapter {
         hasApiKey: !!conf.apiKey,
         apiKey: conf.apiKey || "",
         provider: conf.provider || "openai",
+        baseUrl: conf.baseUrl || "",
         adapters: conf.adapters || {},
         runtimeControl: lifecycle.getRuntimeControl(),
       });
@@ -87,7 +89,7 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     app.post("/api/config/update", (req, res) => {
-      const { key, provider, adapters } = req.body;
+      const { key, provider, baseUrl, adapters } = req.body;
       const updates: any = {};
       const beforeConfig = JSON.parse(JSON.stringify(configManager.getConfig()));
 
@@ -98,6 +100,9 @@ export class WebAdapter implements PlatformAdapter {
       if (provider !== undefined) {
         updates.provider = provider;
         currentProvider = provider;
+      }
+      if (baseUrl !== undefined) {
+        updates.baseUrl = baseUrl;
       }
       if (adapters !== undefined) {
         updates.adapters = adapters;
@@ -112,6 +117,7 @@ export class WebAdapter implements PlatformAdapter {
       res.json({
         success: true,
         provider: newConf.provider,
+        baseUrl: newConf.baseUrl || "",
         adapters: newConf.adapters,
         requiresRestart,
         runtimeControl: lifecycle.getRuntimeControl(),
