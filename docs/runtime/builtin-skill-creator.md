@@ -115,10 +115,7 @@ This override is intentionally narrow.
 
 SkillPack only replaces `skill-creator`. Other skills such as:
 
-- `editorial-card-screenshot`
 - `find-skills`
-- `skillpack-creator`
-- `twitter-content-analyzer`
 
 are still allowed to come from the global pi installation unless the pack provides its own overrides for them.
 
