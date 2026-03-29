@@ -352,7 +352,7 @@ export class WebAdapter implements PlatformAdapter {
           ws.send(JSON.stringify(event));
         };
 
-        const result = await agent.handleMessage(channelId, text, onEvent);
+        const result = await agent.handleMessage("web", channelId, text, onEvent);
 
         if (result.errorMessage) {
           ws.send(JSON.stringify({ error: result.errorMessage }));

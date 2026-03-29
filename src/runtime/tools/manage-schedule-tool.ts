@@ -41,18 +41,6 @@ const ManageScheduleParams = Type.Object({
         "The work prompt to execute when the task triggers. Required for add. Describe only what to do each run; do not repeat timing, cron, or 'every N minutes' instructions here.",
     }),
   ),
-  notifyAdapter: Type.Optional(
-    Type.String({
-      description:
-        "Target adapter name for result notification: 'telegram' or 'slack'. Required for add.",
-    }),
-  ),
-  notifyChannelId: Type.Optional(
-    Type.String({
-      description:
-        "Target channelId for result notification (e.g. 'telegram-123456'). Required for add.",
-    }),
-  ),
   timezone: Type.Optional(
     Type.String({
       description:
@@ -71,6 +59,20 @@ function textResult(text: string): AgentToolResult<undefined> {
   return { content: [{ type: "text", text }], details: undefined };
 }
 
+function getNotifyTarget(
+  channelId: string,
+): { adapter: "telegram" | "slack"; channelId: string } | null {
+  if (channelId.startsWith("telegram-")) {
+    return { adapter: "telegram", channelId };
+  }
+
+  if (channelId.startsWith("slack-")) {
+    return { adapter: "slack", channelId };
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Tool Definition
 // ---------------------------------------------------------------------------
@@ -83,8 +85,10 @@ function textResult(text: string): AgentToolResult<undefined> {
  */
 export function createManageScheduleTool(
   schedulerRef: { current: SchedulerAdapter | null },
-  _rootDirRef: { current: string },
+  adapter: "telegram" | "slack" | "web" | "scheduler",
+  channelId: string,
 ): ToolDefinition<typeof ManageScheduleParams> {
+
   return {
     name: "manage_scheduled_task",
     label: "Manage Scheduled Task",
@@ -92,7 +96,7 @@ export function createManageScheduleTool(
       "Manage scheduled tasks (cron jobs) that automatically execute prompts and push results to IM channels.",
       "",
       "Actions:",
-      "- add: Create a new scheduled task. Requires: name, cron, prompt, notifyAdapter, notifyChannelId. The prompt must describe only the work for each run, not the schedule itself.",
+      "- add: Create a new scheduled task. Requires: name, cron, prompt. The notification target always uses the current Telegram or Slack chat. The prompt must describe only the work for each run, not the schedule itself.",
       "- list: List all scheduled tasks with their status.",
       "- remove: Remove a scheduled task by name.",
       "- trigger: Manually trigger a scheduled task by name (runs immediately).",
@@ -104,9 +108,6 @@ export function createManageScheduleTool(
       "  '0 9 * * 1-5'  = every weekday at 9:00 AM",
       "  '0 18 * * 5'   = every Friday at 6:00 PM",
       "  '*/30 * * * *'  = every 30 minutes",
-      "",
-      "notifyAdapter: 'telegram' or 'slack'",
-      "notifyChannelId: the channel ID where result will be sent (e.g. 'telegram-123456')",
     ].join("\n"),
     parameters: ManageScheduleParams,
     async execute(
@@ -144,9 +145,9 @@ export function createManageScheduleTool(
               "Error: 'name', 'cron', and 'prompt' are required for adding a task.",
             );
           }
-          if (!params.notifyAdapter || !params.notifyChannelId) {
+          if (adapter !== "telegram" && adapter !== "slack") {
             return textResult(
-              "Error: 'notifyAdapter' and 'notifyChannelId' are required for adding a task.",
+              "Error: Scheduled tasks can only be created from a Telegram or Slack.",
             );
           }
 
@@ -155,8 +156,8 @@ export function createManageScheduleTool(
             cron: params.cron,
             prompt: params.prompt,
             notify: {
-              adapter: params.notifyAdapter,
-              channelId: params.notifyChannelId,
+              adapter: adapter,
+              channelId: channelId,
             },
             enabled: true,
             timezone: params.timezone,

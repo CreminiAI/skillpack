@@ -198,18 +198,10 @@ export class PackAgent implements IPackAgent {
   private fileOutputCallbackRef: { current: FileOutputCallback | null } = {
     current: null,
   };
-  private sendFileToolDef = createSendFileTool(this.fileOutputCallbackRef);
   private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
-  private rootDirRef: { current: string };
-  private scheduleToolDef: ReturnType<typeof createManageScheduleTool>;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
-    this.rootDirRef = { current: options.rootDir };
-    this.scheduleToolDef = createManageScheduleTool(
-      this.schedulerRef,
-      this.rootDirRef,
-    );
   }
 
   /**
@@ -219,10 +211,18 @@ export class PackAgent implements IPackAgent {
     this.schedulerRef.current = scheduler;
   }
 
+  private createCustomTools(adapter: "telegram" | "slack" | "web" | "scheduler", channelId: string) {
+    const tools = [createSendFileTool(this.fileOutputCallbackRef) as any];
+    if (adapter === "telegram" || adapter === "slack") {
+      tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
+    }
+    return tools;
+  }
+
   /**
    * Lazily create (or return existing) session for a channel.
    */
-  private async getOrCreateSession(channelId: string): Promise<ChannelSession> {
+  private async getOrCreateSession(adapter: "telegram" | "slack" | "web" | "scheduler", channelId: string): Promise<ChannelSession> {
     const existing = this.channels.get(channelId);
     if (existing) return existing;
 
@@ -287,6 +287,7 @@ export class PackAgent implements IPackAgent {
       await resourceLoader.reload();
 
       const tools = createCodingTools(workspaceDir);
+      const customTools = this.createCustomTools(adapter, channelId);
 
       const { session } = await createAgentSession({
         cwd: workspaceDir,
@@ -296,7 +297,7 @@ export class PackAgent implements IPackAgent {
         resourceLoader,
         model,
         tools,
-        customTools: [this.sendFileToolDef as any, this.scheduleToolDef as any],
+        customTools,
       });
 
       const channelSession: ChannelSession = {
@@ -318,12 +319,13 @@ export class PackAgent implements IPackAgent {
   }
 
   async handleMessage(
+    adapter: "telegram" | "slack" | "web" | "scheduler",
     channelId: string,
     text: string,
     onEvent: (event: AgentEvent) => void,
     attachments?: ChannelAttachment[],
   ): Promise<HandleResult> {
-    const cs = await this.getOrCreateSession(channelId);
+    const cs = await this.getOrCreateSession(adapter, channelId);
     const run = async (): Promise<HandleResult> => {
       cs.running = true;
 

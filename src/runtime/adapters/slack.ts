@@ -289,6 +289,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
 
     try {
       const result = await this.agent.handleMessage(
+        "slack",
         channelId,
         text,
         onEvent,
