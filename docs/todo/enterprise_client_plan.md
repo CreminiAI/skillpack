@@ -346,7 +346,7 @@ skillpack-node (常驻守护进程, ~50MB内存)
     | { kind: "stop_pack", dir: string }
     | { kind: "restart_pack", dir: string }
     | { kind: "get_status" }
-    | { kind: "deploy_pack", zipUrl: string, targetDir: string }
+    | { kind: "deploy_pack", zipUrl: string }
 }
 ```
 

@@ -254,10 +254,9 @@ Response: {
   "status": "sent"                     // 异步，通过 Socket.IO 推送结果
 }
 
-POST   /api/nodes/:nodeId/deploy
+POST   /api/nodes/:nodeId/packs/deploy
 Body: {
-  "zipUrl": "https://...",
-  "targetDir": "/path/to/target"
+  "zipUrl": "https://..."
 }
 Response: {
   "commandId": "cmd_abc123",
