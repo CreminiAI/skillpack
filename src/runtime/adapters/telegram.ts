@@ -155,6 +155,7 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
     try {
       const userText = text || "(User sent an attachment)";
       const result = await this.agent.handleMessage(
+        "telegram",
         channelId,
         userText,
         onEvent,

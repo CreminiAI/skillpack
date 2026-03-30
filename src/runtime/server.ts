@@ -47,6 +47,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const provider = dataConfig.provider || "openai";
   const canonicalRootDir = canonicalizeDir(rootDir);
   const packConfig = loadPackConfig(canonicalRootDir);
+  const baseUrl = dataConfig.baseUrl?.trim() || undefined;
 
   const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
 
@@ -89,6 +90,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     rootDir,
     provider,
     modelId,
+    baseUrl,
     lifecycleHandler: lifecycle,
   });
 

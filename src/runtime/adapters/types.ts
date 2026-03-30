@@ -92,6 +92,7 @@ export interface PackAgentOptions {
   rootDir: string;
   provider: string;
   modelId: string;
+  baseUrl?: string;
   lifecycleHandler: LifecycleHandler;
 }
 
@@ -102,6 +103,7 @@ export interface PackAgentOptions {
 export interface IPackAgent {
   /** Handle an incoming message with streaming events */
   handleMessage(
+    adapter: "telegram" | "slack" | "web" | "scheduler",
     channelId: string,
     text: string,
     onEvent: (event: AgentEvent) => void,
@@ -139,23 +141,23 @@ export type AgentEvent =
   | { type: "text_delta"; delta: string }
   | { type: "thinking_delta"; delta: string }
   | {
-      type: "tool_start";
-      toolName: string;
-      toolInput: unknown;
-    }
+    type: "tool_start";
+    toolName: string;
+    toolInput: unknown;
+  }
   | {
-      type: "tool_end";
-      toolName: string;
-      isError: boolean;
-      result: unknown;
-    }
+    type: "tool_end";
+    toolName: string;
+    isError: boolean;
+    result: unknown;
+  }
   | {
-      type: "file_output";
-      filePath: string;
-      filename: string;
-      mimeType?: string;
-      caption?: string;
-    };
+    type: "file_output";
+    filePath: string;
+    filename: string;
+    mimeType?: string;
+    caption?: string;
+  };
 
 // ---------------------------------------------------------------------------
 // Platform Adapter

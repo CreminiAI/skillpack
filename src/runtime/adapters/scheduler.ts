@@ -227,6 +227,7 @@ export class SchedulerAdapter implements PlatformAdapter {
 
     try {
       const result = await this.agent.handleMessage(
+        "scheduler",
         channelId,
         jobConfig.prompt,
         onEvent,

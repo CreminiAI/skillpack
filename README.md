@@ -20,7 +20,9 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 
 ### 1. Run a skillpack
 
-1. Download the example [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
+1. Download the example
+- [Garry Tan SkillPack](https://github.com/CreminiAI/skillpack-examples/releases/download/v.0.0.3/garry-tan.zip)
+- [Company Deep Research SkillPack](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
 2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
 
 ```bash
@@ -108,6 +110,7 @@ The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prer
 **Telegram configuration**: requires `Bot Token`
 
 ### Slack App Setup and how to get `App Token` and `Bot Token`
+https://skillpack.gitbook.io/skillpack-docs/getting-started/slack-integration
 
 1. Create a new Slack app at https://api.slack.com/apps
 2. Enable Socket Mode (Settings → Socket Mode → Enable)
@@ -144,6 +147,7 @@ The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prer
 9. On the SkillPack buit-in UI http://127.0.0.1:26313, Tap "Connect to Chat App" button and Enter the **`Bot Token`** and **`App Token`**, Save
 
 ### Telegram Setup and how to get `Bot Token`
+https://skillpack.gitbook.io/skillpack-docs/getting-started/telegram-integration
 
 1. **Open Telegram** and search for the official account **`@BotFather`** (it will have a blue verified checkmark).
 2. **Start a chat** by tapping "Start" or sending the `/start` command.

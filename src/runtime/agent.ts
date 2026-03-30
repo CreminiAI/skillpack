@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
   createAgentSession,
@@ -7,6 +8,7 @@ import {
   ModelRegistry,
   SessionManager,
   DefaultResourceLoader,
+  type Skill,
 } from "@mariozechner/pi-coding-agent";
 
 import {
@@ -37,6 +39,13 @@ const DEBUG = true;
 const log = (...args: unknown[]) => DEBUG && console.log(...args);
 const write = (data: string) => DEBUG && process.stdout.write(data);
 
+const BUILTIN_SKILL_CREATOR_NAME = "skill-creator";
+const BUILTIN_SKILL_CREATOR_DESCRIPTION =
+  "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.";
+const BUILTIN_SKILL_CREATOR_TEMPLATE_DIR = fileURLToPath(
+  new URL("../templates/builtin-skills/skill-creator", import.meta.url),
+);
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -46,6 +55,95 @@ interface AssistantDiagnostics {
   errorMessage: string;
   hasText: boolean;
   toolCalls: number;
+}
+
+function materializeBuiltinSkillCreator(
+  rootDir: string,
+  skillsPath: string,
+): Skill | null {
+  if (!fs.existsSync(BUILTIN_SKILL_CREATOR_TEMPLATE_DIR)) {
+    log(
+      `[PackAgent] Built-in skill-creator template missing: ${BUILTIN_SKILL_CREATOR_TEMPLATE_DIR}`,
+    );
+    return null;
+  }
+
+  const packConfigPath = path.resolve(rootDir, "skillpack.json");
+  const skillDir = path.resolve(skillsPath, BUILTIN_SKILL_CREATOR_NAME);
+  const skillPath = path.join(skillDir, "SKILL.md");
+
+  const renderTemplate = (content: string): string =>
+    content
+      .replaceAll("{{SKILLS_PATH}}", skillsPath)
+      .replaceAll("{{PACK_CONFIG_PATH}}", packConfigPath);
+
+  const copyDir = (srcDir: string, destDir: string): void => {
+    fs.mkdirSync(destDir, { recursive: true });
+
+    for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+      if (entry.name === ".DS_Store") {
+        continue;
+      }
+
+      const srcPath = path.join(srcDir, entry.name);
+      const destPath = path.join(destDir, entry.name);
+
+      if (entry.isDirectory()) {
+        copyDir(srcPath, destPath);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      if (entry.name.endsWith(".md") || entry.name.endsWith(".py")) {
+        const content = fs.readFileSync(srcPath, "utf-8");
+        fs.writeFileSync(destPath, renderTemplate(content), "utf-8");
+        continue;
+      }
+
+      fs.copyFileSync(srcPath, destPath);
+    }
+  };
+
+  if (!fs.existsSync(skillDir)) {
+    copyDir(BUILTIN_SKILL_CREATOR_TEMPLATE_DIR, skillDir);
+  }
+
+  if (!fs.existsSync(skillPath)) {
+    log(
+      `[PackAgent] Materialized built-in skill-creator but SKILL.md is missing: ${skillPath}`,
+    );
+    return null;
+  }
+
+  return {
+    name: BUILTIN_SKILL_CREATOR_NAME,
+    description: BUILTIN_SKILL_CREATOR_DESCRIPTION,
+    filePath: skillPath,
+    baseDir: skillDir,
+    source: "path",
+    disableModelInvocation: false,
+  };
+}
+
+function overrideBuiltinSkillCreator(
+  base: { skills: Skill[]; diagnostics: any[] },
+  materializedSkill: Skill | null,
+): { skills: Skill[]; diagnostics: any[] } {
+  if (!materializedSkill) {
+    return base;
+  }
+
+  const filtered = base.skills.filter(
+    (skill) => skill.name !== BUILTIN_SKILL_CREATOR_NAME,
+  );
+
+  return {
+    skills: [materializedSkill, ...filtered],
+    diagnostics: base.diagnostics,
+  };
 }
 
 function getAssistantDiagnostics(message: any): AssistantDiagnostics | null {
@@ -100,18 +198,10 @@ export class PackAgent implements IPackAgent {
   private fileOutputCallbackRef: { current: FileOutputCallback | null } = {
     current: null,
   };
-  private sendFileToolDef = createSendFileTool(this.fileOutputCallbackRef);
   private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
-  private rootDirRef: { current: string };
-  private scheduleToolDef: ReturnType<typeof createManageScheduleTool>;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
-    this.rootDirRef = { current: options.rootDir };
-    this.scheduleToolDef = createManageScheduleTool(
-      this.schedulerRef,
-      this.rootDirRef,
-    );
   }
 
   /**
@@ -121,10 +211,18 @@ export class PackAgent implements IPackAgent {
     this.schedulerRef.current = scheduler;
   }
 
+  private createCustomTools(adapter: "telegram" | "slack" | "web" | "scheduler", channelId: string) {
+    const tools = [createSendFileTool(this.fileOutputCallbackRef) as any];
+    if (adapter === "telegram" || adapter === "slack") {
+      tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
+    }
+    return tools;
+  }
+
   /**
    * Lazily create (or return existing) session for a channel.
    */
-  private async getOrCreateSession(channelId: string): Promise<ChannelSession> {
+  private async getOrCreateSession(adapter: "telegram" | "slack" | "web" | "scheduler", channelId: string): Promise<ChannelSession> {
     const existing = this.channels.get(channelId);
     if (existing) return existing;
 
@@ -132,7 +230,7 @@ export class PackAgent implements IPackAgent {
     if (pendingCreation) return pendingCreation;
 
     const createSessionPromise = (async () => {
-      const { apiKey, rootDir, provider, modelId } = this.options;
+      const { apiKey, rootDir, provider, modelId, baseUrl } = this.options;
 
       const authStorage = AuthStorage.inMemory({
         [provider]: { type: "api_key", key: apiKey },
@@ -140,7 +238,14 @@ export class PackAgent implements IPackAgent {
       (authStorage as any).setRuntimeApiKey(provider, apiKey);
 
       const modelRegistry = new ModelRegistry(authStorage);
-      const model = modelRegistry.find(provider, modelId);
+      const resolvedModel = modelRegistry.find(provider, modelId);
+      const model =
+        resolvedModel && baseUrl
+          ? { ...resolvedModel, baseUrl }
+          : resolvedModel;
+      if (resolvedModel && baseUrl) {
+        log(`[PackAgent] Overriding ${provider}/${modelId} baseUrl -> ${baseUrl}`);
+      }
 
       const sessionDir = path.resolve(
         rootDir,
@@ -163,14 +268,26 @@ export class PackAgent implements IPackAgent {
 
       const skillsPath = path.resolve(rootDir, "skills");
       log(`[PackAgent] Loading skills from: ${skillsPath}`);
+      const materializedSkillCreator = materializeBuiltinSkillCreator(
+        rootDir,
+        skillsPath,
+      );
+      if (materializedSkillCreator) {
+        log(
+          `[PackAgent] Materialized built-in skill-creator to: ${materializedSkillCreator.filePath}`,
+        );
+      }
 
       const resourceLoader = new DefaultResourceLoader({
         cwd: rootDir,
         additionalSkillPaths: [skillsPath],
+        skillsOverride: (base) =>
+          overrideBuiltinSkillCreator(base, materializedSkillCreator),
       });
       await resourceLoader.reload();
 
       const tools = createCodingTools(workspaceDir);
+      const customTools = this.createCustomTools(adapter, channelId);
 
       const { session } = await createAgentSession({
         cwd: workspaceDir,
@@ -180,7 +297,7 @@ export class PackAgent implements IPackAgent {
         resourceLoader,
         model,
         tools,
-        customTools: [this.sendFileToolDef as any, this.scheduleToolDef as any],
+        customTools,
       });
 
       const channelSession: ChannelSession = {
@@ -202,12 +319,13 @@ export class PackAgent implements IPackAgent {
   }
 
   async handleMessage(
+    adapter: "telegram" | "slack" | "web" | "scheduler",
     channelId: string,
     text: string,
     onEvent: (event: AgentEvent) => void,
     attachments?: ChannelAttachment[],
   ): Promise<HandleResult> {
-    const cs = await this.getOrCreateSession(channelId);
+    const cs = await this.getOrCreateSession(adapter, channelId);
     const run = async (): Promise<HandleResult> => {
       cs.running = true;
 
