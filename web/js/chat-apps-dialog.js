@@ -101,14 +101,11 @@ function populateForm() {
 
   // Restart required status
   if (state.restartRequired) {
-    const canRestart = config.runtimeControl?.canManagedRestart;
     setStatus(
-      canRestart
-        ? "Settings changed. Restart service to apply."
-        : "Settings changed. Restart the service manually to apply.",
+      "Settings changed. Restart service to apply.",
       "warning",
     );
-    updateRestartButton(canRestart);
+    updateRestartButton(true);
   } else {
     setStatus("", "");
     updateRestartButton(false);
@@ -139,17 +136,14 @@ async function handleSave() {
     const res = await saveConfigData(updates);
 
     state.config.adapters = res.adapters;
-    state.config.runtimeControl = res.runtimeControl;
     state.restartRequired = !!res.requiresRestart;
 
     if (res.requiresRestart) {
       setStatus(
-        res.runtimeControl?.canManagedRestart
-          ? "Settings saved. Restart service to apply changes."
-          : "Settings saved. Restart the service manually to apply changes.",
+        "Settings saved. Restart service to apply changes.",
         "warning",
       );
-      updateRestartButton(!!res.runtimeControl?.canManagedRestart);
+      updateRestartButton(true);
     } else {
       close();
     }

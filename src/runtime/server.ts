@@ -9,6 +9,12 @@ import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
 import { configManager } from "./config.js";
 import { Lifecycle } from "./lifecycle.js";
+import {
+  register as registryRegister,
+  deregister as registryDeregister,
+  canonicalizeDir,
+} from "./registry.js";
+import { loadConfig as loadPackConfig } from "../pack-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,7 +22,7 @@ export interface ServerOptions {
   rootDir: string;
   host?: string;
   port?: number;
-  firstRun?: boolean;
+  daemonRun?: boolean;
 }
 
 /**
@@ -29,7 +35,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     rootDir,
     host = process.env.HOST || "127.0.0.1",
     port = Number(process.env.PORT) || 26313,
-    firstRun = true,
+    daemonRun = false,
   } = options;
 
   // ---------------------------------------------------------------------------
@@ -39,6 +45,8 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const dataConfig = configManager.load(rootDir);
   const apiKey = dataConfig.apiKey || "";
   const provider = dataConfig.provider || "openai";
+  const canonicalRootDir = canonicalizeDir(rootDir);
+  const packConfig = loadPackConfig(canonicalRootDir);
   const baseUrl = dataConfig.baseUrl?.trim() || undefined;
 
   const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
@@ -58,6 +66,19 @@ export async function startServer(options: ServerOptions): Promise<void> {
   app.use(express.static(webDir));
 
   const server = createServer(app);
+  app.get("/api/health", (_req, res) => {
+    const address = server.address();
+    const actualPort = typeof address === "string" ? port : (address?.port ?? port);
+    res.json({
+      status: "ok",
+      dir: canonicalRootDir,
+      name: packConfig.name,
+      version: packConfig.version,
+      port: actualPort,
+      pid: process.pid,
+    });
+  });
+
   const lifecycle = new Lifecycle(server);
 
   // ---------------------------------------------------------------------------
@@ -182,8 +203,20 @@ export async function startServer(options: ServerOptions): Promise<void> {
     console.log(`\n  Skills Pack Server`);
     console.log(`  Running at ${url}\n`);
 
-    // Open the browser automatically on first run
-    if (firstRun) {
+    // Register in global registry for node-manager discovery
+    try {
+      registryRegister({
+        dir: canonicalRootDir,
+        name: packConfig.name,
+        version: packConfig.version,
+        port: typeof actualPort === "number" ? actualPort : port,
+      });
+    } catch (err) {
+      console.warn("  [Registry] Could not register pack:", err);
+    }
+
+    // Open the browser automatically if not a daemon run
+    if (!daemonRun) {
       const cmd =
         process.platform === "darwin"
           ? `open ${url}`
@@ -197,10 +230,12 @@ export async function startServer(options: ServerOptions): Promise<void> {
   });
 
   process.on("SIGINT", () => {
+    registryDeregister(canonicalRootDir, process.pid);
     void lifecycle.requestShutdown("signal");
   });
 
   process.on("SIGTERM", () => {
+    registryDeregister(canonicalRootDir, process.pid);
     void lifecycle.requestShutdown("signal");
   });
 

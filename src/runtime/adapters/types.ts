@@ -16,12 +16,6 @@ export interface CommandResult {
 
 export type LifecycleTrigger = "web" | "telegram" | "slack" | "signal";
 
-export type ProcessManager = "wrapper" | "none";
-
-export interface RuntimeControl {
-  canManagedRestart: boolean;
-  processManager: ProcessManager;
-}
 
 export interface LifecycleHandler {
   requestRestart(trigger: LifecycleTrigger): Promise<CommandResult>;
@@ -29,7 +23,6 @@ export interface LifecycleHandler {
 }
 
 export interface LifecycleInfo {
-  getRuntimeControl(): RuntimeControl;
 }
 
 // ---------------------------------------------------------------------------
