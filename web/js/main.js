@@ -1,5 +1,4 @@
 import { state, loadConfig } from "./config.js";
-import { initSettings } from "./settings.js";
 import { initApiKeyDialog, updateApiKeyButton } from "./api-key-dialog.js";
 import { initChatAppsDialog, updateChatAppsButton } from "./chat-apps-dialog.js";
 import { initChat, showWelcome } from "./chat.js";
@@ -42,7 +41,6 @@ async function init() {
   }
   
   // Initialize all dialog modules
-  initSettings();
   initApiKeyDialog();
   initChatAppsDialog();
   initChat();
