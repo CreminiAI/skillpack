@@ -8,7 +8,7 @@ import {
   loadConfig,
   saveConfig,
 } from "../pack-config.js";
-import { installSkills, scanInstalledSkills } from "../skill-manager.js";
+import { installSkills, scanInstalledSkills,  syncSkillDescriptions, } from "../skill-manager.js";
 import { startServer } from "../runtime/server.js";
 import type { SkillEntry } from "../pack-config.js";
 
@@ -92,6 +92,8 @@ export async function runCommand(directory?: string): Promise<void> {
       console.warn(chalk.yellow(`  Warning: Some skills could not be installed: ${err}`));
     }
   }
+  syncSkillDescriptions(workDir, config);
+  saveConfig(workDir, config);
 
   // Start the runtime server
   await startServer({

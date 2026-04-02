@@ -140,20 +140,166 @@ function parseSkillMd(filePath: string): InstalledSkill | null {
     }
 
     const frontmatter = frontmatterMatch[1];
-    const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-    const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
-    if (!nameMatch) {
+    const name = readFrontmatterField(frontmatter, "name");
+    if (!name) {
       return null;
     }
 
     return {
-      name: nameMatch[1].trim(),
-      description: descMatch ? descMatch[1].trim() : "",
+      name,
+      description: readFrontmatterField(frontmatter, "description") ?? "",
       dir: path.dirname(filePath),
     };
   } catch {
     return null;
   }
+}
+
+function readFrontmatterField(frontmatter: string, field: string): string | null {
+  const lines = frontmatter.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(/^([A-Za-z0-9_-]+):(?:\s*(.*))?$/);
+    if (!match || match[1] !== field) {
+      continue;
+    }
+
+    const rawValue = (match[2] ?? "").trim();
+    if (isBlockScalar(rawValue)) {
+      const [value] = readBlockScalar(lines, index + 1, rawValue);
+      return value;
+    }
+
+    if (rawValue === "") {
+      const [value] = readIndentedScalar(lines, index + 1);
+      return value;
+    }
+
+    return stripWrappingQuotes(rawValue);
+  }
+
+  return null;
+}
+
+function isBlockScalar(value: string): boolean {
+  return /^[>|][0-9+-]*$/.test(value);
+}
+
+function readBlockScalar(
+  lines: string[],
+  startIndex: number,
+  marker: string,
+): [string, number] {
+  const blockLines: string[] = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const line = lines[index];
+
+    if (line.trim() === "") {
+      blockLines.push("");
+      index += 1;
+      continue;
+    }
+
+    if (!/^\s/.test(line)) {
+      break;
+    }
+
+    blockLines.push(line);
+    index += 1;
+  }
+
+  const normalized = normalizeBlockIndent(blockLines);
+  const style = marker[0];
+  const chomp = marker.includes("-") ? "strip" : marker.includes("+") ? "keep" : "clip";
+  const value =
+    style === ">"
+      ? foldBlockScalar(normalized)
+      : normalized.join("\n");
+
+  return [applyChomp(value, chomp), index];
+}
+
+function readIndentedScalar(lines: string[], startIndex: number): [string, number] {
+  const blockLines: string[] = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const line = lines[index];
+
+    if (line.trim() === "") {
+      blockLines.push("");
+      index += 1;
+      continue;
+    }
+
+    if (!/^\s/.test(line)) {
+      break;
+    }
+
+    blockLines.push(line);
+    index += 1;
+  }
+
+  return [foldBlockScalar(normalizeBlockIndent(blockLines)), index];
+}
+
+function normalizeBlockIndent(lines: string[]): string[] {
+  const indents = lines
+    .filter((line) => line.trim() !== "")
+    .map((line) => line.match(/^[ \t]*/)![0].length);
+
+  const trimLength = indents.length > 0 ? Math.min(...indents) : 0;
+
+  return lines.map((line) => line.slice(trimLength));
+}
+
+function foldBlockScalar(lines: string[]): string {
+  let result = "";
+  let previousBlank = false;
+
+  for (const line of lines) {
+    const isBlank = line.trim() === "";
+
+    if (isBlank) {
+      result += "\n";
+      previousBlank = true;
+      continue;
+    }
+
+    if (result !== "" && !previousBlank) {
+      result += " ";
+    }
+
+    result += line;
+    previousBlank = false;
+  }
+
+  return result;
+}
+
+function applyChomp(value: string, mode: "strip" | "clip" | "keep"): string {
+  if (mode === "keep") {
+    return value;
+  }
+
+  if (mode === "strip") {
+    return value.replace(/\n+$/g, "");
+  }
+
+  return value.replace(/\n*$/g, "");
+}
+
+function stripWrappingQuotes(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
 }
 
 export function syncSkillDescriptions(

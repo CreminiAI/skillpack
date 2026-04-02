@@ -92,17 +92,21 @@ Multiple skill names from the same source can be listed comma-separated.
 
 ## Zip Output
 
-The archive produced by `zip` is intentionally minimal:
+The archive produced by `zip` is intentionally lightweight:
 
 ```text
 <pack-name>/
 ├── skillpack.json       # Pack configuration
+├── AGENTS.md            # Optional pack policy
+├── SOUL.md              # Optional pack persona
 ├── skills/              # Installed skills
 ├── start.sh             # One-click launcher for macOS / Linux
 └── start.bat            # One-click launcher for Windows
 ```
 
 The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prerequisite — no pre-bundled server directory is included.
+
+If present, `AGENTS.md` and `SOUL.md` are read by SkillPack itself when a new chat session starts. SkillPack injects them into the runtime system prompt as pack-level policy and persona, without depending on the host machine's `AGENTS.md`, `.pi/SYSTEM.md`, or `APPEND_SYSTEM.md`.
 
 ## Slack/Telegram Integrations
 
