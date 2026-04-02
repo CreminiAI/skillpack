@@ -158,6 +158,11 @@ function updateProviderUI() {
     if (baseUrlGroup) {
       baseUrlGroup.style.display = meta.supportsBaseUrl ? "" : "none";
     }
+
+    if (baseUrlInput) {
+      baseUrlInput.placeholder =
+        meta.baseUrlPlaceholder || "https://api.openai.com/v1";
+    }
     
     // Update placeholder
     if (apiKeyInput) {

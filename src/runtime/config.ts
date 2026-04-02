@@ -16,6 +16,8 @@ export interface ProviderMeta {
   envKey?: string;
   /** Input placeholder hint (api_key mode only) */
   placeholder?: string;
+  /** Custom base URL placeholder hint (providers that support proxying only) */
+  baseUrlPlaceholder?: string;
   /** OAuth provider ID registered in SDK (oauth mode only) */
   oauthProviderId?: string;
   /** Whether this provider supports custom base URL (for proxying) */
@@ -29,6 +31,7 @@ export const SUPPORTED_PROVIDERS: Record<string, ProviderMeta> = {
     authType: "api_key",
     envKey: "OPENAI_API_KEY",
     placeholder: "sk-proj-...",
+    baseUrlPlaceholder: "https://api.openai.com/v1",
     supportsBaseUrl: true,
   },
   anthropic: {
@@ -37,6 +40,7 @@ export const SUPPORTED_PROVIDERS: Record<string, ProviderMeta> = {
     authType: "api_key",
     envKey: "ANTHROPIC_API_KEY",
     placeholder: "sk-ant-api03-...",
+    baseUrlPlaceholder: "https://api.anthropic.com",
     supportsBaseUrl: true,
   },
   google: {
