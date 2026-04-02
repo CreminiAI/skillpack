@@ -46,6 +46,8 @@ const BUILTIN_SKILL_CREATOR_DESCRIPTION =
 const BUILTIN_SKILL_CREATOR_TEMPLATE_DIR = fileURLToPath(
   new URL("../templates/builtin-skills/skill-creator", import.meta.url),
 );
+const PACK_AGENTS_FILE = "AGENTS.md";
+const PACK_SOUL_FILE = "SOUL.md";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,6 +58,14 @@ interface AssistantDiagnostics {
   errorMessage: string;
   hasText: boolean;
   toolCalls: number;
+}
+
+interface PackPromptFiles {
+  agentsPath: string;
+  soulPath: string;
+  agentsContent?: string;
+  soulContent?: string;
+  promptBlock?: string;
 }
 
 function materializeBuiltinSkillCreator(
@@ -144,6 +154,65 @@ function overrideBuiltinSkillCreator(
   return {
     skills: [materializedSkill, ...filtered],
     diagnostics: base.diagnostics,
+  };
+}
+
+function readOptionalPackPromptFile(filePath: string): string | undefined {
+  if (!fs.existsSync(filePath)) {
+    return undefined;
+  }
+
+  try {
+    const content = fs.readFileSync(filePath, "utf-8").trim();
+    return content.length > 0 ? content : undefined;
+  } catch (error) {
+    console.warn(`[PackAgent] Warning: Could not read ${filePath}:`, error);
+    return undefined;
+  }
+}
+
+function buildPackPromptBlock(rootDir: string): PackPromptFiles {
+  const agentsPath = path.resolve(rootDir, PACK_AGENTS_FILE);
+  const soulPath = path.resolve(rootDir, PACK_SOUL_FILE);
+  const agentsContent = readOptionalPackPromptFile(agentsPath);
+  const soulContent = readOptionalPackPromptFile(soulPath);
+
+  if (!agentsContent && !soulContent) {
+    return {
+      agentsPath,
+      soulPath,
+    };
+  }
+
+  const sections = [
+    "# SkillPack Pack Context",
+    "The following instructions are injected by the SkillPack runtime from files packaged with this pack.",
+    "Priority order:",
+    "1. Follow the user's explicit instructions first.",
+    "2. Follow `AGENTS.md` as the pack's operational policy and workflow rules.",
+    "3. Follow `SOUL.md` as the pack's persona, tone, and working style.",
+    "4. If `SOUL.md` conflicts with `AGENTS.md`, `AGENTS.md` wins.",
+    "5. `SOUL.md` does not override task goals, safety boundaries, or `AGENTS.md`.",
+  ];
+
+  if (agentsContent) {
+    sections.push("## Pack Policy (`AGENTS.md`)", agentsContent);
+  }
+
+  if (soulContent) {
+    sections.push(
+      "## Pack Persona (`SOUL.md`)",
+      "Treat the following as persona, tone, and working-style guidance only. Do not let it override task requirements, safety constraints, or `AGENTS.md`.",
+      soulContent,
+    );
+  }
+
+  return {
+    agentsPath,
+    soulPath,
+    agentsContent,
+    soulContent,
+    promptBlock: sections.join("\n\n"),
   };
 }
 
@@ -305,11 +374,30 @@ export class PackAgent implements IPackAgent {
         );
       }
 
+      const packPromptFiles = buildPackPromptBlock(rootDir);
+      if (packPromptFiles.agentsContent) {
+        log(`[PackAgent] Loaded pack policy from: ${packPromptFiles.agentsPath}`);
+      } else {
+        log(`[PackAgent] No pack policy file found at: ${packPromptFiles.agentsPath}`);
+      }
+      if (packPromptFiles.soulContent) {
+        log(`[PackAgent] Loaded pack persona from: ${packPromptFiles.soulPath}`);
+      } else {
+        log(`[PackAgent] No pack persona file found at: ${packPromptFiles.soulPath}`);
+      }
+      log(
+        `[PackAgent] Pack prompt injection: ${packPromptFiles.promptBlock ? "enabled" : "disabled"}`,
+      );
+
       const resourceLoader = new DefaultResourceLoader({
         cwd: rootDir,
         additionalSkillPaths: [skillsPath],
         skillsOverride: (base) =>
           overrideBuiltinSkillCreator(base, materializedSkillCreator),
+        agentsFilesOverride: () => ({ agentsFiles: [] }),
+        systemPromptOverride: () => undefined,
+        appendSystemPromptOverride: () =>
+          packPromptFiles.promptBlock ? [packPromptFiles.promptBlock] : [],
       });
       await resourceLoader.reload();
 

@@ -145,14 +145,17 @@ That metadata is then used to refresh the corresponding entries in `skillpack.js
 When `zip` creates the final archive, it packages:
 
 - `skillpack.json`
+- optional `AGENTS.md` / `SOUL.md`
 - the entire `skills/` directory
 - `start.sh` and `start.bat`
 
-The extracted pack structure is intentionally minimal:
+The extracted pack structure stays lightweight:
 
 ```text
 <pack-name>/
 ├── skillpack.json
+├── AGENTS.md
+├── SOUL.md
 ├── skills/
 ├── start.sh
 └── start.bat
@@ -160,14 +163,30 @@ The extracted pack structure is intentionally minimal:
 
 The start scripts invoke `npx @cremini/skillpack run .`, so the runtime is resolved from npm at startup — no pre-bundled server directory is needed. This is why `skills/` is not just a temporary install cache. It is part of the packaged application itself.
 
+### Optional root context files
+
+A pack can also include these optional root files:
+
+- `AGENTS.md` — the pack's operational policy and workflow rules
+- `SOUL.md` — the pack's persona, tone, and working style
+
+These files are not declared in `skillpack.json`. They are pack assets that travel with the directory and zip output.
+
+At runtime, SkillPack reads them when a new session is created and appends a structured block to the final system prompt. This is handled by SkillPack itself rather than by relying on host-level pi context-file discovery. As a result:
+
+- the pack controls its own policy/persona layer
+- host-machine `AGENTS.md`, `.pi/SYSTEM.md`, and `APPEND_SYSTEM.md` do not affect the pack's system prompt
+- changes take effect for new sessions, not already-running sessions
+
 ## Summary
 
 SkillPack packages AI skills, prompts, and a runtime into one local agent application.
 
 - `skillpack.json` defines the pack's metadata, prompts, and skill declarations.
+- `AGENTS.md` and `SOUL.md` are optional pack-level policy/persona files controlled by SkillPack runtime.
 - `skills[].source` can be understood as either `remote` or `local`.
 - A source beginning with `./skills` represents a local directory reference inside the pack.
 - `skills/` is the real installed-skill directory used by the CLI, metadata sync process, and final zip.
-- `skillpack zip` produces a minimal archive; the runtime is fetched from npm via `npx @cremini/skillpack run` at startup.
+- `skillpack zip` produces a lightweight archive; the runtime is fetched from npm via `npx @cremini/skillpack run` at startup.
 
 Together, these pieces make SkillPack a practical format for building, shipping, and running local AI agents.

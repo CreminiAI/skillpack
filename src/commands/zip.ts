@@ -15,7 +15,7 @@ import {
 
 /**
  * Package the pack as a lightweight zip file.
- * Includes only: skillpack.json, start.sh, start.bat, skills/
+ * Includes: skillpack.json, optional AGENTS.md / SOUL.md, start.sh, start.bat, skills/
  * Does NOT include server/, web/, or any other runtime files.
  */
 export async function zipCommand(workDir: string): Promise<string> {
@@ -54,19 +54,27 @@ export async function zipCommand(workDir: string): Promise<string> {
       name: `${prefix}/${PACK_FILE}`,
     });
 
-    // 2. skills directory
+    // 2. optional pack-level prompt files
+    for (const file of ["AGENTS.md", "SOUL.md"]) {
+      const filePath = path.join(workDir, file);
+      if (fs.existsSync(filePath)) {
+        archive.file(filePath, { name: `${prefix}/${file}` });
+      }
+    }
+
+    // 3. skills directory
     const skillsDir = path.join(workDir, "skills");
     if (fs.existsSync(skillsDir)) {
       archive.directory(skillsDir, `${prefix}/skills`);
     }
 
-    // 3. start.sh (with execute bit)
+    // 4. start.sh (with execute bit)
     const startSh = path.join(workDir, "start.sh");
     if (fs.existsSync(startSh)) {
       archive.file(startSh, { name: `${prefix}/start.sh`, mode: 0o755 });
     }
 
-    // 4. start.bat
+    // 5. start.bat
     const startBat = path.join(workDir, "start.bat");
     if (fs.existsSync(startBat)) {
       archive.file(startBat, { name: `${prefix}/start.bat` });

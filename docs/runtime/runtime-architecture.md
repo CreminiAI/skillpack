@@ -4,11 +4,13 @@ The runtime source lives in `src/runtime/` and is compiled by `tsup` into `dist/
 
 ## Distributed Pack Structure
 
-A pack zip produced by `skillpack zip` contains only the lightweight essentials:
+A pack zip produced by `skillpack zip` contains the lightweight runtime essentials plus any optional pack-level prompt files:
 
 ```text
 <pack-name>/
 ├── skillpack.json
+├── AGENTS.md
+├── SOUL.md
 ├── skills/
 ├── start.sh
 └── start.bat
@@ -66,6 +68,8 @@ Environment variables:
 
 - Maintains a `Map<string, ChannelSession>` keyed by `channelId`.
 - Each channel session is **lazily created** on the first `handleMessage` call.
+- On session creation, reads optional pack-root `AGENTS.md` and `SOUL.md` and appends a structured SkillPack-owned policy/persona block to the final system prompt.
+- Explicitly disables host-level `AGENTS.md`, `.pi/SYSTEM.md`, and `APPEND_SYSTEM.md` from affecting the pack's system prompt. This isolation applies only to system-prompt sources, not to the existing skill/prompt/extension loading behavior.
 - `handleMessage` subscribes to `pi` session events and forwards them to the adapter's `onEvent` callback:
 
 | pi event | Forwarded as AgentEvent |
@@ -81,6 +85,23 @@ Environment variables:
 
 - Checks `diagnostics` (stopReason, errorMessage, visible output) at the end of each turn and returns an error message on failure.
 - Supports `abort(channelId)` to interrupt a running session and `dispose(channelId)` to tear it down.
+
+### Pack-level policy and persona files
+
+SkillPack supports two optional root files:
+
+- `AGENTS.md` — pack policy, rules, and workflow guidance
+- `SOUL.md` — pack persona, tone, and working style
+
+These files are read once when a new channel session is created. They do not hot-reload into an existing session.
+
+The injected prompt block uses this priority:
+
+1. User instructions
+2. `AGENTS.md`
+3. `SOUL.md`
+
+If `SOUL.md` conflicts with `AGENTS.md`, `AGENTS.md` wins. `SOUL.md` is treated as persona/style guidance only and does not override task requirements or safety boundaries.
 
 Provider and model mapping (in `server.ts`):
 
