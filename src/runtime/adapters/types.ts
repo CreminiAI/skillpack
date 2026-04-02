@@ -127,6 +127,12 @@ export interface IPackAgent {
 
   /** Reserved: restore a historical session */
   restoreSession(sessionId: string): Promise<void>;
+
+  /** Get the shared AuthStorage instance (used by OAuth API endpoints) */
+  getAuthStorage(): any;
+
+  /** Update runtime auth when provider/apiKey changes */
+  updateAuth(provider: string, apiKey?: string): void;
 }
 
 // ---------------------------------------------------------------------------

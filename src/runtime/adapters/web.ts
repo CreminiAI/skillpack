@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
-import { configManager } from "../config.js";
+import { configManager, SUPPORTED_PROVIDERS } from "../config.js";
 import type { DataConfig } from "../config.js";
 
 import type {
@@ -69,6 +69,13 @@ export class WebAdapter implements PlatformAdapter {
     app.get("/api/config", (_req, res) => {
       const config = getPackConfig(rootDir);
       const conf = configManager.getConfig();
+      const currentProvider = conf.provider || "openai";
+      const providerMeta = SUPPORTED_PROVIDERS[currentProvider];
+      
+      const oauthConnected = providerMeta?.authType === "oauth"
+        ? agent.getAuthStorage().hasAuth(currentProvider)
+        : false;
+
       res.json({
         name: config.name,
         description: config.description,
@@ -76,9 +83,11 @@ export class WebAdapter implements PlatformAdapter {
         skills: config.skills || [],
         hasApiKey: !!conf.apiKey,
         apiKey: conf.apiKey || "",
-        provider: conf.provider || "openai",
+        provider: currentProvider,
         baseUrl: conf.baseUrl || "",
         adapters: conf.adapters || {},
+        supportedProviders: SUPPORTED_PROVIDERS,
+        oauthConnected,
       });
     });
 
@@ -109,17 +118,79 @@ export class WebAdapter implements PlatformAdapter {
 
       configManager.save(rootDir, updates);
 
-      const newConf = configManager.getConfig();
-      const requiresRestart =
-        getRuntimeConfigSignature(beforeConfig) !==
-        getRuntimeConfigSignature(newConf);
+      // Sink changes into the agent immediately
+      agent.updateAuth(currentProvider, apiKey);
+
+      const afterConfig = configManager.getConfig();
+      const requiresRestart = getRuntimeConfigSignature(beforeConfig) !== getRuntimeConfigSignature(afterConfig);
+      
       res.json({
-        success: true,
-        provider: newConf.provider,
-        baseUrl: newConf.baseUrl || "",
-        adapters: newConf.adapters,
-        requiresRestart,
+        ...afterConfig,
+        requiresRestart
       });
+    });
+
+    // -- OAuth API routes ----------------------------------------------------
+
+    app.post("/api/oauth/login", async (req, res) => {
+      const { provider } = req.body;
+      const meta = SUPPORTED_PROVIDERS[provider];
+      if (!meta || meta.authType !== "oauth") {
+        return res.status(400).json({ error: "Provider does not support OAuth" });
+      }
+
+      try {
+        const authStorage = agent.getAuthStorage();
+        let authUrl = "";
+
+        // Start login flow. Results in authUrl via callback.
+        const loginPromise = authStorage.login(provider, {
+          onAuth: (info: any) => {
+            authUrl = info.url;
+          },
+          onPrompt: async (prompt: any) => {
+            // For Web UI, we don't handle manual prompt yet.
+            return "";
+          },
+          onProgress: (msg: string) => {
+            console.log(`[OAuth] ${provider} login progress: ${msg}`);
+          },
+        });
+
+        // Wait for authUrl to be populated (small delay as SDK starts local server)
+        await new Promise((r) => setTimeout(r, 1500));
+
+        if (authUrl) {
+          res.json({ status: "pending", authUrl });
+        } else {
+          // If it didn't populate yet, it might still be working or failed.
+          res.json({ status: "pending" });
+        }
+
+        // The promise continues in the background.
+        loginPromise.catch((err: any) => {
+          console.error(`[OAuth] ${provider} login error:`, err);
+        });
+      } catch (err: any) {
+        res.status(500).json({ error: String(err) });
+      }
+    });
+
+    app.get("/api/oauth/status", (_req, res) => {
+      const conf = configManager.getConfig();
+      const provider = conf.provider || "openai";
+      const meta = SUPPORTED_PROVIDERS[provider];
+      if (!meta || meta.authType !== "oauth") {
+        return res.json({ connected: false });
+      }
+      const connected = agent.getAuthStorage().hasAuth(provider);
+      res.json({ connected, provider });
+    });
+
+    app.post("/api/oauth/logout", (req, res) => {
+      const { provider } = req.body;
+      agent.getAuthStorage().logout(provider);
+      res.json({ success: true });
     });
 
     app.post("/api/runtime/restart", async (_req, res) => {
@@ -275,8 +346,13 @@ export class WebAdapter implements PlatformAdapter {
       const _reqProvider =
         url.searchParams.get("provider") || currentProvider;
 
-      if (!apiKey) {
-        ws.send(JSON.stringify({ error: "Please set an API key first" }));
+      const providerMeta = SUPPORTED_PROVIDERS[_reqProvider];
+      const hasAuth = providerMeta?.authType === "oauth"
+        ? agent.getAuthStorage().hasAuth(_reqProvider)
+        : !!apiKey;
+
+      if (!hasAuth) {
+        ws.send(JSON.stringify({ error: "Please configure authentication first" }));
         ws.close();
         return;
       }

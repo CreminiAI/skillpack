@@ -1073,3 +1073,68 @@ body {
   transform: none;
   box-shadow: none;
 }
+.label-hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+/* OAuth UI */
+#apikey-oauth-section {
+  padding: 8px 0;
+}
+
+.oauth-status-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+#oauth-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.oauth-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.oauth-disconnected .oauth-status-dot {
+  background-color: #94a3b8;
+}
+
+.oauth-connected .oauth-status-dot {
+  background-color: #22c55e;
+}
+
+.oauth-disconnected #oauth-status-text {
+  color: var(--text-secondary);
+}
+
+.oauth-connected #oauth-status-text {
+  color: #16a34a;
+}
+
+.oauth-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.oauth-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.oauth-btn svg {
+  margin-right: 8px;
+}

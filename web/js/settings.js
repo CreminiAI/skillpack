@@ -8,6 +8,8 @@ let closeBtn;
 let saveBtn;
 let providerSelect;
 let apiKeyInput;
+let baseUrlInput;
+let baseUrlGroup;
 let telegramTokenInput;
 let slackBotTokenInput;
 let slackAppTokenInput;
@@ -22,6 +24,8 @@ export function initSettings() {
   
   providerSelect = document.getElementById("provider-select");
   apiKeyInput = document.getElementById("api-key-input");
+  baseUrlInput = document.getElementById("settings-baseurl-input");
+  baseUrlGroup = document.getElementById("settings-baseurl-group");
   telegramTokenInput = document.getElementById("telegram-token-input");
   slackBotTokenInput = document.getElementById("slack-bot-token-input");
   slackAppTokenInput = document.getElementById("slack-app-token-input");
@@ -61,9 +65,16 @@ export function initSettings() {
 
 function updatePlaceholder() {
   const p = providerSelect.value;
+  const meta = state.config?.supportedProviders?.[p];
+  
   if (p === "openai") apiKeyInput.placeholder = "sk-proj-...";
   else if (p === "anthropic") apiKeyInput.placeholder = "sk-ant-api03-...";
+  else if (p === "google") apiKeyInput.placeholder = "AIza...";
   else apiKeyInput.placeholder = "sk-...";
+
+  if (baseUrlGroup) {
+    baseUrlGroup.style.display = meta?.supportsBaseUrl ? "" : "none";
+  }
 }
 
 function populateForm() {
@@ -87,6 +98,10 @@ function populateForm() {
     apiKeyInput.value = "***************************************************";
   } else {
     apiKeyInput.value = "";
+  }
+
+  if (baseUrlInput) {
+    baseUrlInput.value = config.baseUrl || "";
   }
 
   if (config.provider) {
@@ -113,6 +128,7 @@ function populateForm() {
 async function handleSave() {
   const key = apiKeyInput.value.trim();
   const provider = providerSelect.value;
+  const baseUrl = baseUrlInput.value.trim();
   const telegramToken = telegramTokenInput.value.trim();
   const slackBotToken = slackBotTokenInput.value.trim();
   const slackAppToken = slackAppTokenInput.value.trim();
@@ -127,6 +143,10 @@ async function handleSave() {
   }
 
   const updates = { provider, adapters };
+  if (baseUrl !== state.config.baseUrl) {
+    updates.baseUrl = baseUrl;
+  }
+
   if (key && key !== "***************************************************" && key !== state.config.apiKey) {
     updates.key = key;
   }
@@ -136,19 +156,14 @@ async function handleSave() {
     
     // Update local config
     state.config.provider = res.provider;
+    state.config.baseUrl = res.baseUrl || "";
     state.config.adapters = res.adapters;
     if (updates.key) {
       state.config.hasApiKey = true;
       state.config.apiKey = updates.key;
     }
     
-    if (state.config.hasApiKey && state.config.apiKey) {
-      apiKeyInput.value = state.config.apiKey;
-    } else if (state.config.hasApiKey) {
-      apiKeyInput.value = "***************************************************";
-    } else {
-      apiKeyInput.value = "";
-    }
+    populateForm();
     state.restartRequired = !!res.requiresRestart;
 
     if (res.requiresRestart) {

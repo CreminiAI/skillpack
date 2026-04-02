@@ -10,6 +10,7 @@ import {
   DefaultResourceLoader,
   type Skill,
 } from "@mariozechner/pi-coding-agent";
+import { ConfigFileAuthBackend, SUPPORTED_PROVIDERS } from "./config.js";
 
 import {
   formatAttachmentsPrompt,
@@ -199,9 +200,37 @@ export class PackAgent implements IPackAgent {
     current: null,
   };
   private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
+  private authStorage: AuthStorage;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
+
+    // Use ConfigFileAuthBackend to persist OAuth credentials in config.json._auth
+    const configPath = path.resolve(options.rootDir, "data", "config.json");
+    const backend = new ConfigFileAuthBackend(configPath);
+    this.authStorage = AuthStorage.fromStorage(backend);
+
+    // For API Key providers, set runtime key (not persisted to _auth)
+    const providerMeta = SUPPORTED_PROVIDERS[options.provider];
+    if (providerMeta?.authType === "api_key" && options.apiKey) {
+      this.authStorage.setRuntimeApiKey(options.provider, options.apiKey);
+    }
+  }
+
+  /** Get the shared AuthStorage instance (used by OAuth API endpoints) */
+  getAuthStorage(): AuthStorage {
+    return this.authStorage;
+  }
+
+  /** Update runtime auth when provider/apiKey changes */
+  updateAuth(provider: string, apiKey?: string): void {
+    // Remove old runtime key
+    this.authStorage.removeRuntimeApiKey(this.options.provider);
+    this.options.provider = provider;
+    if (apiKey) {
+      this.options.apiKey = apiKey;
+      this.authStorage.setRuntimeApiKey(provider, apiKey);
+    }
   }
 
   /**
@@ -230,12 +259,10 @@ export class PackAgent implements IPackAgent {
     if (pendingCreation) return pendingCreation;
 
     const createSessionPromise = (async () => {
-      const { apiKey, rootDir, provider, modelId, baseUrl } = this.options;
+      const { rootDir, provider, modelId, baseUrl } = this.options;
 
-      const authStorage = AuthStorage.inMemory({
-        [provider]: { type: "api_key", key: apiKey },
-      });
-      (authStorage as any).setRuntimeApiKey(provider, apiKey);
+      // Use the shared AuthStorage instance (supports both API Key and OAuth)
+      const authStorage = this.authStorage;
 
       const modelRegistry = new ModelRegistry(authStorage);
       const resolvedModel = modelRegistry.find(provider, modelId);

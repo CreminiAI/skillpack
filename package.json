@@ -1,6 +1,6 @@
 {
   "name": "@cremini/skillpack",
-  "version": "1.1.8-beta.1",
+  "version": "1.2.0",
   "description": "Pack AI Skills into Local Agents",
   "type": "module",
   "repository": {
