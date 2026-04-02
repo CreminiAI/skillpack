@@ -7,7 +7,7 @@ import { exec } from "node:child_process";
 
 import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
-import { configManager } from "./config.js";
+import { configManager, SUPPORTED_PROVIDERS } from "./config.js";
 import { Lifecycle } from "./lifecycle.js";
 import {
   register as registryRegister,
@@ -49,7 +49,8 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const packConfig = loadPackConfig(canonicalRootDir);
   const baseUrl = dataConfig.baseUrl?.trim() || undefined;
 
-  const modelId = provider === "anthropic" ? "claude-opus-4-6" : "gpt-5.4";
+  const modelId = SUPPORTED_PROVIDERS[provider]?.defaultModelId
+    ?? SUPPORTED_PROVIDERS.openai.defaultModelId;
 
   // ---------------------------------------------------------------------------
   // Create Express app & HTTP server
