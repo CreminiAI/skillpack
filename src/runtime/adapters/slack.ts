@@ -37,10 +37,15 @@ const SLASH_COMMANDS: Record<string, BotCommand> = {
 
 const MAX_MESSAGE_LENGTH = 3500;
 const ACK_REACTION = "eyes";
+const PROCESSING_MESSAGE = "_Processing..._";
 
 interface SlackRoute {
   channel: string;
   threadTs?: string;
+}
+
+interface SlackPostedMessage {
+  ts: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +280,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     let hasError = false;
     let errorMessage = "";
     const pendingFiles: Array<{ filePath: string; caption?: string }> = [];
+    const placeholder = await this.sendPlaceholderMessage(client, route);
 
     const onEvent = (event: AgentEvent) => {
       if (event.type === "text_delta") {
@@ -305,14 +311,26 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     }
 
     if (hasError) {
-      await this.sendSafe(client, route, `❌ Error: ${errorMessage}`);
+      await this.sendOrUpdateSafe(
+        client,
+        route,
+        `❌ Error: ${errorMessage}`,
+        placeholder,
+      );
       return;
     }
 
     if (finalText.trim()) {
-      await this.sendLongMessage(client, route, finalText);
+      await this.sendLongMessage(client, route, finalText, placeholder);
     } else if (pendingFiles.length === 0) {
-      await this.sendSafe(client, route, "(No response generated)");
+      await this.sendOrUpdateSafe(
+        client,
+        route,
+        "(No response generated)",
+        placeholder,
+      );
+    } else if (placeholder) {
+      await this.deleteMessageSafe(client, route, placeholder.ts);
     }
 
     // Send outbound files
@@ -424,7 +442,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
   }
 
   private splitMessage(text: string): string[] {
-    if (text.length <= MAX_MESSAGE_LENGTH) {
+    if (this.isSlackMessageWithinLimit(text)) {
       return [text];
     }
 
@@ -432,21 +450,12 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     let remaining = text;
 
     while (remaining.length > 0) {
-      if (remaining.length <= MAX_MESSAGE_LENGTH) {
+      if (this.isSlackMessageWithinLimit(remaining)) {
         chunks.push(remaining);
         break;
       }
 
-      let splitAt = remaining.lastIndexOf("\n\n", MAX_MESSAGE_LENGTH);
-      if (splitAt < MAX_MESSAGE_LENGTH * 0.5) {
-        splitAt = remaining.lastIndexOf("\n", MAX_MESSAGE_LENGTH);
-      }
-      if (splitAt < MAX_MESSAGE_LENGTH * 0.3) {
-        splitAt = remaining.lastIndexOf(" ", MAX_MESSAGE_LENGTH);
-      }
-      if (splitAt < 1) {
-        splitAt = MAX_MESSAGE_LENGTH;
-      }
+      let splitAt = this.findSlackSafeSplitPoint(remaining);
 
       chunks.push(remaining.slice(0, splitAt));
       remaining = remaining.slice(splitAt).trimStart();
@@ -459,8 +468,23 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     client: any,
     route: SlackRoute,
     text: string,
+    placeholder?: SlackPostedMessage | null,
   ): Promise<void> {
-    for (const chunk of this.splitMessage(text)) {
+    const chunks = this.splitMessage(text);
+
+    if (chunks.length === 0) {
+      return;
+    }
+
+    if (placeholder) {
+      await this.updateMessageSafe(client, route, placeholder.ts, chunks[0]);
+      for (const chunk of chunks.slice(1)) {
+        await this.sendSafe(client, route, chunk);
+      }
+      return;
+    }
+
+    for (const chunk of chunks) {
       await this.sendWithRetry(client, route, chunk);
     }
   }
@@ -477,22 +501,51 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     }
   }
 
+  private async sendOrUpdateSafe(
+    client: any,
+    route: SlackRoute,
+    text: string,
+    placeholder?: SlackPostedMessage | null,
+  ): Promise<void> {
+    if (placeholder) {
+      await this.updateMessageSafe(client, route, placeholder.ts, text);
+      return;
+    }
+
+    await this.sendSafe(client, route, text);
+  }
+
+  private async sendPlaceholderMessage(
+    client: any,
+    route: SlackRoute,
+  ): Promise<SlackPostedMessage | null> {
+    try {
+      return await this.sendWithRetry(client, route, PROCESSING_MESSAGE);
+    } catch (err) {
+      console.error("[Slack] Failed to send placeholder message:", err);
+      return null;
+    }
+  }
+
   private async sendWithRetry(
     client: any,
     route: SlackRoute,
     text: string,
     maxRetries = 3,
-  ): Promise<void> {
+  ): Promise<SlackPostedMessage> {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        await client.chat.postMessage({
+        const response = await client.chat.postMessage({
           channel: route.channel,
           text: formatSlackMessage(text),
           mrkdwn: true,
           thread_ts: route.threadTs,
           reply_broadcast: false,
         });
-        return;
+        if (typeof response.ts !== "string") {
+          throw new Error("Slack postMessage response missing ts");
+        }
+        return { ts: response.ts };
       } catch (err: any) {
         const retryAfter = this.getRetryAfterSeconds(err);
         if (retryAfter && attempt < maxRetries) {
@@ -507,6 +560,123 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
         throw err;
       }
     }
+
+    throw new Error("Slack postMessage failed after retries");
+  }
+
+  private async updateMessageSafe(
+    client: any,
+    route: SlackRoute,
+    ts: string,
+    text: string,
+  ): Promise<void> {
+    try {
+      await this.updateWithRetry(client, route, ts, text);
+    } catch (err) {
+      console.error("[Slack] Failed to update message:", err);
+      await this.deleteMessageSafe(client, route, ts);
+      await this.sendSafe(client, route, text);
+    }
+  }
+
+  private async updateWithRetry(
+    client: any,
+    route: SlackRoute,
+    ts: string,
+    text: string,
+    maxRetries = 3,
+  ): Promise<void> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await client.chat.update({
+          channel: route.channel,
+          ts,
+          text: formatSlackMessage(text),
+          mrkdwn: true,
+        });
+        return;
+      } catch (err: any) {
+        const retryAfter = this.getRetryAfterSeconds(err);
+        if (retryAfter && attempt < maxRetries) {
+          console.log(
+            `[Slack] Rate limited while updating, retrying after ${retryAfter}s...`,
+          );
+          await new Promise((resolve) =>
+            setTimeout(resolve, retryAfter * 1000),
+          );
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  private async deleteMessageSafe(
+    client: any,
+    route: SlackRoute,
+    ts: string,
+  ): Promise<void> {
+    try {
+      await client.chat.delete({
+        channel: route.channel,
+        ts,
+      });
+    } catch (err) {
+      console.error("[Slack] Failed to delete placeholder message:", err);
+    }
+  }
+
+  private isSlackMessageWithinLimit(text: string): boolean {
+    return formatSlackMessage(text).length <= MAX_MESSAGE_LENGTH;
+  }
+
+  private findSlackSafeSplitPoint(text: string): number {
+    const preferredBreaks = ["\n\n", "\n", " "];
+    const minSplit = Math.floor(MAX_MESSAGE_LENGTH * 0.3);
+
+    for (const token of preferredBreaks) {
+      const index = this.findBestSlackSplitBefore(text, token);
+      if (index >= minSplit) {
+        return index;
+      }
+    }
+
+    let low = 1;
+    let high = text.length;
+    let best = Math.min(text.length, MAX_MESSAGE_LENGTH);
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const candidate = text.slice(0, mid);
+      if (this.isSlackMessageWithinLimit(candidate)) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return Math.max(1, best);
+  }
+
+  private findBestSlackSplitBefore(text: string, token: string): number {
+    let fromIndex = Math.min(text.length, MAX_MESSAGE_LENGTH);
+
+    while (fromIndex > 0) {
+      const index = text.lastIndexOf(token, fromIndex);
+      if (index < 0) {
+        return -1;
+      }
+
+      const splitAt = index + token.length;
+      if (this.isSlackMessageWithinLimit(text.slice(0, splitAt))) {
+        return splitAt;
+      }
+
+      fromIndex = index - 1;
+    }
+
+    return -1;
   }
 
   private async tryAckReaction(client: any, event: any): Promise<void> {
