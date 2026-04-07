@@ -77,7 +77,7 @@ interface IPackAgent {
     attachments?: ChannelAttachment[],
   ): Promise<HandleResult>;
 
-  /** Handle a unified command (/clear /restart /shutdown) */
+  /** Handle a unified command (/new /clear /restart /shutdown) */
   handleCommand(command: BotCommand, channelId: string): Promise<CommandResult>;
 
   abort(channelId: string): void;
@@ -137,6 +137,7 @@ All adapters support the following commands (triggered by a `/`-prefixed message
 
 | Command | Behavior |
 | --- | --- |
+| `/new` | Alias of `/clear`; destroys the current channel's AgentSession and recreates it on the next message |
 | `/clear` | Destroys the current channel's AgentSession; the next message creates a new one |
 | `/restart` | Triggers a `Lifecycle` graceful exit with exit code `75` |
 | `/shutdown` | Triggers a `Lifecycle` graceful exit with exit code `64` |
@@ -147,11 +148,12 @@ Slack additionally exposes namespaced slash commands:
 
 | Slack command | Maps to |
 | --- | --- |
+| `/new` | `clear` |
 | `/skillpack-clear` | `clear` |
 | `/skillpack-restart` | `restart` |
 | `/skillpack-shutdown` | `shutdown` |
 
-> Slack slash commands cannot be triggered directly from within a thread. In a channel context, the command targets the most recently active Skillpack thread in that channel. If no active thread exists, the user is prompted to `@mention` the bot first, or to send a text command like `@bot /clear` inside the relevant thread.
+> Slack slash commands cannot be triggered directly from within a thread. In a channel context, the command targets the most recently active Skillpack thread in that channel. If no active thread exists, the user is prompted to `@mention` the bot first, or to send a text command like `@bot /clear` or `@bot /new` inside the relevant thread.
 
 ## WebAdapter
 
@@ -230,7 +232,7 @@ Command result:
 - **Only the final result is sent**; `thinking_delta` / `tool_start` / `tool_end` events are not exposed.
 - Markdown is converted to Slack `mrkdwn` before sending; ` ```md ` / ` ```markdown ` blocks are unwrapped and rendered inline.
 - Long messages are split by paragraph and sent sequentially; Slack API rate limits trigger up to 3 automatic retries.
-- Text commands `/clear`, `/restart`, `/shutdown` are supported inside threads.
+- Text commands `/new`, `/clear`, `/restart`, `/shutdown` are supported inside threads.
 
 ### Slack App Requirements
 
@@ -238,7 +240,7 @@ Command result:
 - An app-level token with the `connections:write` scope is required.
 - Bot scopes must include at least: `chat:write`, `im:history`, `app_mentions:read`, `reactions:write`.
 - Event subscriptions must include at least: `message.im`, `app_mention`.
-- Slash commands to configure: `/skillpack-clear`, `/skillpack-restart`, `/skillpack-shutdown`.
+- Slash commands to configure: `/new`, `/skillpack-clear`, `/skillpack-restart`, `/skillpack-shutdown`.
 
 ## Attachment Handling
 

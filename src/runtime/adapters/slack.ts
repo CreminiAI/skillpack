@@ -131,7 +131,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
       }
     });
 
-    for (const commandName of Object.keys(SLASH_COMMANDS)) {
+    for (const commandName of [...Object.keys(SLASH_COMMANDS), "/new"]) {
       app.command(commandName, async (args: any) => {
         try {
           await this.handleSlashCommand(args);
@@ -213,7 +213,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
       await this.sendSafe(
         client,
         route,
-        "Mention me with a message, or use `/clear` to reset this thread.",
+        "Mention me with a message, or use `/clear` or `/new` to reset this thread.",
       );
       return;
     }
@@ -235,7 +235,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     ack,
   }: any): Promise<void> {
     const commandName = command?.command;
-    const mapped = commandName ? SLASH_COMMANDS[commandName] : undefined;
+    const mapped = commandName ? this.resolveSlashCommand(commandName) : undefined;
 
     if (!this.agent || !mapped) {
       await this.safeAck(ack, "Unsupported slash command.");
@@ -334,7 +334,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     if (!this.agent) return false;
 
     const commandKey = text.split(/\s/)[0].toLowerCase();
-    const command = INLINE_COMMANDS[commandKey];
+    const command = this.resolveInlineCommand(commandKey);
     if (!command) return false;
 
     const result = await this.agent.handleCommand(command, channelId);
@@ -344,6 +344,22 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
       result.message || `${commandKey} executed.`,
     );
     return true;
+  }
+
+  private resolveInlineCommand(commandKey: string): BotCommand | undefined {
+    if (commandKey === "/new") {
+      return "clear";
+    }
+
+    return INLINE_COMMANDS[commandKey];
+  }
+
+  private resolveSlashCommand(commandName: string): BotCommand | undefined {
+    if (commandName === "/new") {
+      return "clear";
+    }
+
+    return SLASH_COMMANDS[commandName];
   }
 
   private resolveSlashCommandTarget(
@@ -370,7 +386,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     if (!threadTs) {
       return {
         message:
-          "No active Skillpack thread found in this channel. Mention the bot first, or run the command inside the thread as `@bot /clear`.",
+          "No active Skillpack thread found in this channel. Mention the bot first, or run the command inside the thread as `@bot /clear` or `@bot /new`.",
       };
     }
 

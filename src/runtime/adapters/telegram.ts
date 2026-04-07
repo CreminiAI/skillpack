@@ -121,7 +121,7 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
     // --- Command handling ---
     if (text) {
       const commandKey = text.split(/\s/)[0].toLowerCase();
-      const command = COMMANDS[commandKey];
+      const command = this.resolveCommand(commandKey);
 
       if (command) {
         const result = await this.agent.handleCommand(command, channelId);
@@ -187,6 +187,14 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
     for (const file of pendingFiles) {
       await this.sendFileSafe(chatId, file.filePath, file.caption);
     }
+  }
+
+  private resolveCommand(commandKey: string): BotCommand | undefined {
+    if (commandKey === "/new") {
+      return "clear";
+    }
+
+    return COMMANDS[commandKey];
   }
 
   // -------------------------------------------------------------------------
