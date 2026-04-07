@@ -23,7 +23,7 @@ Skillpack is built for teams that want AI Agents to be deployable, trusted, and 
 1. Download the example
 - [Garry Tan SkillPack](https://github.com/CreminiAI/skillpack-examples/releases/download/v.0.0.3/garry-tan.zip)
 - [Company Deep Research SkillPack](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip)
-2. Unzip it and Run ./start.sh on Mac OS, and double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
+2. Unzip it and Run ./start.sh on Mac OS, Or double click start.bat on Windows (see below), the server starts and opens http://127.0.0.1:26313 in your browser
 
 ```bash
 # macOS / Linux
@@ -110,75 +110,13 @@ If present, `AGENTS.md` and `SOUL.md` are read by SkillPack itself when a new ch
 
 ## Slack/Telegram Integrations
 
-**Slack Configuration**: requires Slack `App Token` and `Bot Token`<br>
-**Telegram configuration**: requires `Bot Token`
+Talk to your Agents on Slack and Telegram
 
-### Slack App Setup and how to get `App Token` and `Bot Token`
+### 5 mins to get Slack `App Token` and `Bot Token`
 https://skillpack.gitbook.io/skillpack-docs/getting-started/slack-integration
 
-1. Create a new Slack app at https://api.slack.com/apps
-2. Enable Socket Mode (Settings → Socket Mode → Enable)
-3. Generate an App-Level Token with `connections:write` scope. This is **`App Token`**
-4. Add Bot Token Scopes (OAuth & Permissions):
-
-- `app_mentions:read`
-- `channels:history`
-- `channels:read`
-- `chat:write`
-- `files:read`
-- `files:write`
-- `groups:history`
-- `groups:read`
-- `im:history`
-- `im:read`
-- `im:write`
-- `users:read`
-
-5. Subscribe to Bot Events (Event Subscriptions):
-
-- `app_mention`
-- `message.channels`
-- `message.groups`
-- `message.im`
-
-6. Enable Direct Messages (App Home):
-   Go to App Home in the left sidebar
-   Under Show Tabs, enable the Messages Tab
-   Check Allow users to send Slash commands and messages from the messages tab
-
-7. Install the app to your workspace. Get the Bot User OAuth Token. This is **`Bot Token`**
-8. Add the app to any channels where you want the agent to operate (it'll only see messages in channels it's added to)
-9. On the SkillPack buit-in UI http://127.0.0.1:26313, Tap "Connect to Chat App" button and Enter the **`Bot Token`** and **`App Token`**, Save
-
-### Telegram Setup and how to get `Bot Token`
+### 1 min to get Telegram `Bot Token`
 https://skillpack.gitbook.io/skillpack-docs/getting-started/telegram-integration
-
-1. **Open Telegram** and search for the official account **`@BotFather`** (it will have a blue verified checkmark).
-2. **Start a chat** by tapping "Start" or sending the `/start` command.
-3. **Send the command** `/newbot` to the BotFather.
-4. **Follow the prompts** to choose a display name and a unique username for your bot. The username must end with the word "bot" (e.g., `MyHelperBot` or `My_Helper_bot`).
-5. **Receive the token**. Once the bot is successfully created, the BotFather will provide you with a message containing your unique API token.
-   The token will look like a long string of numbers and letters, formatted as `123456789:AABBCCddEeff.... `
-6. On the SkillPack buit-in UI http://127.0.0.1:26313, Tap "Connect to Chat App" button and Enter the **`Bot Token`**, Save
-
-### (Optional) Put tokens into data/config.json if you don't use Web UI
-
-Or Once you have telegram or slack tokens, you can also configure them in `data/config.json` (created at runtime, not included in the zip):
-The runtime supports **Slack** and **Telegram** in addition to the built-in web UI.
-
-```json
-{
-  "adapters": {
-    "telegram": {
-      "token": "123456:ABC-DEF..."
-    },
-    "slack": {
-      "botToken": "xoxb-...",
-      "appToken": "xapp-..."
-    }
-  }
-}
-```
 
 ---
 
