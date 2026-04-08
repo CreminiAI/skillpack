@@ -13,6 +13,7 @@ import type {
 } from "./types.js";
 import { formatSlackMessage } from "./markdown.js";
 import { downloadAndSaveAttachment } from "./attachment-utils.js";
+import { resolveCommand } from "../commands/index.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -24,6 +25,7 @@ export interface SlackAdapterOptions {
 }
 
 const INLINE_COMMANDS: Record<string, BotCommand> = {
+  "/help": "help",
   "/clear": "clear",
   "/restart": "restart",
   "/shutdown": "shutdown",
@@ -365,8 +367,9 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
   }
 
   private resolveInlineCommand(commandKey: string): BotCommand | undefined {
-    if (commandKey === "/new") {
-      return "clear";
+    const resolved = resolveCommand(commandKey);
+    if (resolved) {
+      return resolved;
     }
 
     return INLINE_COMMANDS[commandKey];

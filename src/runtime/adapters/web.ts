@@ -3,12 +3,12 @@ import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { configManager, SUPPORTED_PROVIDERS } from "../config.js";
 import type { DataConfig } from "../config.js";
+import { resolveCommand } from "../commands/index.js";
 
 import type {
   PlatformAdapter,
   AdapterContext,
   AgentEvent,
-  BotCommand,
   IPackAgent,
 } from "./types.js";
 
@@ -21,16 +21,8 @@ function getPackConfig(rootDir: string): any {
   return JSON.parse(raw);
 }
 
-const COMMANDS: Record<string, BotCommand> = {
-  "/new": "new",
-  "/clear": "clear",
-  "/restart": "restart",
-  "/shutdown": "shutdown",
-};
-
-function parseCommand(text: string): BotCommand | null {
-  const trimmed = text.trim().toLowerCase();
-  return COMMANDS[trimmed] ?? null;
+function parseCommand(text: string) {
+  return resolveCommand(text.trim().toLowerCase());
 }
 
 function getRuntimeConfigSignature(config: DataConfig): string {

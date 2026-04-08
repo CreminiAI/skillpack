@@ -5,13 +5,13 @@ import type {
   PlatformAdapter,
   AdapterContext,
   AgentEvent,
-  BotCommand,
   ChannelAttachment,
   IPackAgent,
   MessageSender,
 } from "./types.js";
 import { formatTelegramMessage } from "./markdown.js";
 import { downloadAndSaveAttachment } from "./attachment-utils.js";
+import { resolveCommand, getTelegramBotCommands } from "../commands/index.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -21,11 +21,7 @@ export interface TelegramAdapterOptions {
   token: string;
 }
 
-const COMMANDS: Record<string, BotCommand> = {
-  "/clear": "clear",
-  "/restart": "restart",
-  "/shutdown": "shutdown",
-};
+
 
 const MAX_MESSAGE_LENGTH = 4096;
 const ACK_REACTION = {
@@ -62,11 +58,7 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
     });
 
     // Register bot commands with Telegram
-    await this.bot.setMyCommands([
-      { command: "clear", description: "Clear current session and start new" },
-      { command: "restart", description: "Restart the server process" },
-      { command: "shutdown", description: "Shut down the server process" },
-    ]);
+    await this.bot.setMyCommands(getTelegramBotCommands());
 
     const me = await this.bot.getMe();
     console.log(`[TelegramAdapter] Started as @${me.username}`);
@@ -121,7 +113,7 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
     // --- Command handling ---
     if (text) {
       const commandKey = text.split(/\s/)[0].toLowerCase();
-      const command = this.resolveCommand(commandKey);
+      const command = this.resolveTelegramCommand(commandKey);
 
       if (command) {
         const result = await this.agent.handleCommand(command, channelId);
@@ -189,12 +181,8 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
     }
   }
 
-  private resolveCommand(commandKey: string): BotCommand | undefined {
-    if (commandKey === "/new") {
-      return "clear";
-    }
-
-    return COMMANDS[commandKey];
+  private resolveTelegramCommand(commandKey: string) {
+    return resolveCommand(commandKey);
   }
 
   // -------------------------------------------------------------------------

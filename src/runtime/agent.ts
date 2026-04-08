@@ -23,6 +23,7 @@ import {
 } from "./tools/send-file-tool.js";
 import { createManageScheduleTool } from "./tools/manage-schedule-tool.js";
 import type { SchedulerAdapter } from "./adapters/scheduler.js";
+import { handleHelpCommand } from "./commands/help-command.js";
 
 import type {
   IPackAgent,
@@ -599,6 +600,9 @@ export class PackAgent implements IPackAgent {
     channelId: string,
   ): Promise<CommandResult> {
     switch (command) {
+      case "help":
+        return handleHelpCommand(this.options.rootDir);
+
       case "new":
       case "clear": {
         const cs = this.channels.get(channelId);
