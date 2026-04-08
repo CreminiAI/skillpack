@@ -282,21 +282,6 @@ function handleAgentEvent(event) {
     hideLoadingIndicator();
   }
 
-  // Handle bot command results injected by the backend WebSocket response
-  if (event.type === "command_result") {
-    const textBlock = getOrCreateTextBlock();
-    let resText = `Command \`${event.command}\` succeeded.`;
-    if (event.errorMessage) {
-      resText = `Command \`${event.command}\` failed: ${event.errorMessage}`;
-    } else if (event.result) {
-      resText = `Command \`${event.command}\` result:\n\n${event.result}`;
-    }
-    textBlock.dataset.mdContent += resText;
-    textBlock.innerHTML = renderMarkdown(textBlock.dataset.mdContent);
-    scrollToBottom();
-    return;
-  }
-
   switch (event.type) {
     case "agent_start":
     case "message_start":

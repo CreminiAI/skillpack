@@ -58,6 +58,7 @@ function formatSlackInline(text: string): string {
   );
   formatted = formatted.replace(/\*\*([^*\n]+)\*\*/g, "*$1*");
   formatted = formatted.replace(/__([^_\n]+)__/g, "*$1*");
+  formatted = formatted.replace(/^(?:-|\*) /gm, "• ");
 
   return formatted;
 }

@@ -13,9 +13,9 @@ export function buildHelpMessage(rootDir: string): string {
 
   const commands = getVisibleCommands();
   const commandLines = commands.map(
-    (cmd) => `• \`/${cmd.command}\` — ${cmd.description}`,
+    (cmd) => `- \`/${cmd.command}\` — ${cmd.description}`,
   );
-  sections.push(`📋 **Available Commands**\n${commandLines.join("\n")}`);
+  sections.push(`📋 **Available Commands**\n\n${commandLines.join("\n")}`);
 
   const configPath = path.resolve(rootDir, "skillpack.json");
   const skills = readInstalledSkills(configPath);
@@ -23,10 +23,10 @@ export function buildHelpMessage(rootDir: string): string {
   if (skills.length > 0) {
     const skillLines = skills.map(
       (skill) =>
-        `• **${skill.name}**${skill.description ? ` — ${skill.description}` : ""}`,
+        `- **${skill.name}**${skill.description ? ` — ${skill.description}` : ""}`,
     );
     sections.push(
-      `🧩 **Installed Skills** (${skills.length})\n${skillLines.join("\n")}`,
+      `🧩 **Installed Skills** (${skills.length})\n\n${skillLines.join("\n")}`,
     );
   } else {
     sections.push("🧩 **Installed Skills**\nNo skills installed.");
@@ -35,10 +35,13 @@ export function buildHelpMessage(rootDir: string): string {
   sections.push(
     [
       "⏰ **Scheduled Tasks**",
+      "",
       "You can set up recurring tasks using natural language. For example:",
-      '• "Send me a daily market briefing every morning at 9 AM"',
-      '• "Summarize this week\'s trading data every Friday at 6 PM"',
-      '• "Check for new announcements every 30 minutes"',
+      "",
+      '- "Send me a daily market briefing every morning at 9 AM"',
+      '- "Summarize this week\'s trading data every Friday at 6 PM"',
+      '- "Check for new announcements every 30 minutes"',
+      "",
       "I will handle the cron scheduling automatically.",
     ].join("\n"),
   );

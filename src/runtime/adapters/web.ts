@@ -25,6 +25,11 @@ function parseCommand(text: string) {
   return resolveCommand(text.trim().toLowerCase());
 }
 
+function sendWsEvent(ws: WebSocket, event: AgentEvent): void {
+  if (ws.readyState !== ws.OPEN) return;
+  ws.send(JSON.stringify(event));
+}
+
 function getRuntimeConfigSignature(config: DataConfig): string {
   return JSON.stringify({
     apiKey: config.apiKey || "",
@@ -63,7 +68,7 @@ export class WebAdapter implements PlatformAdapter {
       const conf = configManager.getConfig();
       const currentProvider = conf.provider || "openai";
       const providerMeta = SUPPORTED_PROVIDERS[currentProvider];
-      
+
       const oauthConnected = providerMeta?.authType === "oauth"
         ? agent.getAuthStorage().hasAuth(currentProvider)
         : false;
@@ -115,7 +120,7 @@ export class WebAdapter implements PlatformAdapter {
 
       const afterConfig = configManager.getConfig();
       const requiresRestart = getRuntimeConfigSignature(beforeConfig) !== getRuntimeConfigSignature(afterConfig);
-      
+
       res.json({
         ...afterConfig,
         requiresRestart
@@ -389,23 +394,23 @@ export class WebAdapter implements PlatformAdapter {
         const command = parseCommand(text);
         if (command) {
           const result = await agent.handleCommand(command, channelId);
-          ws.send(
-            JSON.stringify({
-              type: "command_result",
-              command,
-              ...result,
-            }),
-          );
-          if (command === "clear" || command === "new") {
-            ws.send(JSON.stringify({ done: true }));
+
+          // sendWsEvent(ws, { type: "agent_start" });
+          // sendWsEvent(ws, { type: "message_start", role: "assistant" });
+
+          if (result.message) {
+            sendWsEvent(ws, { type: "text_delta", delta: result.message });
           }
+
+          // sendWsEvent(ws, { type: "message_end", role: "assistant" });
+          // sendWsEvent(ws, { type: "agent_end" });
+          ws.send(JSON.stringify({ done: true }));
           return;
         }
 
         // Regular message → stream events via WebSocket
         const onEvent = (event: AgentEvent) => {
-          if (ws.readyState !== ws.OPEN) return;
-          ws.send(JSON.stringify(event));
+          sendWsEvent(ws, event);
         };
 
         const result = await agent.handleMessage("web", channelId, text, onEvent);
