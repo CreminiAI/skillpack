@@ -9,6 +9,7 @@ import type {
   BotCommand,
   ChannelAttachment,
   IPackAgent,
+  IpcBroadcaster,
   MessageSender,
 } from "./types.js";
 import { formatSlackMessage } from "./markdown.js";
@@ -63,6 +64,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
   private botUserId: string | null = null;
   private lastThreadByChannel = new Map<string, string>();
   private rootDir = "";
+  private ipcBroadcaster: IpcBroadcaster | null = null;
 
   constructor(options: SlackAdapterOptions) {
     this.options = options;
@@ -71,6 +73,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
   async start(ctx: AdapterContext): Promise<void> {
     this.agent = ctx.agent;
     this.rootDir = ctx.rootDir;
+    this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
 
     this.app = new App({
       token: this.options.botToken,
@@ -171,6 +174,15 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     const teamId = this.getTeamId(body, context);
     const channelId = `slack-dm-${teamId}-${event.channel}`;
     const route: SlackRoute = { channel: event.channel };
+    this.ipcBroadcaster?.broadcastInbound(
+      channelId,
+      "slack",
+      {
+        id: String(event.user || ""),
+        username: String(event.user || ""),
+      },
+      text,
+    );
 
     // Extract file attachments
     const attachments = await this.extractSlackFiles(event, channelId, client);
@@ -212,6 +224,15 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
     );
 
     const text = this.stripBotMention(event.text || "").trim();
+    this.ipcBroadcaster?.broadcastInbound(
+      channelId,
+      "slack",
+      {
+        id: String(event.user || ""),
+        username: String(event.user || ""),
+      },
+      text,
+    );
 
     // Extract file attachments
     const attachments = await this.extractSlackFiles(event, channelId, client);
@@ -293,6 +314,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
           caption: event.caption,
         });
       }
+      this.ipcBroadcaster?.broadcastAgentEvent(channelId, event);
     };
 
     try {

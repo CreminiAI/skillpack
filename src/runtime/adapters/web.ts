@@ -10,6 +10,7 @@ import type {
   AdapterContext,
   AgentEvent,
   IPackAgent,
+  IpcBroadcaster,
 } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -50,10 +51,12 @@ export class WebAdapter implements PlatformAdapter {
 
   private wss: WebSocketServer | null = null;
   private agent: IPackAgent | null = null;
+  private ipcBroadcaster: IpcBroadcaster | null = null;
 
   async start(ctx: AdapterContext): Promise<void> {
     const { agent, server, app, rootDir, lifecycle } = ctx;
     this.agent = agent;
+    this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
 
@@ -411,6 +414,7 @@ export class WebAdapter implements PlatformAdapter {
         // Regular message → stream events via WebSocket
         const onEvent = (event: AgentEvent) => {
           sendWsEvent(ws, event);
+          this.ipcBroadcaster?.broadcastAgentEvent(channelId, event);
         };
 
         const result = await agent.handleMessage("web", channelId, text, onEvent);

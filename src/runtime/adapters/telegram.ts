@@ -7,6 +7,7 @@ import type {
   AgentEvent,
   ChannelAttachment,
   IPackAgent,
+  IpcBroadcaster,
   MessageSender,
 } from "./types.js";
 import { formatTelegramMessage } from "./markdown.js";
@@ -40,6 +41,7 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
   private agent: IPackAgent | null = null;
   private options: TelegramAdapterOptions;
   private rootDir = "";
+  private ipcBroadcaster: IpcBroadcaster | null = null;
 
   constructor(options: TelegramAdapterOptions) {
     this.options = options;
@@ -48,6 +50,7 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
   async start(ctx: AdapterContext): Promise<void> {
     this.agent = ctx.agent;
     this.rootDir = ctx.rootDir;
+    this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
 
     this.bot = new TelegramBot(this.options.token, { polling: true });
 
@@ -101,6 +104,15 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
     const text = (msg.text || msg.caption || "").trim();
 
     const channelId = `telegram-${chatId}`;
+    this.ipcBroadcaster?.broadcastInbound(
+      channelId,
+      "telegram",
+      {
+        id: String(msg.from?.id || ""),
+        username: msg.from?.username || msg.from?.first_name || "",
+      },
+      text,
+    );
 
     // --- Extract attachments ---
     const attachments = await this.extractAttachments(msg, channelId);
@@ -142,6 +154,7 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
           });
           break;
       }
+      this.ipcBroadcaster?.broadcastAgentEvent(channelId, event);
     };
 
     try {

@@ -128,6 +128,9 @@ export interface IPackAgent {
   /** Reserved: restore a historical session */
   restoreSession(sessionId: string): Promise<void>;
 
+  /** Get in-memory active channel IDs */
+  getActiveChannelIds(): string[];
+
   /** Get the shared AuthStorage instance (used by OAuth API endpoints) */
   getAuthStorage(): any;
 
@@ -166,6 +169,21 @@ export type AgentEvent =
   };
 
 // ---------------------------------------------------------------------------
+// IPC Broadcast
+// ---------------------------------------------------------------------------
+
+/** IPC broadcast interface used by platform adapters to notify Electron */
+export interface IpcBroadcaster {
+  broadcastInbound(
+    channelId: string,
+    platform: string,
+    sender: { id: string; username: string },
+    text: string,
+  ): void;
+  broadcastAgentEvent(channelId: string, event: AgentEvent): void;
+}
+
+// ---------------------------------------------------------------------------
 // Platform Adapter
 // ---------------------------------------------------------------------------
 
@@ -179,6 +197,8 @@ export interface AdapterContext {
   notify?: (adapter: string, channelId: string, text: string) => Promise<void>;
   /** Map of running adapters by name, for cross-adapter access */
   adapterMap?: Map<string, PlatformAdapter>;
+  /** IPC broadcaster (desktop mode only) */
+  ipcBroadcaster?: IpcBroadcaster;
 }
 
 export interface PlatformAdapter {

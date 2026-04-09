@@ -7,6 +7,7 @@ import { exec } from "node:child_process";
 
 import { PackAgent } from "./agent.js";
 import { WebAdapter } from "./adapters/web.js";
+import { IpcAdapter } from "./adapters/ipc.js";
 import { configManager, SUPPORTED_PROVIDERS } from "./config.js";
 import { Lifecycle } from "./lifecycle.js";
 import {
@@ -101,10 +102,35 @@ export async function startServer(options: ServerOptions): Promise<void> {
 
   const adapters: import("./adapters/types.js").PlatformAdapter[] = [];
   const adapterMap = new Map<string, import("./adapters/types.js").PlatformAdapter>();
+  const hasIpcChannel = typeof process.send === "function";
+  const ipcAdapter = new IpcAdapter();
+
+  if (hasIpcChannel) {
+    await ipcAdapter.start({
+      agent,
+      server,
+      app,
+      rootDir,
+      lifecycle,
+      adapterMap,
+    });
+    adapters.push(ipcAdapter);
+    adapterMap.set(ipcAdapter.name, ipcAdapter);
+  }
+
+  const ipcBroadcaster = hasIpcChannel ? ipcAdapter : undefined;
 
   // Web adapter is always enabled
   const webAdapter = new WebAdapter();
-  await webAdapter.start({ agent, server, app, rootDir, lifecycle, adapterMap });
+  await webAdapter.start({
+    agent,
+    server,
+    app,
+    rootDir,
+    lifecycle,
+    adapterMap,
+    ipcBroadcaster,
+  });
   adapters.push(webAdapter);
   adapterMap.set(webAdapter.name, webAdapter);
 
@@ -115,7 +141,15 @@ export async function startServer(options: ServerOptions): Promise<void> {
       const telegramAdapter = new TelegramAdapter({
         token: dataConfig.adapters.telegram.token,
       });
-      await telegramAdapter.start({ agent, server, app, rootDir, lifecycle });
+      await telegramAdapter.start({
+        agent,
+        server,
+        app,
+        rootDir,
+        lifecycle,
+        adapterMap,
+        ipcBroadcaster,
+      });
       adapters.push(telegramAdapter);
       adapterMap.set(telegramAdapter.name, telegramAdapter);
     } catch (err) {
@@ -137,7 +171,15 @@ export async function startServer(options: ServerOptions): Promise<void> {
           botToken: slackConfig.botToken,
           appToken: slackConfig.appToken,
         });
-        await slackAdapter.start({ agent, server, app, rootDir, lifecycle });
+        await slackAdapter.start({
+          agent,
+          server,
+          app,
+          rootDir,
+          lifecycle,
+          adapterMap,
+          ipcBroadcaster,
+        });
         adapters.push(slackAdapter);
         adapterMap.set(slackAdapter.name, slackAdapter);
       } catch (err) {
@@ -214,6 +256,10 @@ export async function startServer(options: ServerOptions): Promise<void> {
       });
     } catch (err) {
       console.warn("  [Registry] Could not register pack:", err);
+    }
+
+    if (hasIpcChannel) {
+      ipcAdapter.notifyReady(typeof actualPort === "number" ? actualPort : port);
     }
 
     // Open the browser automatically if not a daemon run
