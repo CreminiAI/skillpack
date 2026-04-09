@@ -90,6 +90,8 @@ export interface DataConfig {
   apiKey?: string;
   provider?: string;
   baseUrl?: string;
+  modelId?: string;
+  apiProtocol?: "openai-responses" | "openai-completions";
   adapters?: {
     telegram?: { token?: string };
     slack?: {
@@ -167,6 +169,12 @@ export class ConfigManager {
     if (updates.provider !== undefined) this.configData.provider = updates.provider;
     if (updates.baseUrl !== undefined) {
       this.configData.baseUrl = updates.baseUrl?.trim() || undefined;
+    }
+    if (updates.modelId !== undefined) {
+      this.configData.modelId = updates.modelId?.trim() || undefined;
+    }
+    if (updates.apiProtocol !== undefined) {
+      this.configData.apiProtocol = updates.apiProtocol || undefined;
     }
 
     // Per-adapter key handling: null = delete, object = overwrite
