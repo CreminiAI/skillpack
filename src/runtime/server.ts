@@ -49,8 +49,10 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const packConfig = loadPackConfig(canonicalRootDir);
   const baseUrl = dataConfig.baseUrl?.trim() || undefined;
 
-  const modelId = SUPPORTED_PROVIDERS[provider]?.defaultModelId
-    ?? SUPPORTED_PROVIDERS.openai.defaultModelId;
+  const modelId =
+    dataConfig.modelId?.trim() ||
+    (SUPPORTED_PROVIDERS[provider]?.defaultModelId ?? SUPPORTED_PROVIDERS.openai.defaultModelId);
+  const apiProtocol = dataConfig.apiProtocol;
 
   // ---------------------------------------------------------------------------
   // Create Express app & HTTP server
@@ -92,6 +94,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     provider,
     modelId,
     baseUrl,
+    apiProtocol,
     lifecycleHandler: lifecycle,
   });
 

@@ -35,6 +35,8 @@ function getRuntimeConfigSignature(config: DataConfig): string {
     apiKey: config.apiKey || "",
     provider: config.provider || "openai",
     baseUrl: config.baseUrl || "",
+    modelId: config.modelId || "",
+    apiProtocol: config.apiProtocol || "",
     telegramToken: config.adapters?.telegram?.token || "",
     slackBotToken: config.adapters?.slack?.botToken || "",
     slackAppToken: config.adapters?.slack?.appToken || "",
@@ -82,6 +84,8 @@ export class WebAdapter implements PlatformAdapter {
         apiKey: conf.apiKey || "",
         provider: currentProvider,
         baseUrl: conf.baseUrl || "",
+        modelId: conf.modelId || "",
+        apiProtocol: conf.apiProtocol || "",
         adapters: conf.adapters || {},
         supportedProviders: SUPPORTED_PROVIDERS,
         oauthConnected,
@@ -94,7 +98,7 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     app.post("/api/config/update", (req, res) => {
-      const { key, provider, baseUrl, adapters } = req.body;
+      const { key, provider, baseUrl, modelId, apiProtocol, adapters } = req.body;
       const updates: any = {};
       const beforeConfig = JSON.parse(JSON.stringify(configManager.getConfig()));
 
@@ -108,6 +112,12 @@ export class WebAdapter implements PlatformAdapter {
       }
       if (baseUrl !== undefined) {
         updates.baseUrl = baseUrl;
+      }
+      if (modelId !== undefined) {
+        updates.modelId = modelId;
+      }
+      if (apiProtocol !== undefined) {
+        updates.apiProtocol = apiProtocol;
       }
       if (adapters !== undefined) {
         updates.adapters = adapters;

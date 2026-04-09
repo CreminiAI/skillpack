@@ -335,13 +335,38 @@ export class PackAgent implements IPackAgent {
       const authStorage = this.authStorage;
 
       const modelRegistry = new ModelRegistry(authStorage);
+
+      // When a custom base URL is provided, register a custom model entry with the
+      // correct API protocol. Most proxies/local endpoints use the Completions API,
+      // so default to "openai-completions" unless the user explicitly chose "openai-responses".
+      if (baseUrl && modelId) {
+        const apiProtocol = this.options.apiProtocol ?? "openai-completions";
+        log(`[PackAgent] Registering custom model ${provider}/${modelId} api=${apiProtocol} baseUrl=${baseUrl}`);
+        modelRegistry.registerProvider(provider, {
+          baseUrl,
+          apiKey: this.options.apiKey,
+          models: [
+            {
+              id: modelId,
+              name: modelId,
+              api: apiProtocol as any,
+              reasoning: false,
+              input: ["text"],
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+              contextWindow: 128000,
+              maxTokens: 4096,
+            },
+          ],
+        });
+      }
+
       const resolvedModel = modelRegistry.find(provider, modelId);
       const model =
-        resolvedModel && baseUrl
+        resolvedModel && baseUrl && !this.options.apiProtocol
           ? { ...resolvedModel, baseUrl }
           : resolvedModel;
       if (resolvedModel && baseUrl) {
-        log(`[PackAgent] Overriding ${provider}/${modelId} baseUrl -> ${baseUrl}`);
+        log(`[PackAgent] Resolved ${provider}/${modelId} api=${resolvedModel.api} baseUrl=${baseUrl}`);
       }
 
       const sessionDir = path.resolve(
