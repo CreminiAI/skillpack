@@ -5,106 +5,55 @@ description: Create new skills, modify and improve existing skills, and measure 
 
 # Skill Creator
 
-A skill for creating new skills and iteratively improving them inside this SkillPack.
-
-At a high level, the process of creating a skill goes like this:
-
-- Decide what the skill should do and when it should trigger.
-- Write a draft of the skill.
-- Create a few realistic test prompts.
-- Run the tests, review the results with the user, and improve the skill.
-- Repeat until the skill is good enough for the user's needs.
-
-Your job when using this skill is to figure out where the user is in this process and help them move forward without overcomplicating things.
-
-## Communicating with the user
-
-Adjust your language to the user's level of familiarity. Avoid unnecessary jargon. Briefly explain terms like "frontmatter", "assertion", or "benchmark" if the user does not appear comfortable with them.
-
-If the user clearly wants a lightweight collaboration rather than a full evaluation loop, keep things simple and iterate directly with them.
+Create new skills and iteratively improve them inside this SkillPack. Determine where the user is in the create → draft → test → improve cycle and help them move forward.
 
 ## Pack-specific rules
 
-This SkillPack uses a fixed project-level skills directory and config file:
-
-- Skills directory: `{{SKILLS_PATH}}`
-- SkillPack config: `{{PACK_CONFIG_PATH}}`
-
-These paths override any generic advice you may know from other environments.
-
-When creating or updating skills in this SkillPack:
-
-- Always place the skill under `{{SKILLS_PATH}}/<skill-name>/`.
-- Always write the main skill file to `{{SKILLS_PATH}}/<skill-name>/SKILL.md`.
-- Treat `skill-name` as the canonical directory name unless the user explicitly asks to preserve an existing directory layout.
-- Never create new skills inside the current workspace directory just because the active cwd is elsewhere.
+All skills live under `{{SKILLS_PATH}}/<skill-name>/SKILL.md` and config is at `{{PACK_CONFIG_PATH}}`. These paths override any generic advice. Never create skills in the current workspace directory — always use `{{SKILLS_PATH}}`.
 
 ## Creating a skill
 
 ### Capture intent
 
-Start by understanding the user's intent. The current conversation may already contain the workflow the user wants to capture. Extract answers from the conversation first, then fill the gaps with targeted questions.
-
-Confirm these points before writing the first draft:
+Extract answers from the current conversation first, then fill gaps with targeted questions. Confirm before writing the first draft:
 
 1. What should this skill enable the model to do?
 2. When should this skill trigger?
 3. What output should it produce?
 4. Does the user want a lightweight draft, or a tested and iterated skill?
 
-### Interview and research
-
-Ask about:
-
-- edge cases
-- input/output formats
-- example prompts or files
-- success criteria
-- dependencies or required tools
-
-Wait to write test prompts until these basics are clear enough.
+Clarify edge cases, input/output formats, success criteria, and dependencies as needed before writing test prompts.
 
 ### Write the skill
 
-Create the skill directory at `{{SKILLS_PATH}}/<skill-name>/`.
+Create the skill at `{{SKILLS_PATH}}/<skill-name>/SKILL.md`. Example template:
 
-Create `SKILL.md` with YAML frontmatter. The frontmatter must include:
+```yaml
+---
+name: example-skill
+description: "Analyze competitor pricing pages and generate a comparison matrix. Use when the user wants to benchmark pricing tiers, feature gaps, or positioning against specific competitors."
+---
 
-- `name`
-- `description`
+# Example Skill
 
-The `description` is the primary triggering mechanism. Make it concrete and slightly "pushy": include both what the skill does and the situations where it should be used.
+## Workflow
 
-Keep the skill practical:
+1. Collect the target URLs from the user.
+2. Extract pricing tiers, features, and limits from each page.
+3. Generate a comparison matrix as a markdown table.
 
-- Put "when to use" information in the `description`, not buried in the body.
-- Keep the body focused on the workflow, decisions, and output expectations.
-- If the skill needs deterministic helpers, place them under `scripts/`.
-- If the skill needs long reference material, place it under `references/` and tell the model when to read it.
+## Output
 
-### Required save location
-
-For a newly created skill named `example-skill`, the target layout must be:
-
-```text
-{{SKILLS_PATH}}/example-skill/
-{{SKILLS_PATH}}/example-skill/SKILL.md
+Return a markdown table with one column per competitor and one row per feature.
 ```
 
-If the user is improving an existing skill, preserve the existing skill name unless they explicitly request a rename.
+The `description` is the primary triggering mechanism — make it concrete with both what the skill does and when to use it. Keep the body focused on workflow, decisions, and output expectations. Place deterministic helpers under `scripts/` and long reference material under `references/`.
 
-### Update skillpack.json
+Preserve the existing skill name when improving unless the user explicitly requests a rename.
 
-After you create or update a skill, you must sync `{{PACK_CONFIG_PATH}}`.
+### Sync skillpack.json
 
-Do not guess the metadata from memory. Instead:
-
-1. Read the final `SKILL.md`.
-2. Parse the YAML frontmatter.
-3. Extract:
-   - `name`
-   - `description`
-4. Upsert an entry into the `skills` array in `{{PACK_CONFIG_PATH}}`:
+After creating or updating a skill, sync `{{PACK_CONFIG_PATH}}`. Read the final `SKILL.md`, parse the YAML frontmatter, and upsert into the `skills` array:
 
 ```json
 {
@@ -114,40 +63,17 @@ Do not guess the metadata from memory. Instead:
 }
 ```
 
-Rules for this update:
-
-- `name` must come from `frontmatter.name`.
-- `description` must come from `frontmatter.description`.
-- `source` must be `./skills/<frontmatter.name>`.
-- If an entry for the same skill already exists, update it instead of creating a duplicate.
+All three fields must come from frontmatter — do not guess from memory. Update existing entries instead of creating duplicates.
 
 ### Writing guide
 
-Prefer imperative, clear instructions. Explain why important constraints exist. Avoid overly rigid language unless strict behavior is actually required.
-
-Useful structure:
-
-- purpose
-- trigger guidance
-- required inputs
-- step-by-step workflow
-- output format
-- edge cases
-
-If the skill supports multiple domains or frameworks, organize the references by variant and tell the model how to choose the right one.
+Prefer imperative instructions. Structure skills as: purpose, trigger guidance, required inputs, step-by-step workflow, output format, edge cases. For multi-domain skills, organize references by variant and tell the model how to choose.
 
 ## Test and iterate
 
-After drafting the skill, propose 2-3 realistic test prompts. The prompts should sound like something a real user would actually say.
+After drafting the skill, propose 2–3 realistic test prompts phrased as a real user would.
 
-If the user wants evaluation:
-
-- run the test prompts with the skill
-- compare the outputs against the user's expectations
-- note what worked and what failed
-- revise the skill
-
-If the user does not want a heavy evaluation loop, do at least a lightweight sanity check before calling the skill complete.
+If the user wants evaluation, run the prompts, compare outputs against expectations, note failures, and revise. Otherwise, do at least a lightweight sanity check before calling the skill complete.
 
 ## Improving an existing skill
 
