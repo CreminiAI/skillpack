@@ -13,99 +13,84 @@ Turn a successful task into a reusable SkillPack. Extract the stable workflow, d
 
 ### 1. Normalize the source task
 
-Start by reducing the finished task into a clean execution spec:
+Reduce the finished task into a clean execution spec:
 
-- Capture the user goal and the concrete deliverable.
-- Capture the final successful workflow, not the full exploratory transcript.
+- Capture the user goal, concrete deliverable, and the final successful workflow (not the full exploratory transcript).
 - List required skills, tools, files, secrets, and environment assumptions.
-- Separate deterministic steps from heuristic steps.
-- Remove dead ends, retries, and one-off debugging noise.
+- Separate deterministic steps from heuristic steps; remove dead ends and debugging noise.
+- If the task is still too broad, narrow the scope instead of writing a vague mega-skill. If key success conditions depend on hidden human judgment, mark the pack as a best-effort assistant workflow.
 
-If the prior work is still ambiguous, ask for the missing stable facts or infer only the pieces that are low risk.
+Ask for missing stable facts or infer only the low-risk pieces.
 
 ### 2. Decide what the pack should contain
 
-Use this split:
-
-- Put reusable procedural knowledge in a local skill under the target pack's `skills/`.
-- Put repeated shell or file-generation logic into scripts inside that local skill when reliability matters.
-- Put detailed schemas, API notes, or conventions into reference files.
-- Put 1 to 3 pack-level prompts in `skillpack.json` as the pack's user-facing entry points.
-
-Do not treat `prompts` as a strict workflow engine. In this codebase they are starter inputs for the UI, not a DAG or state machine. Read `references/skillpack-format.md` when you need the exact pack semantics.
+- **Local skill** (`skills/`): reusable procedural knowledge. Keep scripts minimal unless reproducibility depends on exact file generation or repetitive shell steps.
+- **Scripts** (`scripts/`): repeated shell or file-generation logic where reliability matters.
+- **References** (`references/`): detailed schemas, API notes, or conventions that should not bloat `SKILL.md`.
+- **Prompts** (`skillpack.json`): 1–3 pack-level starter inputs for the UI — not a DAG or state machine. See `references/skillpack-format.md` for exact pack semantics.
 
 ### 3. Create the pack specification
 
-Before writing files, define:
+Before writing files, define the pack spec. Prefer one local orchestrator skill plus a small number of external skills. Example minimal manifest:
 
-- Pack name
-- Pack description
-- Preset prompts
-- Skill list with `name`, `source`, and `description`
-- Which skill is the new local orchestrator skill
-- Expected output files and success criteria
-
-Prefer one local orchestrator skill plus a small number of external skills. Keep the pack narrow and job-focused.
+```json
+{
+  "name": "company-research",
+  "description": "Research a company and produce a summary report",
+  "version": "1.0.0",
+  "prompts": ["Research {company} and create a report with financials and competitors"],
+  "skills": [
+    { "name": "research-orchestrator", "source": "./skills/research-orchestrator", "description": "Orchestrate company research across multiple sources" }
+  ]
+}
+```
 
 ### 4. Create the local orchestrator skill
 
-In the target pack:
+Create `skills/<skill-name>/SKILL.md` with frontmatter and imperative workflow instructions:
 
-- Create `skills/<skill-name>/SKILL.md`.
-- Write frontmatter that clearly describes what the local skill does and when it should trigger.
-- Move the stable workflow into imperative instructions.
-- Add `scripts/` only for fragile or repeated operations.
-- Add `references/` only for detailed information that should not bloat `SKILL.md`.
+```yaml
+---
+name: research-orchestrator
+description: "Orchestrate multi-source company research. Use when the user wants a structured company report covering financials, competitors, and market position."
+---
+```
 
-If the workflow is mostly instructions, keep the local skill simple. If reproducibility depends on exact file generation, add scripts.
+- Write the stable workflow as imperative steps in the body.
+- Add `scripts/` only for fragile or repeated operations; add `references/` only for detailed information.
 
 ### 5. Materialize the pack
 
-Use `scripts/scaffold_skillpack.py` in this skill when you already know the pack spec. It will:
-
-- validate a JSON manifest shaped like `skillpack.json`
-- write `skillpack.json`
-- create `skills/`
-- copy `start.sh` and `start.bat` from this repository's `templates/`
-- optionally run `npx -y @cremini/skillpack zip`
-
-Typical usage:
+Use `scripts/scaffold_skillpack.py` when you have the pack spec:
 
 ```bash
+# Basic
 python3 skills/skillpack-creator/scripts/scaffold_skillpack.py \
   --manifest /tmp/skillpack.json \
   --output /absolute/path/to/output-pack
-```
 
-With zip generation:
-
-```bash
+# With zip
 python3 skills/skillpack-creator/scripts/scaffold_skillpack.py \
   --manifest /tmp/skillpack.json \
   --output /absolute/path/to/output-pack \
   --zip
 ```
 
+The script validates the manifest, writes `skillpack.json`, creates `skills/`, copies `start.sh`/`start.bat` from `templates/`, and optionally runs `npx -y @cremini/skillpack zip`.
+
 ### 6. Validate the result
 
-Before handing the pack back:
+Before handing the pack back, confirm:
 
-- Confirm the manifest matches the intended pack scope.
-- Confirm every declared skill has a valid `name`, `source`, and `description`.
-- Confirm local skills are present under the target pack's `skills/`.
-- Confirm the starter prompts are concrete enough to reproduce the workflow.
-- Zip only after the pack can already run as a directory.
-
-## Decision Rules
-
-- If the reusable value is mostly workflow knowledge, create a local skill and keep scripts minimal.
-- If the task depends on exact file emission or repetitive shell steps, script those parts.
-- If the task is still too broad, split it into a narrower pack instead of writing a vague mega-skill.
-- If key success conditions depend on hidden human judgment, state that the pack is a best-effort assistant workflow, not a deterministic pipeline.
+- The manifest matches the intended pack scope
+- Every declared skill has a valid `name`, `source`, and `description`
+- Local skills are present under the target pack's `skills/`
+- Starter prompts are concrete enough to reproduce the workflow
+- Zip only after the pack runs as a directory
 
 ## Output Standard
 
-When you use this skill, produce:
+Produce:
 
 1. A short summary of the stabilized workflow.
 2. The target pack structure and skill inventory.
