@@ -4,12 +4,15 @@ import { createCommand } from "./commands/create.js";
 import { runCommand } from "./commands/run.js";
 import { zipCommand } from "./commands/zip.js";
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const packageJson = JSON.parse(
   fs.readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
 ) as { version: string };
 
 const program = new Command();
+const cliFilePath = path.resolve(fileURLToPath(import.meta.url));
 
 program
   .name("skillpack")
@@ -50,4 +53,16 @@ program
     }
   });
 
-program.parse();
+function normalizeUserArgs(argv: string[]): string[] {
+  if (argv.length === 0) return argv;
+
+  // In some Electron fork setups, cli path is injected into user args.
+  // Strip the duplicated CLI path so commander sees the real command first.
+  const firstArg = argv[0];
+  if (firstArg && path.resolve(firstArg) === cliFilePath) {
+    return argv.slice(1);
+  }
+  return argv;
+}
+
+program.parse(normalizeUserArgs(process.argv.slice(2)), { from: "user" });

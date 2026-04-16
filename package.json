@@ -29,6 +29,7 @@
     "dev": "tsup --watch",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
+    "prepare": "npm run build",
     "create": "tsup && node dist/cli.js create",
     "run": "tsup && node dist/cli.js run",
     "zip": "tsup && node dist/cli.js zip"

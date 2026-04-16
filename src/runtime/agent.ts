@@ -692,4 +692,8 @@ export class PackAgent implements IPackAgent {
   async restoreSession(_sessionId: string): Promise<void> {
     // TODO: Implement session restoration
   }
+
+  getActiveChannelIds(): string[] {
+    return Array.from(this.channels.keys());
+  }
 }
