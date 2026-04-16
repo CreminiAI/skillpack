@@ -7,7 +7,7 @@ set "FIRST_RUN=1"
 :loop
 set "SKILLPACK_FIRST_RUN=%FIRST_RUN%"
 set "PACK_ROOT=%~dp0"
-npx -y @cremini/skillpack run .
+npx -y @cremini/skillpack@latest run .
 set "EXIT_CODE=%errorlevel%"
 
 set "FIRST_RUN=0"

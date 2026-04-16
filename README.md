@@ -126,6 +126,10 @@ The main use case is to **run local agents on your computer and integrate them w
 
 Download [Company Deep Research](https://github.com/FinpeakInc/downloads/releases/download/v.0.0.1/Company-Deep-Research.zip) and try it! More examples can be found at [skillpack.sh](https://skillpack.sh)
 
+## Questions?
+
+Join our Discord at https://discord.gg/nj8Br4ePJc
+
 ## License
 
 MIT

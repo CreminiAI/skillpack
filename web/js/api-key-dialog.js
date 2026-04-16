@@ -16,6 +16,10 @@ let providerSelect;
 let apiKeyInput;
 let baseUrlInput;
 let baseUrlGroup;
+let modelIdInput;
+let modelIdGroup;
+let protocolSelect;
+let protocolGroup;
 let apikeySection;
 let oauthSection;
 let oauthLoginBtn;
@@ -36,6 +40,10 @@ export function initApiKeyDialog() {
   apiKeyInput = document.getElementById("apikey-input");
   baseUrlInput = document.getElementById("apikey-baseurl-input");
   baseUrlGroup = document.getElementById("apikey-baseurl-group");
+  modelIdInput = document.getElementById("apikey-modelid-input");
+  modelIdGroup = document.getElementById("apikey-modelid-group");
+  protocolSelect = document.getElementById("apikey-protocol-select");
+  protocolGroup = document.getElementById("apikey-protocol-group");
   apikeySection = document.getElementById("apikey-apikey-section");
   oauthSection = document.getElementById("apikey-oauth-section");
   oauthLoginBtn = document.getElementById("oauth-login-btn");
@@ -66,6 +74,9 @@ export function initApiKeyDialog() {
   }
   if (oauthLogoutBtn) {
     oauthLogoutBtn.addEventListener("click", handleOAuthLogout);
+  }
+  if (baseUrlInput) {
+    baseUrlInput.addEventListener("input", updateModelIdVisibility);
   }
 }
 
@@ -126,6 +137,12 @@ function populateForm() {
   if (baseUrlInput) {
     baseUrlInput.value = config.baseUrl || "";
   }
+  if (modelIdInput) {
+    modelIdInput.value = config.modelId || "";
+  }
+  if (protocolSelect) {
+    protocolSelect.value = config.apiProtocol || "openai-completions";
+  }
 
   // OAuth Status
   if (config.oauthConnected) {
@@ -163,6 +180,9 @@ function updateProviderUI() {
       baseUrlInput.placeholder =
         meta.baseUrlPlaceholder || "https://api.openai.com/v1";
     }
+
+    // Show model name field only when a custom base URL is filled in
+    updateModelIdVisibility();
     
     // Update placeholder
     if (apiKeyInput) {
@@ -171,10 +191,21 @@ function updateProviderUI() {
   }
 }
 
+function updateModelIdVisibility() {
+  if (!modelIdGroup) return;
+  const hasCustomUrl = baseUrlInput && baseUrlInput.value.trim().length > 0;
+  modelIdGroup.style.display = hasCustomUrl ? "" : "none";
+  if (protocolGroup) {
+    protocolGroup.style.display = hasCustomUrl ? "" : "none";
+  }
+}
+
 async function handleSave() {
   const key = apiKeyInput.value.trim();
   const provider = providerSelect.value;
   const baseUrl = baseUrlInput.value.trim();
+  const modelId = modelIdInput ? modelIdInput.value.trim() : "";
+  const apiProtocol = protocolSelect ? protocolSelect.value : "";
 
   // If OAuth is selected, we don't handle it here but it shouldn't happen as save button is hidden
   const meta = state.config?.supportedProviders?.[provider];
@@ -183,6 +214,15 @@ async function handleSave() {
   const updates = { provider };
   if (baseUrl !== state.config.baseUrl) {
     updates.baseUrl = baseUrl;
+  }
+  if (modelId !== (state.config.modelId || "")) {
+    updates.modelId = modelId;
+  }
+  const hasCustomUrl = baseUrl.length > 0;
+  if (hasCustomUrl && apiProtocol !== (state.config.apiProtocol || "openai-completions")) {
+    updates.apiProtocol = apiProtocol;
+  } else if (!hasCustomUrl && state.config.apiProtocol) {
+    updates.apiProtocol = "";
   }
   
   if (key && key !== "***************************************************" && key !== state.config.apiKey) {
@@ -195,6 +235,8 @@ async function handleSave() {
 
     state.config.provider = res.provider;
     state.config.baseUrl = res.baseUrl || "";
+    state.config.modelId = res.modelId || "";
+    state.config.apiProtocol = res.apiProtocol || "";
     if (updates.key) {
       state.config.hasApiKey = true;
       state.config.apiKey = updates.key;

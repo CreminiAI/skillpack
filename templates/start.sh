@@ -7,7 +7,7 @@ FIRST_RUN=1
 while true; do
   SKILLPACK_FIRST_RUN="$FIRST_RUN" \
   PACK_ROOT="$(pwd)" \
-    npx -y @cremini/skillpack run .
+    npx -y @cremini/skillpack@latest run .
   EXIT_CODE=$?
 
   FIRST_RUN=0
