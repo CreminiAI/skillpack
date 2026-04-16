@@ -13,6 +13,7 @@ import { isMessageSender } from "./types.js";
 
 type IpcRequest =
   | { id: string; type: "get_conversations" }
+  | { id: string; type: "create_conversation" }
   | { id: string; type: "get_messages"; channelId: string; limit?: number }
   | { id: string; type: "send_message"; channelId: string; text: string }
   | { id: string; type: "command"; command: BotCommand; channelId: string }
@@ -30,6 +31,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
   private rootDir = "";
   private adapterMap: Map<string, PlatformAdapter> | null = null;
   private conversationService: ConversationService | null = null;
+  private readonly createdChannels = new Set<string>();
   private messageListener?: (message: unknown) => void;
   private started = false;
 
@@ -113,8 +115,18 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
       switch (request.type) {
         case "get_conversations": {
           const activeChannels = new Set(this.agent.getActiveChannelIds());
+          for (const channelId of this.createdChannels) {
+            activeChannels.add(channelId);
+          }
           const conversations = this.conversationService.listConversations(activeChannels);
           this.reply(request.id, conversations);
+          return;
+        }
+
+        case "create_conversation": {
+          const channelId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          this.createdChannels.add(channelId);
+          this.reply(request.id, { channelId });
           return;
         }
 
@@ -142,6 +154,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           }
 
           const platform = this.detectPlatform(request.channelId);
+          this.createdChannels.add(request.channelId);
           let fullText = "";
 
           const result = await this.agent.handleMessage(
