@@ -6,6 +6,8 @@ import {
   type SessionMessageEntry,
 } from "@mariozechner/pi-coding-agent";
 
+export const DEFAULT_WEB_CHANNEL_ID = "web";
+
 export interface ConversationSummary {
   channelId: string;
   platform: "telegram" | "slack" | "web" | "scheduler";
@@ -23,23 +25,55 @@ export interface ConversationMessage {
   toolCalls?: Array<{ name: string; isError: boolean }>;
 }
 
+export interface ListConversationOptions {
+  includeDefaultWeb?: boolean;
+  includeLegacyWeb?: boolean;
+  allowedPlatforms?: Array<ConversationSummary["platform"]>;
+}
+
 export class ConversationService {
   constructor(private readonly rootDir: string) {}
 
   /**
    * Scan data/sessions and return conversation summaries sorted by recency.
    */
-  listConversations(activeChannels: Set<string>): ConversationSummary[] {
+  listConversations(
+    activeChannels: Set<string>,
+    options: ListConversationOptions = {},
+  ): ConversationSummary[] {
+    const {
+      includeDefaultWeb = false,
+      includeLegacyWeb = true,
+      allowedPlatforms,
+    } = options;
     const sessionsDir = path.resolve(this.rootDir, "data", "sessions");
     const channelIds = new Set<string>(activeChannels);
+    const allowedPlatformSet = allowedPlatforms
+      ? new Set<ConversationSummary["platform"]>(allowedPlatforms)
+      : null;
+
+    if (includeDefaultWeb) {
+      channelIds.add(DEFAULT_WEB_CHANNEL_ID);
+    }
 
     if (fs.existsSync(sessionsDir)) {
       for (const entry of fs.readdirSync(sessionsDir)) {
         const channelDir = path.join(sessionsDir, entry);
         try {
-          if (fs.statSync(channelDir).isDirectory()) {
-            channelIds.add(entry);
+          if (!fs.statSync(channelDir).isDirectory()) {
+            continue;
           }
+
+          const platform = this.detectPlatform(entry);
+          if (allowedPlatformSet && !allowedPlatformSet.has(platform)) {
+            continue;
+          }
+
+          if (!includeLegacyWeb && this.isLegacyWebConversation(entry)) {
+            continue;
+          }
+
+          channelIds.add(entry);
         } catch {
           // Ignore broken entries and continue.
         }
@@ -48,6 +82,14 @@ export class ConversationService {
 
     const results: ConversationSummary[] = [];
     for (const channelId of channelIds) {
+      const platform = this.detectPlatform(channelId);
+      if (allowedPlatformSet && !allowedPlatformSet.has(platform)) {
+        continue;
+      }
+      if (!includeLegacyWeb && this.isLegacyWebConversation(channelId)) {
+        continue;
+      }
+
       const channelDir = path.join(sessionsDir, channelId);
       const sessionFile = this.findLatestSessionFile(channelDir);
 
@@ -71,7 +113,7 @@ export class ConversationService {
 
       results.push({
         channelId,
-        platform: this.detectPlatform(channelId),
+        platform,
         sessionFile,
         messageCount,
         lastMessageAt,
@@ -80,6 +122,13 @@ export class ConversationService {
     }
 
     return results.sort((a, b) => {
+      if (a.channelId === DEFAULT_WEB_CHANNEL_ID && b.channelId !== DEFAULT_WEB_CHANNEL_ID) {
+        return -1;
+      }
+      if (b.channelId === DEFAULT_WEB_CHANNEL_ID && a.channelId !== DEFAULT_WEB_CHANNEL_ID) {
+        return 1;
+      }
+
       const recency = (b.lastMessageAt || "").localeCompare(a.lastMessageAt || "");
       if (recency !== 0) return recency;
       return a.channelId.localeCompare(b.channelId);
@@ -203,5 +252,9 @@ export class ConversationService {
     if (channelId.startsWith("slack-")) return "slack";
     if (channelId.startsWith("scheduler-")) return "scheduler";
     return "web";
+  }
+
+  private isLegacyWebConversation(channelId: string): boolean {
+    return channelId.startsWith("web-");
   }
 }

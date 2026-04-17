@@ -1,10 +1,17 @@
 import { state } from "./config.js";
+import {
+  createConversation,
+  getConversationMessages,
+  listConversations,
+} from "./api.js";
 
 export const chatHistory = [];
+const DEFAULT_WEB_CHANNEL_ID = "web";
 let ws = null;
 let currentAssistantMsg = null;
+let currentChannelId = DEFAULT_WEB_CHANNEL_ID;
 
-export function initChat() {
+export async function initChat() {
   // Send button
   document.getElementById("send-btn").addEventListener("click", sendMessage);
 
@@ -39,6 +46,8 @@ export function initChat() {
       }
     });
   }
+
+  await initializeConversation();
 }
 
 export function showWelcome(config) {
@@ -192,8 +201,11 @@ async function getOrCreateWs() {
   return new Promise((resolve, reject) => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const provider = state.config && state.config.provider ? state.config.provider : "openai";
-
-    const wsUrl = `${protocol}//${window.location.host}${state.API_BASE}/api/chat?provider=${provider}`;
+    const params = new URLSearchParams({
+      provider,
+      channelId: currentChannelId || DEFAULT_WEB_CHANNEL_ID,
+    });
+    const wsUrl = `${protocol}//${window.location.host}${state.API_BASE}/api/chat?${params.toString()}`;
 
     ws = new WebSocket(wsUrl);
 
@@ -223,6 +235,47 @@ async function getOrCreateWs() {
       enableInput();
     };
   });
+}
+
+async function initializeConversation() {
+  const channelId = await ensureConversation();
+  currentChannelId = channelId;
+  await loadConversationHistory(channelId);
+}
+
+async function ensureConversation() {
+  const conversations = await listConversations();
+  const existing = conversations.find(
+    (conversation) => conversation.channelId === DEFAULT_WEB_CHANNEL_ID,
+  );
+  if (existing) {
+    return existing.channelId;
+  }
+
+  const created = await createConversation();
+  return created.channelId || DEFAULT_WEB_CHANNEL_ID;
+}
+
+async function loadConversationHistory(channelId) {
+  const messages = await getConversationMessages(channelId, 200);
+  const messagesEl = document.getElementById("messages");
+  const chatArea = document.getElementById("chat-area");
+
+  messagesEl.innerHTML = "";
+  chatHistory.length = 0;
+
+  for (const message of messages) {
+    appendMessage(message.role, message.text);
+    chatHistory.push({ role: message.role, content: message.text });
+  }
+
+  if (messages.length > 0) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
+  } else {
+    chatArea.classList.remove("mode-chat");
+    chatArea.classList.add("mode-welcome");
+  }
 }
 
 function handleError(errorMsg) {

@@ -4,6 +4,10 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { configManager, SUPPORTED_PROVIDERS } from "../config.js";
 import type { DataConfig } from "../config.js";
 import { resolveCommand } from "../commands/index.js";
+import {
+  ConversationService,
+  DEFAULT_WEB_CHANNEL_ID,
+} from "../services/conversation.js";
 
 import type {
   PlatformAdapter,
@@ -62,11 +66,13 @@ export class WebAdapter implements PlatformAdapter {
   private wss: WebSocketServer | null = null;
   private agent: IPackAgent | null = null;
   private ipcBroadcaster: IpcBroadcaster | null = null;
+  private conversationService: ConversationService | null = null;
 
   async start(ctx: AdapterContext): Promise<void> {
     const { agent, server, app, rootDir, lifecycle } = ctx;
     this.agent = agent;
     this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
+    this.conversationService = new ConversationService(rootDir);
     const resultsQueryService = ctx.resultsQueryService ?? null;
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
@@ -221,16 +227,37 @@ export class WebAdapter implements PlatformAdapter {
       res.json({ success: true });
     });
 
-    // -- Reserved: session history endpoints (stub) -------------------------
+    // -- Conversation API ---------------------------------------------------
 
-    app.get("/api/sessions", (_req, res) => {
-      const sessions = agent.listSessions();
-      res.json(sessions);
+    const getWebConversations = () => {
+      const activeChannels = new Set(agent.getActiveChannelIds());
+      return this.conversationService!.listConversations(activeChannels, {
+        includeDefaultWeb: true,
+        includeLegacyWeb: false,
+        allowedPlatforms: ["web"],
+      });
+    };
+
+    app.get("/api/conversations", (_req, res) => {
+      res.json(getWebConversations());
     });
 
-    app.get("/api/sessions/:id", (_req, res) => {
-      // TODO: restore session by id
-      res.status(501).json({ error: "Not implemented yet" });
+    app.post("/api/conversations", (_req, res) => {
+      res.json({ channelId: DEFAULT_WEB_CHANNEL_ID });
+    });
+
+    app.get("/api/conversations/:channelId/messages", (req, res) => {
+      if (req.params.channelId !== DEFAULT_WEB_CHANNEL_ID) {
+        res.status(404).json({ error: "Conversation not found" });
+        return;
+      }
+
+      res.json(
+        this.conversationService!.getMessages(
+          req.params.channelId,
+          parsePositiveInt(req.query.limit, 100),
+        ),
+      );
     });
 
     // -- Persisted results API ----------------------------------------------
@@ -413,8 +440,11 @@ export class WebAdapter implements PlatformAdapter {
         return;
       }
 
-      // Each WebSocket connection maps to a unique channel
-      const channelId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const requestedChannelId = url.searchParams.get("channelId");
+      const channelId =
+        requestedChannelId && requestedChannelId === DEFAULT_WEB_CHANNEL_ID
+          ? requestedChannelId
+          : DEFAULT_WEB_CHANNEL_ID;
 
       this.handleWsConnection(ws, channelId, agent);
     });
@@ -487,7 +517,9 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     ws.on("close", () => {
-      agent.dispose(channelId);
+      if (channelId !== DEFAULT_WEB_CHANNEL_ID) {
+        agent.dispose(channelId);
+      }
     });
   }
 }

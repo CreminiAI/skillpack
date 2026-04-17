@@ -1,6 +1,9 @@
 import { configManager, type DataConfig, type ScheduledJobConfig } from "../config.js";
 import type { ResultsQueryService } from "../artifacts/index.js";
-import { ConversationService } from "../services/conversation.js";
+import {
+  ConversationService,
+  DEFAULT_WEB_CHANNEL_ID,
+} from "../services/conversation.js";
 import type { SchedulerAdapter } from "./scheduler.js";
 import type {
   AdapterContext,
@@ -124,13 +127,16 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           for (const channelId of this.createdChannels) {
             activeChannels.add(channelId);
           }
-          const conversations = this.conversationService.listConversations(activeChannels);
+          const conversations = this.conversationService.listConversations(activeChannels, {
+            includeDefaultWeb: true,
+            includeLegacyWeb: false,
+          });
           this.reply(request.id, conversations);
           return;
         }
 
         case "create_conversation": {
-          const channelId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const channelId = DEFAULT_WEB_CHANNEL_ID;
           this.createdChannels.add(channelId);
           this.reply(request.id, { channelId });
           return;

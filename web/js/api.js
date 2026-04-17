@@ -23,3 +23,33 @@ export async function restartRuntime() {
   }
   return payload;
 }
+
+export async function listConversations() {
+  const res = await fetch(state.API_BASE + "/api/conversations");
+  if (!res.ok) {
+    throw new Error("Load Conversations Failed");
+  }
+  return await res.json();
+}
+
+export async function createConversation() {
+  const res = await fetch(state.API_BASE + "/api/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error("Create Conversation Failed");
+  }
+  return await res.json();
+}
+
+export async function getConversationMessages(channelId, limit = 200) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const res = await fetch(
+    state.API_BASE + `/api/conversations/${encodeURIComponent(channelId)}/messages?${params.toString()}`,
+  );
+  if (!res.ok) {
+    throw new Error("Load Conversation Messages Failed");
+  }
+  return await res.json();
+}
