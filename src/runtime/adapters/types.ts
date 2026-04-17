@@ -1,5 +1,10 @@
 import type { Server } from "node:http";
 import type { Express } from "express";
+import type {
+  ArtifactSnapshotService,
+  ResultStore,
+  ResultsQueryService,
+} from "../artifacts/index.js";
 
 // ---------------------------------------------------------------------------
 // Bot Commands
@@ -95,6 +100,8 @@ export interface PackAgentOptions {
   baseUrl?: string;
   apiProtocol?: "openai-responses" | "openai-completions";
   lifecycleHandler: LifecycleHandler;
+  resultStore: ResultStore;
+  artifactSnapshotService: ArtifactSnapshotService;
 }
 
 /**
@@ -200,6 +207,8 @@ export interface AdapterContext {
   adapterMap?: Map<string, PlatformAdapter>;
   /** IPC broadcaster (desktop mode only) */
   ipcBroadcaster?: IpcBroadcaster;
+  /** Read-only query service for persisted run and artifact results */
+  resultsQueryService?: ResultsQueryService;
 }
 
 export interface PlatformAdapter {

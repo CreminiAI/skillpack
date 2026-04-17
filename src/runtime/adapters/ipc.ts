@@ -1,4 +1,5 @@
 import { configManager, type DataConfig, type ScheduledJobConfig } from "../config.js";
+import type { ResultsQueryService } from "../artifacts/index.js";
 import { ConversationService } from "../services/conversation.js";
 import type { SchedulerAdapter } from "./scheduler.js";
 import type {
@@ -15,6 +16,9 @@ type IpcRequest =
   | { id: string; type: "get_conversations" }
   | { id: string; type: "create_conversation" }
   | { id: string; type: "get_messages"; channelId: string; limit?: number }
+  | { id: string; type: "get_result_runs"; channelId?: string; limit?: number }
+  | { id: string; type: "get_run_artifacts"; runId: string }
+  | { id: string; type: "get_recent_artifacts"; channelId?: string; limit?: number }
   | { id: string; type: "send_message"; channelId: string; text: string }
   | { id: string; type: "command"; command: BotCommand; channelId: string }
   | { id: string; type: "get_config" }
@@ -31,6 +35,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
   private rootDir = "";
   private adapterMap: Map<string, PlatformAdapter> | null = null;
   private conversationService: ConversationService | null = null;
+  private resultsQueryService: ResultsQueryService | null = null;
   private readonly createdChannels = new Set<string>();
   private messageListener?: (message: unknown) => void;
   private started = false;
@@ -45,6 +50,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
     this.rootDir = ctx.rootDir;
     this.adapterMap = ctx.adapterMap ?? null;
     this.conversationService = new ConversationService(ctx.rootDir);
+    this.resultsQueryService = ctx.resultsQueryService ?? null;
 
     this.messageListener = (message: unknown) => {
       if (!this.isIpcRequest(message)) return;
@@ -140,6 +146,43 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             request.limit ?? 100,
           );
           this.reply(request.id, messages);
+          return;
+        }
+
+        case "get_result_runs": {
+          if (!this.resultsQueryService) {
+            this.replyError(request.id, "Results query service is not available");
+            return;
+          }
+          this.reply(request.id, this.resultsQueryService.listRecentRuns({
+            channelId: request.channelId,
+            limit: request.limit,
+          }));
+          return;
+        }
+
+        case "get_run_artifacts": {
+          if (!this.resultsQueryService) {
+            this.replyError(request.id, "Results query service is not available");
+            return;
+          }
+          if (!request.runId || typeof request.runId !== "string") {
+            this.replyError(request.id, "runId is required");
+            return;
+          }
+          this.reply(request.id, this.resultsQueryService.getRunArtifacts(request.runId));
+          return;
+        }
+
+        case "get_recent_artifacts": {
+          if (!this.resultsQueryService) {
+            this.replyError(request.id, "Results query service is not available");
+            return;
+          }
+          this.reply(request.id, this.resultsQueryService.listRecentArtifacts({
+            channelId: request.channelId,
+            limit: request.limit,
+          }));
           return;
         }
 

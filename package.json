@@ -43,11 +43,12 @@
   "author": "CreminiAI",
   "license": "MIT",
   "dependencies": {
-    "@sinclair/typebox": "^0.34.41",
     "@mariozechner/pi-coding-agent": "^0.57.1",
+    "@sinclair/typebox": "^0.34.41",
     "@slack/bolt": "^4.6.0",
     "ajv": "^8.17.1",
     "archiver": "^7.0.1",
+    "better-sqlite3": "^11.10.0",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
     "express": "^5.1.0",
@@ -58,6 +59,7 @@
   },
   "devDependencies": {
     "@types/archiver": "^7.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.0",
     "@types/inquirer": "^9.0.9",
     "@types/node": "^25.5.0",

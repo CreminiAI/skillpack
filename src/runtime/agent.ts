@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
@@ -17,6 +18,13 @@ import {
   attachmentsToImageContent,
   isImageMime,
 } from "./adapters/attachment-utils.js";
+import {
+  ArtifactSnapshotService,
+  createSetFinalArtifactsTool,
+  type FinalArtifactsCollector,
+  ResultStore,
+  RunArtifactCoordinator,
+} from "./artifacts/index.js";
 import {
   createSendFileTool,
   type FileOutputCallback,
@@ -242,6 +250,19 @@ function getAssistantDiagnostics(message: any): AssistantDiagnostics | null {
   return { stopReason, errorMessage, hasText: text.length > 0, toolCalls };
 }
 
+function extractAssistantText(message: any): string {
+  if (!message || message.role !== "assistant") {
+    return "";
+  }
+
+  const content = Array.isArray(message.content) ? message.content : [];
+  return content
+    .filter((item: any) => item?.type === "text")
+    .map((item: any) => item.text || "")
+    .join("")
+    .trim();
+}
+
 function getLifecycleTrigger(channelId: string): LifecycleTrigger {
   if (channelId.startsWith("telegram-")) return "telegram";
   if (channelId.startsWith("slack-")) return "slack";
@@ -256,6 +277,8 @@ interface ChannelSession {
   session: any; // AgentSession from pi-coding-agent
   running: boolean;
   pending: Promise<void>;
+  fileOutputCallbackRef: { current: FileOutputCallback | null };
+  finalArtifactsCollectorRef: { current: FinalArtifactsCollector | null };
 }
 
 // ---------------------------------------------------------------------------
@@ -266,14 +289,15 @@ export class PackAgent implements IPackAgent {
   private options: PackAgentOptions;
   private channels = new Map<string, ChannelSession>();
   private pendingSessionCreations = new Map<string, Promise<ChannelSession>>();
-  private fileOutputCallbackRef: { current: FileOutputCallback | null } = {
-    current: null,
-  };
   private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
   private authStorage: AuthStorage;
+  private readonly resultStore: ResultStore;
+  private readonly artifactSnapshotService: ArtifactSnapshotService;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
+    this.resultStore = options.resultStore;
+    this.artifactSnapshotService = options.artifactSnapshotService;
 
     // Use ConfigFileAuthBackend to persist OAuth credentials in config.json._auth
     const configPath = path.resolve(options.rootDir, "data", "config.json");
@@ -310,12 +334,40 @@ export class PackAgent implements IPackAgent {
     this.schedulerRef.current = scheduler;
   }
 
-  private createCustomTools(adapter: "telegram" | "slack" | "web" | "scheduler", channelId: string) {
-    const tools = [createSendFileTool(this.fileOutputCallbackRef) as any];
+  private createCustomTools(
+    adapter: "telegram" | "slack" | "web" | "scheduler",
+    channelId: string,
+    fileOutputCallbackRef: { current: FileOutputCallback | null },
+    finalArtifactsCollectorRef: { current: FinalArtifactsCollector | null },
+  ) {
+    const tools = [
+      createSendFileTool(fileOutputCallbackRef) as any,
+      createSetFinalArtifactsTool(this.options.rootDir, finalArtifactsCollectorRef) as any,
+    ];
     if (adapter === "telegram" || adapter === "slack") {
       tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
     }
     return tools;
+  }
+
+  private getRunFailureStatus(stopReason: string | undefined): "error" | "aborted" {
+    return stopReason === "aborted" ? "aborted" : "error";
+  }
+
+  private persistFailedRun(
+    runId: string,
+    coordinator: RunArtifactCoordinator,
+    stopReason: string | undefined,
+    errorMessage: string | undefined,
+  ): void {
+    this.resultStore.failRun({
+      runId,
+      assistantText: coordinator.getAssistantText(),
+      status: this.getRunFailureStatus(stopReason),
+      stopReason: stopReason ?? null,
+      errorMessage: errorMessage ?? null,
+      completedAt: new Date().toISOString(),
+    });
   }
 
   /**
@@ -428,7 +480,20 @@ export class PackAgent implements IPackAgent {
       await resourceLoader.reload();
 
       const tools = createCodingTools(workspaceDir);
-      const customTools = this.createCustomTools(adapter, channelId);
+      const fileOutputCallbackRef: { current: FileOutputCallback | null } = {
+        current: null,
+      };
+      const finalArtifactsCollectorRef: {
+        current: FinalArtifactsCollector | null;
+      } = {
+        current: null,
+      };
+      const customTools = this.createCustomTools(
+        adapter,
+        channelId,
+        fileOutputCallbackRef,
+        finalArtifactsCollectorRef,
+      );
 
       const { session } = await createAgentSession({
         cwd: workspaceDir,
@@ -445,6 +510,8 @@ export class PackAgent implements IPackAgent {
         session,
         running: false,
         pending: Promise.resolve(),
+        fileOutputCallbackRef,
+        finalArtifactsCollectorRef,
       };
       this.channels.set(channelId, channelSession);
       return channelSession;
@@ -471,94 +538,114 @@ export class PackAgent implements IPackAgent {
       cs.running = true;
 
       let turnHadVisibleOutput = false;
-
-      // Wire up file output callback for this run
-      this.fileOutputCallbackRef.current = (event) => {
-        onEvent(event);
-      };
-
-      // Subscribe to agent events and forward to adapter
-      const unsubscribe = cs.session.subscribe((event: any) => {
-        switch (event.type) {
-          case "agent_start":
-            log("\n=== [AGENT SESSION START] ===");
-            log("System Prompt:\n", cs.session.systemPrompt);
-            log("============================\n");
-            onEvent({ type: "agent_start" });
-            break;
-
-          case "message_start":
-            log(`\n--- [Message Start: ${event.message?.role}] ---`);
-            if (event.message?.role === "user") {
-              log(JSON.stringify(event.message.content, null, 2));
-            }
-            onEvent({ type: "message_start", role: event.message?.role ?? "" });
-            break;
-
-          case "message_update":
-            if (event.assistantMessageEvent?.type === "text_delta") {
-              turnHadVisibleOutput = true;
-              write(event.assistantMessageEvent.delta);
-              onEvent({
-                type: "text_delta",
-                delta: event.assistantMessageEvent.delta,
-              });
-            } else if (event.assistantMessageEvent?.type === "thinking_delta") {
-              turnHadVisibleOutput = true;
-              onEvent({
-                type: "thinking_delta",
-                delta: event.assistantMessageEvent.delta,
-              });
-            }
-            break;
-
-          case "message_end":
-            log(`\n--- [Message End: ${event.message?.role}] ---`);
-            if (event.message?.role === "assistant") {
-              const diagnostics = getAssistantDiagnostics(event.message);
-              if (diagnostics) {
-                log(
-                  `[Assistant Diagnostics] stopReason=${diagnostics.stopReason} text=${diagnostics.hasText ? "yes" : "no"} toolCalls=${diagnostics.toolCalls}`,
-                );
-                if (diagnostics.errorMessage) {
-                  log(`[Assistant Error] ${diagnostics.errorMessage}`);
-                }
-              }
-            }
-            onEvent({ type: "message_end", role: event.message?.role ?? "" });
-            break;
-
-          case "tool_execution_start":
-            turnHadVisibleOutput = true;
-            log(`\n>>> [Tool Start: ${event.toolName}] >>>`);
-            log("Args:", JSON.stringify(event.args, null, 2));
-            onEvent({
-              type: "tool_start",
-              toolName: event.toolName,
-              toolInput: event.args,
-            });
-            break;
-
-          case "tool_execution_end":
-            turnHadVisibleOutput = true;
-            log(`<<< [Tool End: ${event.toolName}] <<<`);
-            log(`Error: ${event.isError ? "Yes" : "No"}`);
-            onEvent({
-              type: "tool_end",
-              toolName: event.toolName,
-              isError: event.isError,
-              result: event.result,
-            });
-            break;
-
-          case "agent_end":
-            log("\n=== [AGENT SESSION END] ===\n");
-            onEvent({ type: "agent_end" });
-            break;
-        }
-      });
+      const runId = randomUUID();
+      const coordinator = new RunArtifactCoordinator();
+      const startedAt = new Date().toISOString();
+      let unsubscribe = () => undefined;
 
       try {
+        this.resultStore.createRun({
+          runId,
+          channelId,
+          userText: text,
+          startedAt,
+        });
+
+        // Wire up file output callback for this run
+        cs.fileOutputCallbackRef.current = (event) => {
+          onEvent(event);
+        };
+        cs.finalArtifactsCollectorRef.current = {
+          addArtifacts: (artifacts) => {
+            coordinator.addDeclaration(artifacts);
+          },
+          markInvalid: () => {
+            coordinator.markArtifactDeclarationInvalid();
+          },
+        };
+
+        // Subscribe to agent events and forward to adapter
+        unsubscribe = cs.session.subscribe((event: any) => {
+          switch (event.type) {
+            case "agent_start":
+              log("\n=== [AGENT SESSION START] ===");
+              log("System Prompt:\n", cs.session.systemPrompt);
+              log("============================\n");
+              onEvent({ type: "agent_start" });
+              break;
+
+            case "message_start":
+              log(`\n--- [Message Start: ${event.message?.role}] ---`);
+              if (event.message?.role === "user") {
+                log(JSON.stringify(event.message.content, null, 2));
+              }
+              onEvent({ type: "message_start", role: event.message?.role ?? "" });
+              break;
+
+            case "message_update":
+              if (event.assistantMessageEvent?.type === "text_delta") {
+                turnHadVisibleOutput = true;
+                write(event.assistantMessageEvent.delta);
+                coordinator.appendAssistantDelta(event.assistantMessageEvent.delta);
+                onEvent({
+                  type: "text_delta",
+                  delta: event.assistantMessageEvent.delta,
+                });
+              } else if (event.assistantMessageEvent?.type === "thinking_delta") {
+                turnHadVisibleOutput = true;
+                onEvent({
+                  type: "thinking_delta",
+                  delta: event.assistantMessageEvent.delta,
+                });
+              }
+              break;
+
+            case "message_end":
+              log(`\n--- [Message End: ${event.message?.role}] ---`);
+              if (event.message?.role === "assistant") {
+                const diagnostics = getAssistantDiagnostics(event.message);
+                if (diagnostics) {
+                  log(
+                    `[Assistant Diagnostics] stopReason=${diagnostics.stopReason} text=${diagnostics.hasText ? "yes" : "no"} toolCalls=${diagnostics.toolCalls}`,
+                  );
+                  if (diagnostics.errorMessage) {
+                    log(`[Assistant Error] ${diagnostics.errorMessage}`);
+                  }
+                }
+              }
+              onEvent({ type: "message_end", role: event.message?.role ?? "" });
+              break;
+
+            case "tool_execution_start":
+              turnHadVisibleOutput = true;
+              log(`\n>>> [Tool Start: ${event.toolName}] >>>`);
+              log("Args:", JSON.stringify(event.args, null, 2));
+              onEvent({
+                type: "tool_start",
+                toolName: event.toolName,
+                toolInput: event.args,
+              });
+              break;
+
+            case "tool_execution_end":
+              turnHadVisibleOutput = true;
+              log(`<<< [Tool End: ${event.toolName}] <<<`);
+              log(`Error: ${event.isError ? "Yes" : "No"}`);
+              onEvent({
+                type: "tool_end",
+                toolName: event.toolName,
+                isError: event.isError,
+                result: event.result,
+              });
+              break;
+
+            case "agent_end":
+              log("\n=== [AGENT SESSION END] ===\n");
+              onEvent({ type: "agent_end" });
+              break;
+          }
+        });
+
         // Build prompt with attachments
         let promptText = text;
         const promptOptions: { images?: Array<{ type: "image"; data: string; mimeType: string }> } = {};
@@ -586,8 +673,18 @@ export class PackAgent implements IPackAgent {
 
         const lastMessage = cs.session.state.messages.at(-1);
         const diagnostics = getAssistantDiagnostics(lastMessage);
+        const assistantText = extractAssistantText(lastMessage);
+        if (assistantText) {
+          coordinator.setAssistantText(assistantText);
+        }
 
         if (diagnostics?.errorMessage) {
+          this.persistFailedRun(
+            runId,
+            coordinator,
+            diagnostics.stopReason,
+            diagnostics.errorMessage,
+          );
           return {
             stopReason: diagnostics.stopReason,
             errorMessage: diagnostics.errorMessage,
@@ -600,17 +697,43 @@ export class PackAgent implements IPackAgent {
           diagnostics.toolCalls === 0 &&
           !turnHadVisibleOutput
         ) {
+          const errorMessage =
+            "Assistant returned no visible output. Check the server logs for details.";
+          this.persistFailedRun(
+            runId,
+            coordinator,
+            diagnostics.stopReason,
+            errorMessage,
+          );
           return {
             stopReason: diagnostics.stopReason,
-            errorMessage:
-              "Assistant returned no visible output. Check the server logs for details.",
+            errorMessage,
           };
         }
 
+        const snapshots = coordinator.hasInvalidArtifactDeclarations()
+          ? []
+          : this.artifactSnapshotService.createSnapshots(
+            runId,
+            coordinator.getDeclarations(),
+          );
+        this.resultStore.completeRun({
+          runId,
+          assistantText: coordinator.getAssistantText(),
+          stopReason: diagnostics?.stopReason ?? "unknown",
+          completedAt: new Date().toISOString(),
+          artifacts: snapshots,
+        });
+
         return { stopReason: diagnostics?.stopReason ?? "unknown" };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.persistFailedRun(runId, coordinator, "error", message);
+        throw error;
       } finally {
         cs.running = false;
-        this.fileOutputCallbackRef.current = null;
+        cs.fileOutputCallbackRef.current = null;
+        cs.finalArtifactsCollectorRef.current = null;
         unsubscribe();
       }
     };

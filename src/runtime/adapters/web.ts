@@ -44,6 +44,14 @@ function getRuntimeConfigSignature(config: DataConfig): string {
   });
 }
 
+function parsePositiveInt(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
 // ---------------------------------------------------------------------------
 // WebAdapter
 // ---------------------------------------------------------------------------
@@ -59,6 +67,7 @@ export class WebAdapter implements PlatformAdapter {
     const { agent, server, app, rootDir, lifecycle } = ctx;
     this.agent = agent;
     this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
+    const resultsQueryService = ctx.resultsQueryService ?? null;
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
 
@@ -224,6 +233,41 @@ export class WebAdapter implements PlatformAdapter {
       res.status(501).json({ error: "Not implemented yet" });
     });
 
+    // -- Persisted results API ----------------------------------------------
+
+    app.get("/api/results/runs", (req, res) => {
+      if (!resultsQueryService) {
+        res.status(503).json({ error: "Results query service is not available" });
+        return;
+      }
+
+      res.json(resultsQueryService.listRecentRuns({
+        channelId: typeof req.query.channelId === "string" ? req.query.channelId : undefined,
+        limit: parsePositiveInt(req.query.limit, 50),
+      }));
+    });
+
+    app.get("/api/results/runs/:runId/artifacts", (req, res) => {
+      if (!resultsQueryService) {
+        res.status(503).json({ error: "Results query service is not available" });
+        return;
+      }
+
+      res.json(resultsQueryService.getRunArtifacts(req.params.runId));
+    });
+
+    app.get("/api/results/artifacts", (req, res) => {
+      if (!resultsQueryService) {
+        res.status(503).json({ error: "Results query service is not available" });
+        return;
+      }
+
+      res.json(resultsQueryService.listRecentArtifacts({
+        channelId: typeof req.query.channelId === "string" ? req.query.channelId : undefined,
+        limit: parsePositiveInt(req.query.limit, 100),
+      }));
+    });
+
     // -- File download endpoint (for outbound attachments) -------------------
 
     app.get("/api/files", (req, res) => {
@@ -234,7 +278,9 @@ export class WebAdapter implements PlatformAdapter {
       }
 
       // Security: only allow files under data/ directory
-      const resolvedPath = path.resolve(filePath);
+      const resolvedPath = path.isAbsolute(filePath)
+        ? path.resolve(filePath)
+        : path.resolve(rootDir, filePath);
       const dataDir = path.resolve(rootDir, "data");
       if (!resolvedPath.startsWith(dataDir)) {
         res.status(403).json({ error: "Access denied" });
