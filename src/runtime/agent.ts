@@ -622,6 +622,7 @@ export class PackAgent implements IPackAgent {
               log("Args:", JSON.stringify(event.args, null, 2));
               onEvent({
                 type: "tool_start",
+                toolCallId: event.toolCallId ?? "",
                 toolName: event.toolName,
                 toolInput: event.args,
               });
@@ -633,6 +634,7 @@ export class PackAgent implements IPackAgent {
               log(`Error: ${event.isError ? "Yes" : "No"}`);
               onEvent({
                 type: "tool_end",
+                toolCallId: event.toolCallId ?? "",
                 toolName: event.toolName,
                 isError: event.isError,
                 result: event.result,

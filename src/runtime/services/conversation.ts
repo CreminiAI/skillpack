@@ -8,6 +8,16 @@ import {
 
 export const DEFAULT_WEB_CHANNEL_ID = "web";
 
+export interface ConversationToolCall {
+  id: string;
+  name: string;
+  isError: boolean;
+  arguments?: {
+    filePath?: string;
+    caption?: string;
+  };
+}
+
 export interface ConversationSummary {
   channelId: string;
   platform: "telegram" | "slack" | "web" | "scheduler";
@@ -22,7 +32,7 @@ export interface ConversationMessage {
   role: "user" | "assistant";
   text: string;
   timestamp: string;
-  toolCalls?: Array<{ name: string; isError: boolean }>;
+  toolCalls?: ConversationToolCall[];
 }
 
 export interface ListConversationOptions {
@@ -154,6 +164,7 @@ export class ConversationService {
     if (safeLimit === 0) return [];
 
     const entries = this.loadEntries(sessionFile);
+    const toolResultsById = this.collectToolResultStates(entries);
     const messages: ConversationMessage[] = [];
     for (const entry of entries) {
       if (entry.type !== "message") continue;
@@ -162,11 +173,12 @@ export class ConversationService {
       if (role !== "user" && role !== "assistant") continue;
 
       const text = this.extractText(entry.message);
-      if (!text) continue;
-
       const toolCalls = role === "assistant"
-        ? this.extractToolCallSummaries(entry.message)
+        ? this.extractToolCalls(entry.message, toolResultsById)
         : undefined;
+      const hasVisibleSendFile = this.hasVisibleSendFileToolCall(toolCalls);
+
+      if (!text && !hasVisibleSendFile) continue;
 
       messages.push({
         id: entry.id,
@@ -228,21 +240,92 @@ export class ConversationService {
     return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
   }
 
-  private extractToolCallSummaries(
+  private collectToolResultStates(entries: SessionEntry[]): Map<string, boolean> {
+    const toolResultsById = new Map<string, boolean>();
+
+    for (const entry of entries) {
+      if (entry.type !== "message") continue;
+      if (entry.message?.role !== "toolResult") continue;
+      if (typeof entry.message?.toolCallId !== "string" || !entry.message.toolCallId) {
+        continue;
+      }
+
+      toolResultsById.set(entry.message.toolCallId, entry.message?.isError === true);
+    }
+
+    return toolResultsById;
+  }
+
+  private extractToolCalls(
     message: any,
-  ): Array<{ name: string; isError: boolean }> | undefined {
+    toolResultsById: Map<string, boolean>,
+  ): ConversationToolCall[] | undefined {
     if (!Array.isArray(message?.content)) return undefined;
 
     const toolCalls = message.content
       .filter((item: any) => item?.type === "toolCall")
-      .map((item: any) => ({
-        name: typeof item?.name === "string" && item.name
+      .map((item: any) => {
+        const id = typeof item?.id === "string" && item.id
+          ? item.id
+          : "unknown";
+        const name = typeof item?.name === "string" && item.name
           ? item.name
-          : "unknown",
-        isError: false,
-      }));
+          : "unknown";
+        const toolCall: ConversationToolCall = {
+          id,
+          name,
+          isError: toolResultsById.get(id) === true,
+        };
+
+        if (name === "send_file") {
+          const args = this.extractSendFileArguments(item?.arguments);
+          if (args) {
+            toolCall.arguments = args;
+          }
+        }
+
+        return toolCall;
+      });
 
     return toolCalls.length > 0 ? toolCalls : undefined;
+  }
+
+  private extractSendFileArguments(
+    rawArguments: unknown,
+  ): ConversationToolCall["arguments"] | undefined {
+    if (!rawArguments || typeof rawArguments !== "object") {
+      return undefined;
+    }
+
+    const maybeArgs = rawArguments as { filePath?: unknown; caption?: unknown };
+    const filePath = typeof maybeArgs.filePath === "string" && maybeArgs.filePath
+      ? maybeArgs.filePath
+      : undefined;
+    const caption = typeof maybeArgs.caption === "string" && maybeArgs.caption
+      ? maybeArgs.caption
+      : undefined;
+
+    if (!filePath && !caption) {
+      return undefined;
+    }
+
+    return {
+      filePath,
+      caption,
+    };
+  }
+
+  private hasVisibleSendFileToolCall(
+    toolCalls: ConversationToolCall[] | undefined,
+  ): boolean {
+    return Boolean(
+      toolCalls?.some((toolCall) =>
+        toolCall.name === "send_file" &&
+        !toolCall.isError &&
+        typeof toolCall.arguments?.filePath === "string" &&
+        toolCall.arguments.filePath.length > 0
+      ),
+    );
   }
 
   private detectPlatform(

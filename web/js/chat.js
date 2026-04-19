@@ -10,6 +10,8 @@ const DEFAULT_WEB_CHANNEL_ID = "web";
 let ws = null;
 let currentAssistantMsg = null;
 let currentChannelId = DEFAULT_WEB_CHANNEL_ID;
+const pendingSendFileCalls = new Map();
+const anonymousSendFileCalls = [];
 
 export async function initChat() {
   // Send button
@@ -265,7 +267,7 @@ async function loadConversationHistory(channelId) {
   chatHistory.length = 0;
 
   for (const message of messages) {
-    appendMessage(message.role, message.text);
+    appendMessage(message.role, message.text, message.toolCalls);
     chatHistory.push({ role: message.role, content: message.text });
   }
 
@@ -370,6 +372,13 @@ function handleAgentEvent(event) {
       break;
 
     case "tool_start":
+      if (event.toolName === "send_file") {
+        queueSendFileToolCall(event.toolCallId, event.toolInput);
+        scrollToBottom();
+        showLoadingIndicator();
+        break;
+      }
+
       const toolCard = document.createElement("div");
       toolCard.className = "tool-card running collapsed";
       const safeInput =
@@ -413,13 +422,27 @@ function handleAgentEvent(event) {
       }
 
       toolCard.dataset.toolName = event.toolName;
+      toolCard.dataset.toolCallId = event.toolCallId || "";
       scrollToBottom();
       showLoadingIndicator();
       break;
 
     case "tool_end":
+      if (event.toolName === "send_file") {
+        const file = dequeueSendFileToolCall(event.toolCallId);
+        if (!event.isError && file) {
+          appendFileCard(currentAssistantMsg, file.filePath, file.caption);
+        }
+        scrollToBottom();
+        showLoadingIndicator();
+        break;
+      }
+
       const cards = Array.from(currentAssistantMsg.querySelectorAll(".tool-card.running"));
-      const card = cards.reverse().find((c) => c.dataset.toolName === event.toolName);
+      const card = cards.reverse().find((c) =>
+        c.dataset.toolName === event.toolName &&
+        (event.toolCallId ? c.dataset.toolCallId === event.toolCallId : true)
+      );
       if (card) {
         card.classList.remove("running");
         card.classList.add(event.isError ? "error" : "success");
@@ -456,6 +479,100 @@ function handleAgentEvent(event) {
       showLoadingIndicator();
       break;
   }
+}
+
+function queueSendFileToolCall(toolCallId, toolInput) {
+  const file = extractSendFileToolInput(toolInput);
+  if (!file) return;
+
+  if (toolCallId) {
+    pendingSendFileCalls.set(toolCallId, file);
+    return;
+  }
+
+  anonymousSendFileCalls.push(file);
+}
+
+function dequeueSendFileToolCall(toolCallId) {
+  if (toolCallId) {
+    const file = pendingSendFileCalls.get(toolCallId) || null;
+    pendingSendFileCalls.delete(toolCallId);
+    return file;
+  }
+
+  return anonymousSendFileCalls.shift() || null;
+}
+
+function extractSendFileToolInput(toolInput) {
+  if (!toolInput || typeof toolInput !== "object") {
+    return null;
+  }
+
+  const filePath =
+    typeof toolInput.filePath === "string" ? toolInput.filePath.trim() : "";
+  const caption =
+    typeof toolInput.caption === "string" ? toolInput.caption.trim() : "";
+
+  if (!filePath) {
+    return null;
+  }
+
+  return {
+    filePath,
+    caption,
+  };
+}
+
+function getVisibleSendFileToolCalls(toolCalls) {
+  if (!Array.isArray(toolCalls)) {
+    return [];
+  }
+
+  return toolCalls.filter((toolCall) =>
+    toolCall &&
+    toolCall.name === "send_file" &&
+    !toolCall.isError &&
+    toolCall.arguments &&
+    typeof toolCall.arguments.filePath === "string" &&
+    toolCall.arguments.filePath
+  );
+}
+
+function appendFileCard(container, filePath, caption) {
+  const fileName = basename(filePath);
+  const title = caption || fileName;
+  const card = document.createElement("a");
+  card.className = "file-card";
+  card.href = buildFileDownloadUrl(filePath);
+  card.title = filePath;
+  card.setAttribute("download", fileName);
+  card.setAttribute("target", "_blank");
+  card.setAttribute("rel", "noopener noreferrer");
+  card.innerHTML = `
+    <div class="file-card-icon">FILE</div>
+    <div class="file-card-copy">
+      <div class="file-card-title">${escapeHtml(title)}</div>
+      <div class="file-card-meta">${escapeHtml(fileName)}</div>
+    </div>
+    <div class="file-card-action">Download</div>
+  `;
+
+  const indicator = container.querySelector(".loading-indicator");
+  if (indicator) {
+    container.insertBefore(card, indicator);
+  } else {
+    container.appendChild(card);
+  }
+}
+
+function basename(filePath) {
+  const normalized = String(filePath).replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] || String(filePath);
+}
+
+function buildFileDownloadUrl(filePath) {
+  return `${state.API_BASE}/api/files?path=${encodeURIComponent(filePath)}`;
 }
 
 function getOrCreateThinkingBlock() {
@@ -518,10 +635,12 @@ function getOrCreateTextBlock() {
 function enableInput() {
   const sendBtn = document.getElementById("send-btn");
   if (sendBtn) sendBtn.disabled = false;
+  pendingSendFileCalls.clear();
+  anonymousSendFileCalls.length = 0;
   currentAssistantMsg = null;
 }
 
-function appendMessage(role, text) {
+function appendMessage(role, text, toolCalls = []) {
   const messages = document.getElementById("messages");
   const div = document.createElement("div");
   div.className = "message " + role;
@@ -534,6 +653,13 @@ function appendMessage(role, text) {
     tb.dataset.mdContent = text;
     tb.innerHTML = renderMarkdown(text);
     div.appendChild(tb);
+  }
+
+  if (role === "assistant") {
+    const sendFileCalls = getVisibleSendFileToolCalls(toolCalls);
+    sendFileCalls.forEach((toolCall) => {
+      appendFileCard(div, toolCall.arguments.filePath, toolCall.arguments.caption);
+    });
   }
 
   messages.appendChild(div);

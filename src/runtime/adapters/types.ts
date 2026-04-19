@@ -159,11 +159,13 @@ export type AgentEvent =
   | { type: "thinking_delta"; delta: string }
   | {
     type: "tool_start";
+    toolCallId: string;
     toolName: string;
     toolInput: unknown;
   }
   | {
     type: "tool_end";
+    toolCallId: string;
     toolName: string;
     isError: boolean;
     result: unknown;

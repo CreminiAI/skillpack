@@ -8,6 +8,7 @@ import {
   ConversationService,
   DEFAULT_WEB_CHANNEL_ID,
 } from "../services/conversation.js";
+import { isWithinDirectory } from "../files/metadata.js";
 
 import type {
   PlatformAdapter,
@@ -54,6 +55,17 @@ function parsePositiveInt(value: unknown, fallback: number): number {
     return fallback;
   }
   return Math.floor(parsed);
+}
+
+function resolveDownloadFilePath(
+  rootDir: string,
+  filePath: string,
+): string | null {
+  const resolvedPath = path.isAbsolute(filePath)
+    ? path.resolve(filePath)
+    : path.resolve(rootDir, filePath);
+
+  return isWithinDirectory(rootDir, resolvedPath) ? resolvedPath : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,12 +316,8 @@ export class WebAdapter implements PlatformAdapter {
         return;
       }
 
-      // Security: only allow files under data/ directory
-      const resolvedPath = path.isAbsolute(filePath)
-        ? path.resolve(filePath)
-        : path.resolve(rootDir, filePath);
-      const dataDir = path.resolve(rootDir, "data");
-      if (!resolvedPath.startsWith(dataDir)) {
+      const resolvedPath = resolveDownloadFilePath(rootDir, filePath);
+      if (!resolvedPath) {
         res.status(403).json({ error: "Access denied" });
         return;
       }
