@@ -39,7 +39,6 @@
   "apiKey": "...", 
   "baseUrl": "https://api.openai.com/v1",
   "adapters": { ... },
-  "scheduledJobs": [ ... ],
   "_auth": {
     "openai-codex": {
       "type": "oauth",
@@ -50,6 +49,8 @@
   }
 }
 ```
+
+> `scheduledJobs` no longer belong in `config.json`. Pack-shipped scheduled tasks now live in root-level `job.json`.
 
 ---
 

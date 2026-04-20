@@ -145,6 +145,7 @@ That metadata is then used to refresh the corresponding entries in `skillpack.js
 When `zip` creates the final archive, it packages:
 
 - `skillpack.json`
+- optional `job.json`
 - optional `AGENTS.md` / `SOUL.md`
 - the entire `skills/` directory
 - `start.sh` and `start.bat`
@@ -154,6 +155,7 @@ The extracted pack structure stays lightweight:
 ```text
 <pack-name>/
 ├── skillpack.json
+├── job.json
 ├── AGENTS.md
 ├── SOUL.md
 ├── skills/
@@ -166,6 +168,8 @@ The start scripts invoke `npx @cremini/skillpack run .`, so the runtime is resol
 ### Optional root context files
 
 A pack can also include these optional root files:
+
+- `job.json` — scheduled job definitions that ship with the pack
 
 - `AGENTS.md` — the pack's operational policy and workflow rules
 - `SOUL.md` — the pack's persona, tone, and working style
@@ -183,6 +187,7 @@ At runtime, SkillPack reads them when a new session is created and appends a str
 SkillPack packages AI skills, prompts, and a runtime into one local agent application.
 
 - `skillpack.json` defines the pack's metadata, prompts, and skill declarations.
+- `job.json` optionally defines scheduled jobs that should ship inside the pack zip.
 - `AGENTS.md` and `SOUL.md` are optional pack-level policy/persona files controlled by SkillPack runtime.
 - `skills[].source` can be understood as either `remote` or `local`.
 - A source beginning with `./skills` represents a local directory reference inside the pack.

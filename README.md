@@ -97,6 +97,7 @@ The archive produced by `zip` is intentionally lightweight:
 ```text
 <pack-name>/
 ├── skillpack.json       # Pack configuration
+├── job.json             # Optional scheduled jobs shipped with the pack
 ├── AGENTS.md            # Optional pack policy
 ├── SOUL.md              # Optional pack persona
 ├── skills/              # Installed skills
@@ -105,6 +106,8 @@ The archive produced by `zip` is intentionally lightweight:
 ```
 
 The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prerequisite — no pre-bundled server directory is included.
+
+If present, `job.json` defines scheduled jobs that travel with the pack and are loaded by the scheduler at runtime.
 
 If present, `AGENTS.md` and `SOUL.md` are read by SkillPack itself when a new chat session starts. SkillPack injects them into the runtime system prompt as pack-level policy and persona, without depending on the host machine's `AGENTS.md`, `.pi/SYSTEM.md`, or `APPEND_SYSTEM.md`.
 

@@ -1,4 +1,5 @@
-import { configManager, type DataConfig, type ScheduledJobConfig } from "../config.js";
+import { configManager, type DataConfig } from "../config.js";
+import type { ScheduledJobConfig } from "../../job-config.js";
 import type { ResultsQueryService } from "../artifacts/index.js";
 import {
   ConversationService,

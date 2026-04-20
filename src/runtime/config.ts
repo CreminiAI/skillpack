@@ -61,28 +61,6 @@ export const SUPPORTED_PROVIDERS: Record<string, ProviderMeta> = {
 };
 
 // ---------------------------------------------------------------------------
-// Scheduled Job Configuration
-// ---------------------------------------------------------------------------
-
-export interface ScheduledJobConfig {
-  /** Unique job name */
-  name: string;
-  /** Standard 5-field cron expression */
-  cron: string;
-  /** Prompt to send to the Agent when triggered */
-  prompt: string;
-  /** Where to push the result */
-  notify: {
-    adapter: string;   // "telegram" | "slack"
-    channelId: string; // e.g. "telegram-123456"
-  };
-  /** Defaults to true; set false to skip */
-  enabled?: boolean;
-  /** Optional timezone, e.g. "Asia/Shanghai" */
-  timezone?: string;
-}
-
-// ---------------------------------------------------------------------------
 // Data Config
 // ---------------------------------------------------------------------------
 
@@ -100,9 +78,44 @@ export interface DataConfig {
     };
     [key: string]: any;
   };
-  scheduledJobs?: ScheduledJobConfig[];
   /** OAuth credentials managed by AuthStorage (do not edit manually) */
   _auth?: Record<string, unknown>;
+}
+
+function normalizeDataConfig(value: unknown): DataConfig {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const raw = value as Record<string, unknown>;
+  const normalized: DataConfig = {};
+
+  if (typeof raw.apiKey === "string") {
+    normalized.apiKey = raw.apiKey;
+  }
+  if (typeof raw.provider === "string") {
+    normalized.provider = raw.provider;
+  }
+  if (typeof raw.baseUrl === "string") {
+    normalized.baseUrl = raw.baseUrl;
+  }
+  if (typeof raw.modelId === "string") {
+    normalized.modelId = raw.modelId;
+  }
+  if (
+    raw.apiProtocol === "openai-responses" ||
+    raw.apiProtocol === "openai-completions"
+  ) {
+    normalized.apiProtocol = raw.apiProtocol;
+  }
+  if (raw.adapters && typeof raw.adapters === "object" && !Array.isArray(raw.adapters)) {
+    normalized.adapters = raw.adapters as DataConfig["adapters"];
+  }
+  if (raw._auth && typeof raw._auth === "object" && !Array.isArray(raw._auth)) {
+    normalized._auth = raw._auth as Record<string, unknown>;
+  }
+
+  return normalized;
 }
 
 export class ConfigManager {
@@ -121,9 +134,20 @@ export class ConfigManager {
 
   public load(rootDir: string): DataConfig {
     this.configPath = path.join(rootDir, "data", "config.json");
+    this.configData = {};
     if (fs.existsSync(this.configPath)) {
       try {
-        this.configData = JSON.parse(fs.readFileSync(this.configPath, "utf-8"));
+        const parsed = JSON.parse(fs.readFileSync(this.configPath, "utf-8")) as unknown;
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          "scheduledJobs" in (parsed as Record<string, unknown>)
+        ) {
+          console.warn(
+            '  Warning: data/config.json contains deprecated "scheduledJobs". Move them to job.json at the pack root; the old field is ignored.',
+          );
+        }
+        this.configData = normalizeDataConfig(parsed);
         console.log("  Loaded config from data/config.json");
       } catch (err) {
         console.warn("  Warning: Failed to parse data/config.json:", err);
@@ -190,12 +214,8 @@ export class ConfigManager {
       this.configData.adapters = merged;
     }
 
-    // Scheduled jobs: full replacement (array merge semantics are ambiguous)
-    if (updates.scheduledJobs !== undefined) {
-      this.configData.scheduledJobs = updates.scheduledJobs;
-    }
-
     try {
+      this.configData = normalizeDataConfig(this.configData);
       fs.writeFileSync(
         this.configPath,
         JSON.stringify(this.configData, null, 2),

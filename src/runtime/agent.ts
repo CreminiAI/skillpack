@@ -344,7 +344,7 @@ export class PackAgent implements IPackAgent {
       createSendFileTool(fileOutputCallbackRef) as any,
       createSetFinalArtifactsTool(this.options.rootDir, finalArtifactsCollectorRef) as any,
     ];
-    if (adapter === "telegram" || adapter === "slack") {
+    if (adapter !== "scheduler") {
       tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
     }
     return tools;

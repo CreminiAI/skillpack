@@ -6,8 +6,11 @@ import type {
   IPackAgent,
   AgentEvent,
 } from "./types.js";
-import type { ScheduledJobConfig } from "../config.js";
-import { configManager } from "../config.js";
+import {
+  loadJobFile,
+  saveJobFile,
+  type ScheduledJobConfig,
+} from "../../job-config.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,9 +95,7 @@ export class SchedulerAdapter implements PlatformAdapter {
     this.rootDir = ctx.rootDir;
     this.notifyFn = ctx.notify || (async () => {});
 
-    // Load initial jobs from config
-    const config = configManager.getConfig();
-    const jobConfigs = config.scheduledJobs || [];
+    const jobConfigs = loadJobFile(this.rootDir).jobs;
 
     let scheduledCount = 0;
     let disabledCount = 0;
@@ -291,7 +292,7 @@ export class SchedulerAdapter implements PlatformAdapter {
   // -------------------------------------------------------------------------
 
   /**
-   * Add a new job, persist to config.json.
+   * Add a new job, persist to job.json.
    */
   addJob(jobConfig: ScheduledJobConfig): { success: boolean; message: string } {
     if (this.jobs.has(jobConfig.name)) {
@@ -318,7 +319,7 @@ export class SchedulerAdapter implements PlatformAdapter {
   }
 
   /**
-   * Remove a job and persist to config.json.
+   * Remove a job and persist to job.json.
    */
   removeJob(name: string): { success: boolean; message: string } {
     if (!this.jobs.has(name)) {
@@ -437,14 +438,14 @@ export class SchedulerAdapter implements PlatformAdapter {
   }
 
   /**
-   * Persist all current jobs to data/config.json.
+   * Persist all current jobs to job.json.
    */
   private persistJobs(): void {
     const configs: ScheduledJobConfig[] = [];
     for (const [, job] of this.jobs) {
       configs.push(job.config);
     }
-    configManager.save(this.rootDir, { scheduledJobs: configs });
+    saveJobFile(this.rootDir, { jobs: configs });
   }
 
   // -------------------------------------------------------------------------

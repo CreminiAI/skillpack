@@ -33,8 +33,8 @@ export interface ServerOptions {
 
 /**
  * Start the SkillPack runtime server.
- * Reads skillpack.json and data/config.json from rootDir, starts Express + WS,
- * loads adapters (Web always, Telegram/Slack if configured).
+ * Reads skillpack.json plus pack/runtime config files from rootDir, starts
+ * Express + WS, and loads adapters (Web always, Telegram/Slack if configured).
  */
 export async function startServer(options: ServerOptions): Promise<void> {
   const {
@@ -47,7 +47,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
   } = options;
 
   // ---------------------------------------------------------------------------
-  // Read configuration: data/config.json first, env vars override
+  // Read runtime configuration: data/config.json first, env vars override
   // ---------------------------------------------------------------------------
 
   const dataConfig = configManager.load(rootDir);
@@ -222,8 +222,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     await adapter.sendMessage(channelId, text);
   };
 
-  // Scheduler adapter (conditional – starts AFTER all IM adapters)
-  const scheduledJobs = dataConfig.scheduledJobs || [];
+  // Scheduler adapter (starts AFTER all IM adapters and loads job.json)
   let schedulerAdapter: import("./adapters/scheduler.js").SchedulerAdapter | null = null;
 
   // Always import scheduler so that the Agent tool can manage jobs dynamically
@@ -242,10 +241,6 @@ export async function startServer(options: ServerOptions): Promise<void> {
     });
     adapters.push(schedulerAdapter);
     adapterMap.set(schedulerAdapter.name, schedulerAdapter);
-
-    if (scheduledJobs.length > 0) {
-      console.log(`[Server] Scheduler started with ${scheduledJobs.length} job(s)`);
-    }
   } catch (err) {
     console.error("[Scheduler] Failed to start:", err);
   }

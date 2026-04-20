@@ -8,10 +8,19 @@ import {
 export const chatHistory = [];
 const DEFAULT_WEB_CHANNEL_ID = "web";
 let ws = null;
+let wsConnectPromise = null;
 let currentAssistantMsg = null;
 let currentChannelId = DEFAULT_WEB_CHANNEL_ID;
 const pendingSendFileCalls = new Map();
 const anonymousSendFileCalls = [];
+let reconnectTimer = null;
+let shouldMaintainWs = false;
+
+function hasConfiguredWebAuth() {
+  return Boolean(
+    state.config && (state.config.hasApiKey || state.config.oauthConnected)
+  );
+}
 
 export async function initChat() {
   // Send button
@@ -50,6 +59,10 @@ export async function initChat() {
   }
 
   await initializeConversation();
+  shouldMaintainWs = hasConfiguredWebAuth();
+  if (shouldMaintainWs) {
+    void ensureBackgroundWsConnection();
+  }
 }
 
 export function showWelcome(config) {
@@ -195,12 +208,59 @@ function renderEmbeddedMarkdownBlocks(html) {
   return template.innerHTML;
 }
 
-async function getOrCreateWs() {
+function clearReconnectTimer() {
+  if (reconnectTimer !== null) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleReconnect() {
+  if (!shouldMaintainWs || !hasConfiguredWebAuth() || reconnectTimer !== null) {
+    return;
+  }
+
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null;
+    void ensureBackgroundWsConnection();
+  }, 1000);
+}
+
+async function ensureBackgroundWsConnection() {
+  try {
+    await getOrCreateWs({ background: true });
+  } catch (err) {
+    console.warn("Background WebSocket connection failed:", err);
+  }
+}
+
+export function refreshWebSocketConnectionPreference() {
+  shouldMaintainWs = hasConfiguredWebAuth();
+
+  if (shouldMaintainWs) {
+    void ensureBackgroundWsConnection();
+    return;
+  }
+
+  clearReconnectTimer();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  }
+}
+
+async function getOrCreateWs(options = {}) {
+  const { background = false } = options;
   if (ws && ws.readyState === WebSocket.OPEN) {
     return ws;
   }
 
-  return new Promise((resolve, reject) => {
+  if (wsConnectPromise) {
+    return wsConnectPromise;
+  }
+
+  clearReconnectTimer();
+
+  wsConnectPromise = new Promise((resolve, reject) => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const provider = state.config && state.config.provider ? state.config.provider : "openai";
     const params = new URLSearchParams({
@@ -209,19 +269,29 @@ async function getOrCreateWs() {
     });
     const wsUrl = `${protocol}//${window.location.host}${state.API_BASE}/api/chat?${params.toString()}`;
 
-    ws = new WebSocket(wsUrl);
+    const socket = new WebSocket(wsUrl);
+    ws = socket;
 
-    ws.onopen = () => resolve(ws);
-    ws.onerror = (err) => {
+    socket.onopen = () => {
+      shouldMaintainWs = true;
+      wsConnectPromise = null;
+      resolve(socket);
+    };
+    socket.onerror = (err) => {
       console.error(err);
+      wsConnectPromise = null;
       reject(new Error("WebSocket connection failed"));
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
       try {
         const parsed = JSON.parse(event.data);
         if (parsed.error) {
-          handleError(parsed.error);
+          if (background && !currentAssistantMsg) {
+            console.warn("Background WebSocket message error:", parsed.error);
+          } else {
+            handleError(parsed.error);
+          }
         } else if (parsed.done) {
           handleDone();
         } else if (parsed.type) {
@@ -232,11 +302,17 @@ async function getOrCreateWs() {
       }
     };
 
-    ws.onclose = () => {
-      ws = null;
+    socket.onclose = () => {
+      if (ws === socket) {
+        ws = null;
+      }
+      wsConnectPromise = null;
       enableInput();
+      scheduleReconnect();
     };
   });
+
+  return wsConnectPromise;
 }
 
 async function initializeConversation() {
@@ -326,7 +402,28 @@ function hideLoadingIndicator() {
   }
 }
 
+function ensureAssistantMessageForEvent(event) {
+  if (currentAssistantMsg) return;
+
+  if (
+    !["agent_start", "message_start", "text_delta", "thinking_delta", "tool_start"].includes(
+      event.type
+    )
+  ) {
+    return;
+  }
+
+  const chatArea = document.getElementById("chat-area");
+  if (chatArea.classList.contains("mode-welcome")) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
+  }
+
+  currentAssistantMsg = appendMessage("assistant", "");
+}
+
 function handleAgentEvent(event) {
+  ensureAssistantMessageForEvent(event);
   if (!currentAssistantMsg) return;
 
   if (

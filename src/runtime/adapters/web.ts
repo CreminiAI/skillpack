@@ -79,6 +79,7 @@ export class WebAdapter implements PlatformAdapter {
   private agent: IPackAgent | null = null;
   private ipcBroadcaster: IpcBroadcaster | null = null;
   private conversationService: ConversationService | null = null;
+  private socketsByChannel = new Map<string, Set<WebSocket>>();
 
   async start(ctx: AdapterContext): Promise<void> {
     const { agent, server, app, rootDir, lifecycle } = ctx;
@@ -468,7 +469,26 @@ export class WebAdapter implements PlatformAdapter {
       this.wss.close();
       this.wss = null;
     }
+    this.socketsByChannel.clear();
     console.log("[WebAdapter] Stopped");
+  }
+
+  async sendMessage(channelId: string, text: string): Promise<void> {
+    const sockets = this.socketsByChannel.get(channelId);
+    const activeSockets = [...(sockets || [])].filter(
+      (socket) => socket.readyState === socket.OPEN,
+    );
+
+    if (activeSockets.length === 0) {
+      throw new Error(`[Web] No active WebSocket clients for channelId: ${channelId}`);
+    }
+
+    for (const socket of activeSockets) {
+      sendWsEvent(socket, { type: "message_start", role: "assistant" });
+      sendWsEvent(socket, { type: "text_delta", delta: text });
+      sendWsEvent(socket, { type: "message_end", role: "assistant" });
+      socket.send(JSON.stringify({ done: true }));
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -480,6 +500,8 @@ export class WebAdapter implements PlatformAdapter {
     channelId: string,
     agent: IPackAgent,
   ): void {
+    this.addSocket(channelId, ws);
+
     ws.on("message", async (data) => {
       try {
         const payload = JSON.parse(data.toString());
@@ -525,9 +547,28 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     ws.on("close", () => {
+      this.removeSocket(channelId, ws);
       if (channelId !== DEFAULT_WEB_CHANNEL_ID) {
         agent.dispose(channelId);
       }
     });
+  }
+
+  private addSocket(channelId: string, ws: WebSocket): void {
+    const sockets = this.socketsByChannel.get(channelId) ?? new Set<WebSocket>();
+    sockets.add(ws);
+    this.socketsByChannel.set(channelId, sockets);
+  }
+
+  private removeSocket(channelId: string, ws: WebSocket): void {
+    const sockets = this.socketsByChannel.get(channelId);
+    if (!sockets) {
+      return;
+    }
+
+    sockets.delete(ws);
+    if (sockets.size === 0) {
+      this.socketsByChannel.delete(channelId);
+    }
   }
 }

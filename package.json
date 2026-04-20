@@ -28,6 +28,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
     "format": "prettier --write .",
     "prepare": "npm run build",
     "create": "tsup && node dist/cli.js create",
@@ -68,6 +69,7 @@
     "@types/ws": "^8.18.0",
     "prettier": "^3.8.1",
     "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

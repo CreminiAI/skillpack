@@ -5,6 +5,7 @@
  */
 import { state } from "./config.js";
 import { saveConfigData, restartRuntime } from "./api.js";
+import { refreshWebSocketConnectionPreference } from "./chat.js";
 
 // --- DOM Elements ---
 let dialog;
@@ -245,6 +246,7 @@ async function handleSave() {
     populateForm();
     state.restartRequired = !!res.requiresRestart;
     updateApiKeyButton();
+    refreshWebSocketConnectionPreference();
 
     if (res.requiresRestart) {
       setStatus("Settings saved. Restart service to apply changes.", "warning");
@@ -301,6 +303,7 @@ async function handleOAuthLogout() {
     updateOAuthUI(false);
     state.config.oauthConnected = false;
     updateApiKeyButton();
+    refreshWebSocketConnectionPreference();
     setStatus("Logged out successfully", "success");
   } catch (err) {
     setStatus("Logout failed: " + err.message, "error");
@@ -314,6 +317,7 @@ async function checkOAuthStatus() {
     updateOAuthUI(connected);
     state.config.oauthConnected = connected;
     updateApiKeyButton();
+    refreshWebSocketConnectionPreference();
   } catch (err) {
     console.error("Failed to check OAuth status:", err);
   }
@@ -329,6 +333,7 @@ function pollOAuthStatus() {
       state.config.oauthConnected = true;
       state.restartRequired = true;
       updateApiKeyButton();
+      refreshWebSocketConnectionPreference();
       setStatus("Connected successfully!", "success");
       updateRestartButton(true);
     }
