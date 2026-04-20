@@ -232,6 +232,8 @@ export class SchedulerAdapter implements PlatformAdapter {
         channelId,
         jobConfig.prompt,
         onEvent,
+        undefined,
+        { jobName: jobConfig.name },
       );
 
       if (result.errorMessage) {
@@ -330,6 +332,36 @@ export class SchedulerAdapter implements PlatformAdapter {
     this.persistJobs();
 
     return { success: true, message: `Job "${name}" removed.` };
+  }
+
+  updateJob(
+    name: string,
+    updates: Omit<ScheduledJobConfig, "name">,
+  ): { success: boolean; message: string } {
+    const job = this.jobs.get(name);
+    if (!job) {
+      return { success: false, message: `Job "${name}" not found.` };
+    }
+
+    const nextConfig: ScheduledJobConfig = {
+      name,
+      cron: updates.cron,
+      prompt: updates.prompt,
+      notify: updates.notify,
+      enabled: updates.enabled,
+      timezone: updates.timezone,
+    };
+
+    const result = this.registerJob(nextConfig);
+    if (!result.registered) {
+      return { success: false, message: result.message };
+    }
+
+    this.persistJobs();
+    return {
+      success: true,
+      message: `Job "${name}" updated.`,
+    };
   }
 
   /**

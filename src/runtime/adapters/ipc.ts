@@ -22,7 +22,14 @@ type IpcRequest =
   | { id: string; type: "get_messages"; channelId: string; limit?: number }
   | { id: string; type: "get_result_runs"; channelId?: string; limit?: number }
   | { id: string; type: "get_run_artifacts"; runId: string }
-  | { id: string; type: "get_recent_artifacts"; channelId?: string; limit?: number }
+  | {
+    id: string;
+    type: "get_recent_artifacts";
+    channelId?: string;
+    jobName?: string;
+    limit?: number;
+    offset?: number;
+  }
   | { id: string; type: "send_message"; channelId: string; text: string }
   | { id: string; type: "command"; command: BotCommand; channelId: string }
   | { id: string; type: "get_config" }
@@ -30,6 +37,14 @@ type IpcRequest =
   | { id: string; type: "get_status" }
   | { id: string; type: "get_scheduled_jobs" }
   | { id: string; type: "add_scheduled_job"; job: ScheduledJobConfig }
+  | {
+    id: string;
+    type: "update_scheduled_job";
+    name: string;
+    updates: Omit<ScheduledJobConfig, "name">;
+  }
+  | { id: string; type: "set_scheduled_job_enabled"; name: string; enabled: boolean }
+  | { id: string; type: "trigger_scheduled_job"; name: string }
   | { id: string; type: "remove_scheduled_job"; name: string };
 
 export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
@@ -188,7 +203,9 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           }
           this.reply(request.id, this.resultsQueryService.listRecentArtifacts({
             channelId: request.channelId,
+            jobName: request.jobName,
             limit: request.limit,
+            offset: request.offset,
           }));
           return;
         }
@@ -278,6 +295,51 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             return;
           }
           const result = scheduler.addJob(request.job);
+          if (!result.success) {
+            this.replyError(request.id, result.message);
+            return;
+          }
+          this.reply(request.id, result);
+          return;
+        }
+
+        case "update_scheduled_job": {
+          const scheduler = this.getSchedulerAdapter();
+          if (!scheduler) {
+            this.replyError(request.id, "Scheduler adapter is not available");
+            return;
+          }
+          const result = scheduler.updateJob(request.name, request.updates);
+          if (!result.success) {
+            this.replyError(request.id, result.message);
+            return;
+          }
+          this.reply(request.id, result);
+          return;
+        }
+
+        case "set_scheduled_job_enabled": {
+          const scheduler = this.getSchedulerAdapter();
+          if (!scheduler) {
+            this.replyError(request.id, "Scheduler adapter is not available");
+            return;
+          }
+          const result = scheduler.setEnabled(request.name, request.enabled);
+          if (!result.success) {
+            this.replyError(request.id, result.message);
+            return;
+          }
+          this.reply(request.id, result);
+          return;
+        }
+
+        case "trigger_scheduled_job": {
+          const scheduler = this.getSchedulerAdapter();
+          if (!scheduler) {
+            this.replyError(request.id, "Scheduler adapter is not available");
+            return;
+          }
+          const result = await scheduler.triggerJob(request.name);
           if (!result.success) {
             this.replyError(request.id, result.message);
             return;

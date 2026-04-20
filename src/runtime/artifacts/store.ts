@@ -54,6 +54,7 @@ type SqliteArtifactRow = {
   channel_id: string;
   declaration_seq: number;
   artifact_order: number;
+  job_name: string | null;
   original_path: string;
   snapshot_path: string;
   file_name: string;
@@ -86,6 +87,7 @@ function mapArtifactRow(row: SqliteArtifactRow): ResultArtifactRecord {
     channelId: row.channel_id,
     declarationSeq: row.declaration_seq,
     artifactOrder: row.artifact_order,
+    jobName: row.job_name,
     originalPath: row.original_path,
     snapshotPath: row.snapshot_path,
     fileName: row.file_name,
@@ -112,52 +114,76 @@ export class ResultStore {
 
   private migrate(): void {
     const userVersion = this.db.pragma("user_version", { simple: true }) as number;
-    if (userVersion >= 1) {
+    if (userVersion === 0) {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS runs (
+          run_id TEXT PRIMARY KEY,
+          channel_id TEXT NOT NULL,
+          user_text TEXT NOT NULL,
+          assistant_text TEXT,
+          status TEXT NOT NULL,
+          stop_reason TEXT,
+          error_message TEXT,
+          started_at TEXT NOT NULL,
+          completed_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_runs_channel_completed_at
+        ON runs(channel_id, completed_at DESC);
+
+        CREATE TABLE IF NOT EXISTS artifacts (
+          artifact_id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          channel_id TEXT NOT NULL,
+          declaration_seq INTEGER NOT NULL,
+          artifact_order INTEGER NOT NULL,
+          job_name TEXT,
+          original_path TEXT NOT NULL,
+          snapshot_path TEXT NOT NULL,
+          file_name TEXT NOT NULL,
+          mime_type TEXT,
+          size_bytes INTEGER NOT NULL,
+          title TEXT,
+          description TEXT,
+          is_primary INTEGER NOT NULL DEFAULT 0,
+          declared_at TEXT NOT NULL,
+          FOREIGN KEY (run_id) REFERENCES runs(run_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_artifacts_run_order
+        ON artifacts(run_id, declaration_seq, artifact_order);
+
+        CREATE INDEX IF NOT EXISTS idx_artifacts_channel_declared_at
+        ON artifacts(channel_id, declared_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_artifacts_job_name_declared_at
+        ON artifacts(job_name, declared_at DESC);
+      `);
+
+      this.db.pragma("user_version = 2");
       return;
     }
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS runs (
-        run_id TEXT PRIMARY KEY,
-        channel_id TEXT NOT NULL,
-        user_text TEXT NOT NULL,
-        assistant_text TEXT,
-        status TEXT NOT NULL,
-        stop_reason TEXT,
-        error_message TEXT,
-        started_at TEXT NOT NULL,
-        completed_at TEXT
-      );
+    if (userVersion < 2) {
+      const artifactColumns = this.db.prepare(`
+        PRAGMA table_info(artifacts)
+      `).all() as Array<{ name: string }>;
+      const hasJobName = artifactColumns.some((column) => column.name === "job_name");
 
-      CREATE INDEX IF NOT EXISTS idx_runs_channel_completed_at
-      ON runs(channel_id, completed_at DESC);
+      if (!hasJobName) {
+        this.db.exec(`
+          ALTER TABLE artifacts
+          ADD COLUMN job_name TEXT
+        `);
+      }
 
-      CREATE TABLE IF NOT EXISTS artifacts (
-        artifact_id TEXT PRIMARY KEY,
-        run_id TEXT NOT NULL,
-        channel_id TEXT NOT NULL,
-        declaration_seq INTEGER NOT NULL,
-        artifact_order INTEGER NOT NULL,
-        original_path TEXT NOT NULL,
-        snapshot_path TEXT NOT NULL,
-        file_name TEXT NOT NULL,
-        mime_type TEXT,
-        size_bytes INTEGER NOT NULL,
-        title TEXT,
-        description TEXT,
-        is_primary INTEGER NOT NULL DEFAULT 0,
-        declared_at TEXT NOT NULL,
-        FOREIGN KEY (run_id) REFERENCES runs(run_id)
-      );
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_artifacts_job_name_declared_at
+        ON artifacts(job_name, declared_at DESC)
+      `);
 
-      CREATE INDEX IF NOT EXISTS idx_artifacts_run_order
-      ON artifacts(run_id, declaration_seq, artifact_order);
-
-      CREATE INDEX IF NOT EXISTS idx_artifacts_channel_declared_at
-      ON artifacts(channel_id, declared_at DESC);
-    `);
-
-    this.db.pragma("user_version = 1");
+      this.db.pragma("user_version = 2");
+    }
   }
 
   createRun(input: CreateRunInput): void {
@@ -209,6 +235,7 @@ export class ResultStore {
         channel_id,
         declaration_seq,
         artifact_order,
+        job_name,
         original_path,
         snapshot_path,
         file_name,
@@ -224,6 +251,7 @@ export class ResultStore {
         @channelId,
         @declarationSeq,
         @artifactOrder,
+        @jobName,
         @originalPath,
         @snapshotPath,
         @fileName,
@@ -250,6 +278,7 @@ export class ResultStore {
           channelId: row.channel_id,
           declarationSeq: artifact.declarationSeq,
           artifactOrder: artifact.artifactOrder,
+          jobName: artifact.jobName ?? null,
           originalPath: artifact.originalPath,
           snapshotPath: artifact.snapshotPath,
           fileName: artifact.fileName,
@@ -313,23 +342,30 @@ export class ResultStore {
 
   listRecentArtifacts(options: ListArtifactsOptions = {}): ResultArtifactRecord[] {
     const limit = options.limit ?? 100;
+    const offset = options.offset ?? 0;
+    const conditions: string[] = [];
+    const params: Array<string | number> = [];
+
     if (options.channelId) {
-      const rows = this.db.prepare(`
-        SELECT *
-        FROM artifacts
-        WHERE channel_id = ?
-        ORDER BY declared_at DESC, declaration_seq DESC, artifact_order DESC
-        LIMIT ?
-      `).all(options.channelId, limit) as SqliteArtifactRow[];
-      return rows.map(mapArtifactRow);
+      conditions.push("channel_id = ?");
+      params.push(options.channelId);
     }
 
+    if (options.jobName) {
+      conditions.push("job_name = ?");
+      params.push(options.jobName);
+    }
+
+    const whereClause = conditions.length > 0
+      ? `WHERE ${conditions.join(" AND ")}`
+      : "";
     const rows = this.db.prepare(`
       SELECT *
       FROM artifacts
+      ${whereClause}
       ORDER BY declared_at DESC, declaration_seq DESC, artifact_order DESC
-      LIMIT ?
-    `).all(limit) as SqliteArtifactRow[];
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset) as SqliteArtifactRow[];
     return rows.map(mapArtifactRow);
   }
 }

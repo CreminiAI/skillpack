@@ -41,6 +41,7 @@ import type {
   BotCommand,
   CommandResult,
   ChannelAttachment,
+  HandleMessageOptions,
   LifecycleTrigger,
   SessionInfo,
 } from "./adapters/types.js";
@@ -532,6 +533,7 @@ export class PackAgent implements IPackAgent {
     text: string,
     onEvent: (event: AgentEvent) => void,
     attachments?: ChannelAttachment[],
+    options?: HandleMessageOptions,
   ): Promise<HandleResult> {
     const cs = await this.getOrCreateSession(adapter, channelId);
     const run = async (): Promise<HandleResult> => {
@@ -718,6 +720,7 @@ export class PackAgent implements IPackAgent {
           : this.artifactSnapshotService.createSnapshots(
             runId,
             coordinator.getDeclarations(),
+            options?.jobName,
           );
         this.resultStore.completeRun({
           runId,

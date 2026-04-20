@@ -20,6 +20,7 @@ export interface SnapshotArtifactRecord {
   declarationSeq: number;
   artifactOrder: number;
   declaredAt: string;
+  jobName?: string | null;
   originalPath: string;
   snapshotPath: string;
   fileName: string;
@@ -48,6 +49,7 @@ export interface ResultArtifactRecord {
   channelId: string;
   declarationSeq: number;
   artifactOrder: number;
+  jobName: string | null;
   originalPath: string;
   snapshotPath: string;
   fileName: string;
@@ -66,5 +68,7 @@ export interface ListRunsOptions {
 
 export interface ListArtifactsOptions {
   channelId?: string;
+  jobName?: string;
   limit?: number;
+  offset?: number;
 }

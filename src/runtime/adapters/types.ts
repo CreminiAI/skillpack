@@ -92,6 +92,10 @@ export interface HandleResult {
   errorMessage?: string;
 }
 
+export interface HandleMessageOptions {
+  jobName?: string;
+}
+
 export interface PackAgentOptions {
   apiKey: string;
   rootDir: string;
@@ -116,6 +120,7 @@ export interface IPackAgent {
     text: string,
     onEvent: (event: AgentEvent) => void,
     attachments?: ChannelAttachment[],
+    options?: HandleMessageOptions,
   ): Promise<HandleResult>;
 
   /** Handle a built-in bot command */

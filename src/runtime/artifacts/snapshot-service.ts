@@ -20,6 +20,7 @@ export class ArtifactSnapshotService {
   createSnapshots(
     runId: string,
     declarations: readonly ArtifactDeclarationBatch[],
+    jobName?: string,
   ): SnapshotArtifactRecord[] {
     if (declarations.length === 0) {
       return [];
@@ -50,6 +51,7 @@ export class ArtifactSnapshotService {
             declarationSeq: declaration.declarationSeq,
             artifactOrder,
             declaredAt: declaration.declaredAt,
+            jobName: jobName ?? null,
             originalPath: toPackRelativePath(this.rootDir, artifact.filePath),
             snapshotPath: path.join("data", "artifacts", runId, snapshotName).split(path.sep).join("/"),
             fileName: artifact.fileName,

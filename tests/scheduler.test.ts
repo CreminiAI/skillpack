@@ -114,3 +114,39 @@ test("scheduler persists add/remove/enable changes only to job.json", async () =
     await scheduler.stop();
   });
 });
+
+test("scheduler passes jobName metadata when triggering a job", async () => {
+  await withTempDir(async (dir) => {
+    saveJobFile(dir, {
+      jobs: [
+        {
+          name: "metadata-job",
+          cron: "0 9 * * 1-5",
+          prompt: "Send the metadata report",
+          notify: {
+            adapter: "telegram",
+            channelId: "telegram-123",
+          },
+        },
+      ],
+    });
+
+    const calls: unknown[] = [];
+    const scheduler = new SchedulerAdapter();
+    await scheduler.start({
+      ...createSchedulerContext(dir),
+      agent: {
+        handleMessage: async (...args: unknown[]) => {
+          calls.push(args[5]);
+          return { errorMessage: undefined };
+        },
+      },
+    } as any);
+
+    const result = await scheduler.triggerJob("metadata-job");
+    assert.equal(result.success, true);
+    assert.deepEqual(calls, [{ jobName: "metadata-job" }]);
+
+    await scheduler.stop();
+  });
+});
