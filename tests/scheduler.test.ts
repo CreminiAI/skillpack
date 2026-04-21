@@ -19,6 +19,7 @@ async function withTempDir(run: (dir: string) => Promise<void> | void): Promise<
 function createSchedulerContext(rootDir: string) {
   return {
     agent: {
+      handleCommand: async () => ({ success: true }),
       handleMessage: async () => ({ errorMessage: undefined }),
     },
     server: {},
@@ -136,6 +137,7 @@ test("scheduler passes jobName metadata when triggering a job", async () => {
     await scheduler.start({
       ...createSchedulerContext(dir),
       agent: {
+        handleCommand: async () => ({ success: true }),
         handleMessage: async (...args: unknown[]) => {
           calls.push(args[5]);
           return { errorMessage: undefined };
@@ -146,6 +148,56 @@ test("scheduler passes jobName metadata when triggering a job", async () => {
     const result = await scheduler.triggerJob("metadata-job");
     assert.equal(result.success, true);
     assert.deepEqual(calls, [{ jobName: "metadata-job" }]);
+
+    await scheduler.stop();
+  });
+});
+
+test("scheduler clears previous context before running and keeps the same channelId", async () => {
+  await withTempDir(async (dir) => {
+    saveJobFile(dir, {
+      jobs: [
+        {
+          name: "clean-context-job",
+          cron: "0 9 * * 1-5",
+          prompt: "Run with a fresh context",
+          notify: {
+            adapter: "telegram",
+            channelId: "telegram-123",
+          },
+        },
+      ],
+    });
+
+    const calls: Array<{
+      type: "clear" | "message";
+      channelId: string;
+    }> = [];
+
+    const scheduler = new SchedulerAdapter();
+    await scheduler.start({
+      ...createSchedulerContext(dir),
+      agent: {
+        handleCommand: async (command: string, channelId: string) => {
+          calls.push({ type: command as "clear", channelId });
+          return { success: true };
+        },
+        handleMessage: async (
+          _adapter: string,
+          channelId: string,
+        ) => {
+          calls.push({ type: "message", channelId });
+          return { errorMessage: undefined };
+        },
+      },
+    } as any);
+
+    const result = await scheduler.triggerJob("clean-context-job");
+    assert.equal(result.success, true);
+    assert.deepEqual(calls, [
+      { type: "clear", channelId: "scheduler-clean-context-job" },
+      { type: "message", channelId: "scheduler-clean-context-job" },
+    ]);
 
     await scheduler.stop();
   });

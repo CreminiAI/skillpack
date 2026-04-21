@@ -227,6 +227,8 @@ export class SchedulerAdapter implements PlatformAdapter {
     };
 
     try {
+      await this.clearJobContext(channelId);
+
       const result = await this.agent.handleMessage(
         "scheduler",
         channelId,
@@ -287,6 +289,13 @@ export class SchedulerAdapter implements PlatformAdapter {
     }
 
     return { text: fullText, notifyFailed };
+  }
+
+  private async clearJobContext(channelId: string): Promise<void> {
+    const result = await this.agent.handleCommand("clear", channelId);
+    if (!result.success) {
+      throw new Error(result.message || `Failed to clear context for ${channelId}`);
+    }
   }
 
   // -------------------------------------------------------------------------
