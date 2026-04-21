@@ -55,12 +55,17 @@ export function createSaveArtifactsTool(
     name: "save_artifacts",
     label: "Save Artifacts",
     description: [
-      "Save artifact files produced by this run for dashboard indexing.",
-      "Use this only for output files that should appear in the artifact catalog.",
+      "Save the final output files produced by this run.",
+      "Always use this for user-facing deliverables that are part of the final result.",
+      "Do not use this for intermediate, temporary, draft, or scratch files.",
       "Each filePath must be an absolute path inside the current pack root.",
     ].join("\n"),
     promptSnippet:
-      "save_artifacts: Save only the output files that should appear in the artifact dashboard. Use absolute paths inside the current pack root.",
+      "save_artifacts: Save final result files for this task. Always call this for user-facing final deliverables, and never for intermediate files. Use absolute paths inside the current pack root.",
+    promptGuidelines: [
+      "Whenever you create a final result file for the user, call `save_artifacts` before finishing the response.",
+      "Do not call `save_artifacts` for intermediate, temporary, draft, or scratch files.",
+    ],
     parameters: SaveArtifactsParams,
     async execute(
       _toolCallId,
