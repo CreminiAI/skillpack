@@ -20,13 +20,10 @@ type IpcRequest =
   | { id: string; type: "get_conversations" }
   | { id: string; type: "create_conversation" }
   | { id: string; type: "get_messages"; channelId: string; limit?: number }
-  | { id: string; type: "get_result_runs"; channelId?: string; limit?: number }
-  | { id: string; type: "get_run_artifacts"; runId: string }
   | {
     id: string;
     type: "get_recent_artifacts";
     channelId?: string;
-    jobName?: string;
     limit?: number;
     offset?: number;
   }
@@ -171,31 +168,6 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           return;
         }
 
-        case "get_result_runs": {
-          if (!this.resultsQueryService) {
-            this.replyError(request.id, "Results query service is not available");
-            return;
-          }
-          this.reply(request.id, this.resultsQueryService.listRecentRuns({
-            channelId: request.channelId,
-            limit: request.limit,
-          }));
-          return;
-        }
-
-        case "get_run_artifacts": {
-          if (!this.resultsQueryService) {
-            this.replyError(request.id, "Results query service is not available");
-            return;
-          }
-          if (!request.runId || typeof request.runId !== "string") {
-            this.replyError(request.id, "runId is required");
-            return;
-          }
-          this.reply(request.id, this.resultsQueryService.getRunArtifacts(request.runId));
-          return;
-        }
-
         case "get_recent_artifacts": {
           if (!this.resultsQueryService) {
             this.replyError(request.id, "Results query service is not available");
@@ -203,7 +175,6 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           }
           this.reply(request.id, this.resultsQueryService.listRecentArtifacts({
             channelId: request.channelId,
-            jobName: request.jobName,
             limit: request.limit,
             offset: request.offset,
           }));

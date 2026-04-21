@@ -19,11 +19,9 @@ import {
   isImageMime,
 } from "./adapters/attachment-utils.js";
 import {
-  ArtifactSnapshotService,
-  createSetFinalArtifactsTool,
-  type FinalArtifactsCollector,
-  ResultStore,
-  RunArtifactCoordinator,
+  ArtifactPersistenceService,
+  createSaveArtifactsTool,
+  type SaveArtifactsCallback,
 } from "./artifacts/index.js";
 import {
   createSendFileTool,
@@ -41,7 +39,6 @@ import type {
   BotCommand,
   CommandResult,
   ChannelAttachment,
-  HandleMessageOptions,
   LifecycleTrigger,
   SessionInfo,
 } from "./adapters/types.js";
@@ -251,19 +248,6 @@ function getAssistantDiagnostics(message: any): AssistantDiagnostics | null {
   return { stopReason, errorMessage, hasText: text.length > 0, toolCalls };
 }
 
-function extractAssistantText(message: any): string {
-  if (!message || message.role !== "assistant") {
-    return "";
-  }
-
-  const content = Array.isArray(message.content) ? message.content : [];
-  return content
-    .filter((item: any) => item?.type === "text")
-    .map((item: any) => item.text || "")
-    .join("")
-    .trim();
-}
-
 function getLifecycleTrigger(channelId: string): LifecycleTrigger {
   if (channelId.startsWith("telegram-")) return "telegram";
   if (channelId.startsWith("slack-")) return "slack";
@@ -279,7 +263,7 @@ interface ChannelSession {
   running: boolean;
   pending: Promise<void>;
   fileOutputCallbackRef: { current: FileOutputCallback | null };
-  finalArtifactsCollectorRef: { current: FinalArtifactsCollector | null };
+  finalArtifactsSaveCallbackRef: { current: SaveArtifactsCallback | null };
 }
 
 // ---------------------------------------------------------------------------
@@ -292,13 +276,11 @@ export class PackAgent implements IPackAgent {
   private pendingSessionCreations = new Map<string, Promise<ChannelSession>>();
   private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
   private authStorage: AuthStorage;
-  private readonly resultStore: ResultStore;
-  private readonly artifactSnapshotService: ArtifactSnapshotService;
+  private readonly artifactPersistenceService: ArtifactPersistenceService;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
-    this.resultStore = options.resultStore;
-    this.artifactSnapshotService = options.artifactSnapshotService;
+    this.artifactPersistenceService = options.artifactPersistenceService;
 
     // Use ConfigFileAuthBackend to persist OAuth credentials in config.json._auth
     const configPath = path.resolve(options.rootDir, "data", "config.json");
@@ -339,36 +321,16 @@ export class PackAgent implements IPackAgent {
     adapter: "telegram" | "slack" | "web" | "scheduler",
     channelId: string,
     fileOutputCallbackRef: { current: FileOutputCallback | null },
-    finalArtifactsCollectorRef: { current: FinalArtifactsCollector | null },
+    finalArtifactsSaveCallbackRef: { current: SaveArtifactsCallback | null },
   ) {
     const tools = [
       createSendFileTool(fileOutputCallbackRef) as any,
-      createSetFinalArtifactsTool(this.options.rootDir, finalArtifactsCollectorRef) as any,
+      createSaveArtifactsTool(this.options.rootDir, finalArtifactsSaveCallbackRef) as any,
     ];
     if (adapter !== "scheduler") {
       tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
     }
     return tools;
-  }
-
-  private getRunFailureStatus(stopReason: string | undefined): "error" | "aborted" {
-    return stopReason === "aborted" ? "aborted" : "error";
-  }
-
-  private persistFailedRun(
-    runId: string,
-    coordinator: RunArtifactCoordinator,
-    stopReason: string | undefined,
-    errorMessage: string | undefined,
-  ): void {
-    this.resultStore.failRun({
-      runId,
-      assistantText: coordinator.getAssistantText(),
-      status: this.getRunFailureStatus(stopReason),
-      stopReason: stopReason ?? null,
-      errorMessage: errorMessage ?? null,
-      completedAt: new Date().toISOString(),
-    });
   }
 
   /**
@@ -484,8 +446,8 @@ export class PackAgent implements IPackAgent {
       const fileOutputCallbackRef: { current: FileOutputCallback | null } = {
         current: null,
       };
-      const finalArtifactsCollectorRef: {
-        current: FinalArtifactsCollector | null;
+      const finalArtifactsSaveCallbackRef: {
+        current: SaveArtifactsCallback | null;
       } = {
         current: null,
       };
@@ -493,7 +455,7 @@ export class PackAgent implements IPackAgent {
         adapter,
         channelId,
         fileOutputCallbackRef,
-        finalArtifactsCollectorRef,
+        finalArtifactsSaveCallbackRef,
       );
 
       const { session } = await createAgentSession({
@@ -512,7 +474,7 @@ export class PackAgent implements IPackAgent {
         running: false,
         pending: Promise.resolve(),
         fileOutputCallbackRef,
-        finalArtifactsCollectorRef,
+        finalArtifactsSaveCallbackRef,
       };
       this.channels.set(channelId, channelSession);
       return channelSession;
@@ -533,7 +495,6 @@ export class PackAgent implements IPackAgent {
     text: string,
     onEvent: (event: AgentEvent) => void,
     attachments?: ChannelAttachment[],
-    options?: HandleMessageOptions,
   ): Promise<HandleResult> {
     const cs = await this.getOrCreateSession(adapter, channelId);
     const run = async (): Promise<HandleResult> => {
@@ -541,29 +502,19 @@ export class PackAgent implements IPackAgent {
 
       let turnHadVisibleOutput = false;
       const runId = randomUUID();
-      const coordinator = new RunArtifactCoordinator();
-      const startedAt = new Date().toISOString();
       let unsubscribe = () => undefined;
 
       try {
-        this.resultStore.createRun({
-          runId,
-          channelId,
-          userText: text,
-          startedAt,
-        });
-
         // Wire up file output callback for this run
         cs.fileOutputCallbackRef.current = (event) => {
           onEvent(event);
         };
-        cs.finalArtifactsCollectorRef.current = {
-          addArtifacts: (artifacts) => {
-            coordinator.addDeclaration(artifacts);
-          },
-          markInvalid: () => {
-            coordinator.markArtifactDeclarationInvalid();
-          },
+        cs.finalArtifactsSaveCallbackRef.current = (artifacts) => {
+          return this.artifactPersistenceService.saveArtifacts({
+            runId,
+            channelId,
+            artifacts,
+          });
         };
 
         // Subscribe to agent events and forward to adapter
@@ -588,7 +539,6 @@ export class PackAgent implements IPackAgent {
               if (event.assistantMessageEvent?.type === "text_delta") {
                 turnHadVisibleOutput = true;
                 write(event.assistantMessageEvent.delta);
-                coordinator.appendAssistantDelta(event.assistantMessageEvent.delta);
                 onEvent({
                   type: "text_delta",
                   delta: event.assistantMessageEvent.delta,
@@ -677,18 +627,8 @@ export class PackAgent implements IPackAgent {
 
         const lastMessage = cs.session.state.messages.at(-1);
         const diagnostics = getAssistantDiagnostics(lastMessage);
-        const assistantText = extractAssistantText(lastMessage);
-        if (assistantText) {
-          coordinator.setAssistantText(assistantText);
-        }
 
         if (diagnostics?.errorMessage) {
-          this.persistFailedRun(
-            runId,
-            coordinator,
-            diagnostics.stopReason,
-            diagnostics.errorMessage,
-          );
           return {
             stopReason: diagnostics.stopReason,
             errorMessage: diagnostics.errorMessage,
@@ -703,42 +643,17 @@ export class PackAgent implements IPackAgent {
         ) {
           const errorMessage =
             "Assistant returned no visible output. Check the server logs for details.";
-          this.persistFailedRun(
-            runId,
-            coordinator,
-            diagnostics.stopReason,
-            errorMessage,
-          );
           return {
             stopReason: diagnostics.stopReason,
             errorMessage,
           };
         }
 
-        const snapshots = coordinator.hasInvalidArtifactDeclarations()
-          ? []
-          : this.artifactSnapshotService.createSnapshots(
-            runId,
-            coordinator.getDeclarations(),
-            options?.jobName,
-          );
-        this.resultStore.completeRun({
-          runId,
-          assistantText: coordinator.getAssistantText(),
-          stopReason: diagnostics?.stopReason ?? "unknown",
-          completedAt: new Date().toISOString(),
-          artifacts: snapshots,
-        });
-
         return { stopReason: diagnostics?.stopReason ?? "unknown" };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.persistFailedRun(runId, coordinator, "error", message);
-        throw error;
       } finally {
         cs.running = false;
         cs.fileOutputCallbackRef.current = null;
-        cs.finalArtifactsCollectorRef.current = null;
+        cs.finalArtifactsSaveCallbackRef.current = null;
         unsubscribe();
       }
     };

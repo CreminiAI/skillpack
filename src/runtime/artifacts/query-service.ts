@@ -1,8 +1,6 @@
 import type {
   ListArtifactsOptions,
-  ListRunsOptions,
   ResultArtifactRecord,
-  ResultRunRecord,
 } from "./types.js";
 import { ResultStore } from "./store.js";
 
@@ -26,21 +24,9 @@ function clampOffset(offset: number | undefined): number {
 export class ResultsQueryService {
   constructor(private readonly resultStore: ResultStore) {}
 
-  listRecentRuns(options: ListRunsOptions = {}): ResultRunRecord[] {
-    return this.resultStore.listRecentRuns({
-      channelId: options.channelId,
-      limit: clampLimit(options.limit, 50, 200),
-    });
-  }
-
-  getRunArtifacts(runId: string): ResultArtifactRecord[] {
-    return this.resultStore.getRunArtifacts(runId);
-  }
-
   listRecentArtifacts(options: ListArtifactsOptions = {}): ResultArtifactRecord[] {
     return this.resultStore.listRecentArtifacts({
       channelId: options.channelId,
-      jobName: options.jobName,
       limit: clampLimit(options.limit, 100, 500),
       offset: clampOffset(options.offset),
     });

@@ -16,6 +16,7 @@ import {
   canonicalizeDir,
 } from "./registry.js";
 import {
+  ArtifactPersistenceService,
   ArtifactSnapshotService,
   ResultStore,
   ResultsQueryService,
@@ -93,6 +94,10 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const lifecycle = new Lifecycle(server);
   const resultStore = new ResultStore(rootDir);
   const artifactSnapshotService = new ArtifactSnapshotService(rootDir);
+  const artifactPersistenceService = new ArtifactPersistenceService(
+    artifactSnapshotService,
+    resultStore,
+  );
   const resultsQueryService = new ResultsQueryService(resultStore);
 
   // ---------------------------------------------------------------------------
@@ -107,8 +112,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     baseUrl,
     apiProtocol,
     lifecycleHandler: lifecycle,
-    resultStore,
-    artifactSnapshotService,
+    artifactPersistenceService,
   });
 
   // ---------------------------------------------------------------------------

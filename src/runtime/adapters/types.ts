@@ -1,8 +1,7 @@
 import type { Server } from "node:http";
 import type { Express } from "express";
 import type {
-  ArtifactSnapshotService,
-  ResultStore,
+  ArtifactPersistenceService,
   ResultsQueryService,
 } from "../artifacts/index.js";
 
@@ -92,10 +91,6 @@ export interface HandleResult {
   errorMessage?: string;
 }
 
-export interface HandleMessageOptions {
-  jobName?: string;
-}
-
 export interface PackAgentOptions {
   apiKey: string;
   rootDir: string;
@@ -104,8 +99,7 @@ export interface PackAgentOptions {
   baseUrl?: string;
   apiProtocol?: "openai-responses" | "openai-completions";
   lifecycleHandler: LifecycleHandler;
-  resultStore: ResultStore;
-  artifactSnapshotService: ArtifactSnapshotService;
+  artifactPersistenceService: ArtifactPersistenceService;
 }
 
 /**
@@ -120,7 +114,6 @@ export interface IPackAgent {
     text: string,
     onEvent: (event: AgentEvent) => void,
     attachments?: ChannelAttachment[],
-    options?: HandleMessageOptions,
   ): Promise<HandleResult>;
 
   /** Handle a built-in bot command */
@@ -214,7 +207,7 @@ export interface AdapterContext {
   adapterMap?: Map<string, PlatformAdapter>;
   /** IPC broadcaster (desktop mode only) */
   ipcBroadcaster?: IpcBroadcaster;
-  /** Read-only query service for persisted run and artifact results */
+  /** Read-only query service for persisted artifact results */
   resultsQueryService?: ResultsQueryService;
 }
 

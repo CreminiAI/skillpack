@@ -116,7 +116,7 @@ test("scheduler persists add/remove/enable changes only to job.json", async () =
   });
 });
 
-test("scheduler passes jobName metadata when triggering a job", async () => {
+test("scheduler triggers jobs with the derived scheduler channelId only", async () => {
   await withTempDir(async (dir) => {
     saveJobFile(dir, {
       jobs: [
@@ -132,14 +132,17 @@ test("scheduler passes jobName metadata when triggering a job", async () => {
       ],
     });
 
-    const calls: unknown[] = [];
+    const calls: Array<{ channelId: string; options: unknown }> = [];
     const scheduler = new SchedulerAdapter();
     await scheduler.start({
       ...createSchedulerContext(dir),
       agent: {
         handleCommand: async () => ({ success: true }),
         handleMessage: async (...args: unknown[]) => {
-          calls.push(args[5]);
+          calls.push({
+            channelId: args[1] as string,
+            options: args[5],
+          });
           return { errorMessage: undefined };
         },
       },
@@ -147,7 +150,12 @@ test("scheduler passes jobName metadata when triggering a job", async () => {
 
     const result = await scheduler.triggerJob("metadata-job");
     assert.equal(result.success, true);
-    assert.deepEqual(calls, [{ jobName: "metadata-job" }]);
+    assert.deepEqual(calls, [
+      {
+        channelId: "scheduler-metadata-job",
+        options: undefined,
+      },
+    ]);
 
     await scheduler.stop();
   });

@@ -235,7 +235,6 @@ export class SchedulerAdapter implements PlatformAdapter {
         jobConfig.prompt,
         onEvent,
         undefined,
-        { jobName: jobConfig.name },
       );
 
       if (result.errorMessage) {

@@ -275,27 +275,6 @@ export class WebAdapter implements PlatformAdapter {
 
     // -- Persisted results API ----------------------------------------------
 
-    app.get("/api/results/runs", (req, res) => {
-      if (!resultsQueryService) {
-        res.status(503).json({ error: "Results query service is not available" });
-        return;
-      }
-
-      res.json(resultsQueryService.listRecentRuns({
-        channelId: typeof req.query.channelId === "string" ? req.query.channelId : undefined,
-        limit: parsePositiveInt(req.query.limit, 50),
-      }));
-    });
-
-    app.get("/api/results/runs/:runId/artifacts", (req, res) => {
-      if (!resultsQueryService) {
-        res.status(503).json({ error: "Results query service is not available" });
-        return;
-      }
-
-      res.json(resultsQueryService.getRunArtifacts(req.params.runId));
-    });
-
     app.get("/api/results/artifacts", (req, res) => {
       if (!resultsQueryService) {
         res.status(503).json({ error: "Results query service is not available" });
@@ -305,6 +284,7 @@ export class WebAdapter implements PlatformAdapter {
       res.json(resultsQueryService.listRecentArtifacts({
         channelId: typeof req.query.channelId === "string" ? req.query.channelId : undefined,
         limit: parsePositiveInt(req.query.limit, 100),
+        offset: parsePositiveInt(req.query.offset, 0),
       }));
     });
 
