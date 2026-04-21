@@ -99,7 +99,7 @@ The CLI entry point is `src/cli.ts`, built on `commander`:
 | --- | --- |
 | `skillpack create [directory]` | Interactively create a new pack (also accepts `--config <url>` to initialize from a remote or local config file) |
 | `skillpack run [directory]` | Start the runtime server; prompts to create `skillpack.json` if missing; auto-installs missing remote skills |
-| `skillpack zip` | Package `skillpack.json`, `start.sh`, `start.bat`, and `skills/` into a zip |
+| `skillpack zip` | Package `skillpack.json`, optional `job.json`, optional pack prompt files, `start.sh`, `start.bat`, and `skills/` into a zip |
 
 ---
 
@@ -150,7 +150,9 @@ npx -y skills add <source> --agent openclaw --copy -y --skill <name>
 Packages only the essentials for distribution:
 
 - `skillpack.json`
+- optional `job.json`
 - `skills/` directory
+- optional `AGENTS.md` / `SOUL.md`
 - `start.sh` / `start.bat`
 
 The runtime is no longer bundled inside the zip. The start scripts invoke `npx @cremini/skillpack run` so the runtime is resolved from npm at startup.
@@ -168,6 +170,9 @@ The zip produced by `skillpack zip` contains:
 ```text
 <pack-name>/
 ├── skillpack.json
+├── job.json
+├── AGENTS.md
+├── SOUL.md
 ├── skills/
 ├── start.sh
 └── start.bat

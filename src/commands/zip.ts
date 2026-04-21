@@ -8,6 +8,7 @@ import {
   PACK_FILE,
   saveConfig,
 } from "../pack-config.js";
+import { getJobFilePath, JOB_FILE } from "../job-config.js";
 import {
   installConfiguredSkills,
   syncSkillDescriptions,
@@ -15,7 +16,8 @@ import {
 
 /**
  * Package the pack as a lightweight zip file.
- * Includes: skillpack.json, optional AGENTS.md / SOUL.md, start.sh, start.bat, skills/
+ * Includes: skillpack.json, optional job.json, optional AGENTS.md / SOUL.md,
+ * start.sh, start.bat, skills/
  * Does NOT include server/, web/, or any other runtime files.
  */
 export async function zipCommand(workDir: string): Promise<string> {
@@ -54,7 +56,13 @@ export async function zipCommand(workDir: string): Promise<string> {
       name: `${prefix}/${PACK_FILE}`,
     });
 
-    // 2. optional pack-level prompt files
+    // 2. optional scheduled jobs
+    const jobFilePath = getJobFilePath(workDir);
+    if (fs.existsSync(jobFilePath)) {
+      archive.file(jobFilePath, { name: `${prefix}/${JOB_FILE}` });
+    }
+
+    // 3. optional pack-level prompt files
     for (const file of ["AGENTS.md", "SOUL.md"]) {
       const filePath = path.join(workDir, file);
       if (fs.existsSync(filePath)) {
@@ -62,19 +70,19 @@ export async function zipCommand(workDir: string): Promise<string> {
       }
     }
 
-    // 3. skills directory
+    // 4. skills directory
     const skillsDir = path.join(workDir, "skills");
     if (fs.existsSync(skillsDir)) {
       archive.directory(skillsDir, `${prefix}/skills`);
     }
 
-    // 4. start.sh (with execute bit)
+    // 5. start.sh (with execute bit)
     const startSh = path.join(workDir, "start.sh");
     if (fs.existsSync(startSh)) {
       archive.file(startSh, { name: `${prefix}/start.sh`, mode: 0o755 });
     }
 
-    // 5. start.bat
+    // 6. start.bat
     const startBat = path.join(workDir, "start.bat");
     if (fs.existsSync(startBat)) {
       archive.file(startBat, { name: `${prefix}/start.bat` });

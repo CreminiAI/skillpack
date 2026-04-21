@@ -15,6 +15,12 @@ import {
   deregister as registryDeregister,
   canonicalizeDir,
 } from "./registry.js";
+import {
+  ArtifactPersistenceService,
+  ArtifactSnapshotService,
+  ResultStore,
+  ResultsQueryService,
+} from "./artifacts/index.js";
 import { loadConfig as loadPackConfig } from "../pack-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,24 +29,26 @@ export interface ServerOptions {
   rootDir: string;
   host?: string;
   port?: number;
-  daemonRun?: boolean;
+  runtimeMode?: "standalone" | "embedded";
 }
 
 /**
  * Start the SkillPack runtime server.
- * Reads skillpack.json and data/config.json from rootDir, starts Express + WS,
- * loads adapters (Web always, Telegram/Slack if configured).
+ * Reads skillpack.json plus pack/runtime config files from rootDir, starts
+ * Express + WS, and loads adapters (Web always, Telegram/Slack if configured).
  */
 export async function startServer(options: ServerOptions): Promise<void> {
   const {
     rootDir,
     host = process.env.HOST || "127.0.0.1",
     port = Number(process.env.PORT) || 26313,
-    daemonRun = false,
+    runtimeMode = process.env.SKILLPACK_RUNTIME_MODE === "embedded"
+      ? "embedded"
+      : "standalone",
   } = options;
 
   // ---------------------------------------------------------------------------
-  // Read configuration: data/config.json first, env vars override
+  // Read runtime configuration: data/config.json first, env vars override
   // ---------------------------------------------------------------------------
 
   const dataConfig = configManager.load(rootDir);
@@ -84,6 +92,13 @@ export async function startServer(options: ServerOptions): Promise<void> {
   });
 
   const lifecycle = new Lifecycle(server);
+  const resultStore = new ResultStore(rootDir);
+  const artifactSnapshotService = new ArtifactSnapshotService(rootDir);
+  const artifactPersistenceService = new ArtifactPersistenceService(
+    artifactSnapshotService,
+    resultStore,
+  );
+  const resultsQueryService = new ResultsQueryService(resultStore);
 
   // ---------------------------------------------------------------------------
   // Create PackAgent (shared instance)
@@ -97,6 +112,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     baseUrl,
     apiProtocol,
     lifecycleHandler: lifecycle,
+    artifactPersistenceService,
   });
 
   // ---------------------------------------------------------------------------
@@ -107,6 +123,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const adapterMap = new Map<string, import("./adapters/types.js").PlatformAdapter>();
   const hasIpcChannel = typeof process.send === "function";
   const ipcAdapter = new IpcAdapter();
+  const webEnabled = runtimeMode === "standalone";
 
   if (hasIpcChannel) {
     await ipcAdapter.start({
@@ -116,6 +133,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
       rootDir,
       lifecycle,
       adapterMap,
+      resultsQueryService,
     });
     adapters.push(ipcAdapter);
     adapterMap.set(ipcAdapter.name, ipcAdapter);
@@ -123,19 +141,21 @@ export async function startServer(options: ServerOptions): Promise<void> {
 
   const ipcBroadcaster = hasIpcChannel ? ipcAdapter : undefined;
 
-  // Web adapter is always enabled
-  const webAdapter = new WebAdapter();
-  await webAdapter.start({
-    agent,
-    server,
-    app,
-    rootDir,
-    lifecycle,
-    adapterMap,
-    ipcBroadcaster,
-  });
-  adapters.push(webAdapter);
-  adapterMap.set(webAdapter.name, webAdapter);
+  if (webEnabled) {
+    const webAdapter = new WebAdapter();
+    await webAdapter.start({
+      agent,
+      server,
+      app,
+      rootDir,
+      lifecycle,
+      adapterMap,
+      ipcBroadcaster,
+      resultsQueryService,
+    });
+    adapters.push(webAdapter);
+    adapterMap.set(webAdapter.name, webAdapter);
+  }
 
   // Telegram adapter (conditional)
   if (dataConfig.adapters?.telegram?.token) {
@@ -152,6 +172,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
         lifecycle,
         adapterMap,
         ipcBroadcaster,
+        resultsQueryService,
       });
       adapters.push(telegramAdapter);
       adapterMap.set(telegramAdapter.name, telegramAdapter);
@@ -182,6 +203,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
           lifecycle,
           adapterMap,
           ipcBroadcaster,
+          resultsQueryService,
         });
         adapters.push(slackAdapter);
         adapterMap.set(slackAdapter.name, slackAdapter);
@@ -204,8 +226,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     await adapter.sendMessage(channelId, text);
   };
 
-  // Scheduler adapter (conditional – starts AFTER all IM adapters)
-  const scheduledJobs = dataConfig.scheduledJobs || [];
+  // Scheduler adapter (starts AFTER all IM adapters and loads job.json)
   let schedulerAdapter: import("./adapters/scheduler.js").SchedulerAdapter | null = null;
 
   // Always import scheduler so that the Agent tool can manage jobs dynamically
@@ -220,13 +241,10 @@ export async function startServer(options: ServerOptions): Promise<void> {
       lifecycle,
       notify: notifyFn,
       adapterMap,
+      resultsQueryService,
     });
     adapters.push(schedulerAdapter);
     adapterMap.set(schedulerAdapter.name, schedulerAdapter);
-
-    if (scheduledJobs.length > 0) {
-      console.log(`[Server] Scheduler started with ${scheduledJobs.length} job(s)`);
-    }
   } catch (err) {
     console.error("[Scheduler] Failed to start:", err);
   }
@@ -239,34 +257,26 @@ export async function startServer(options: ServerOptions): Promise<void> {
   lifecycle.registerAdapters(adapters);
 
   // ---------------------------------------------------------------------------
-  // Listen
+  // Ready / Listen
   // ---------------------------------------------------------------------------
 
-  server.once("listening", () => {
-    const address = server.address();
-    const actualPort = typeof address === "string" ? address : address?.port;
-    const url = `http://${host}:${actualPort}`;
-    console.log(`\n  Skills Pack Server`);
-    console.log(`  Running at ${url}\n`);
+  const announceReady = (actualPort: number) => {
+    if (webEnabled) {
+      const url = `http://${host}:${actualPort}`;
+      console.log(`\n  Skills Pack Server`);
+      console.log(`  Running at ${url}\n`);
 
-    // Register in global registry for node-manager discovery
-    try {
-      registryRegister({
-        dir: canonicalRootDir,
-        name: packConfig.name,
-        version: packConfig.version,
-        port: typeof actualPort === "number" ? actualPort : port,
-      });
-    } catch (err) {
-      console.warn("  [Registry] Could not register pack:", err);
-    }
+      try {
+        registryRegister({
+          dir: canonicalRootDir,
+          name: packConfig.name,
+          version: packConfig.version,
+          port: actualPort,
+        });
+      } catch (err) {
+        console.warn("  [Registry] Could not register pack:", err);
+      }
 
-    if (hasIpcChannel) {
-      ipcAdapter.notifyReady(typeof actualPort === "number" ? actualPort : port);
-    }
-
-    // Open the browser automatically if not a daemon run
-    if (!daemonRun) {
       const cmd =
         process.platform === "darwin"
           ? `open ${url}`
@@ -276,8 +286,15 @@ export async function startServer(options: ServerOptions): Promise<void> {
       exec(cmd, (err) => {
         if (err) console.warn(`  Could not open browser: ${err.message}`);
       });
+    } else {
+      console.log("\n  Skills Pack Server");
+      console.log("  Running in embedded mode (IPC only)\n");
     }
-  });
+
+    if (hasIpcChannel) {
+      ipcAdapter.notifyReady(actualPort);
+    }
+  };
 
   process.on("SIGINT", () => {
     registryDeregister(canonicalRootDir, process.pid);
@@ -289,25 +306,34 @@ export async function startServer(options: ServerOptions): Promise<void> {
     void lifecycle.requestShutdown("signal");
   });
 
-  await new Promise<void>((resolve, reject) => {
-    function tryListen(listenPort: number) {
-      server.listen(listenPort, host);
+  if (webEnabled) {
+    const actualPort = await new Promise<number>((resolve, reject) => {
+      function tryListen(listenPort: number) {
+        server.listen(listenPort, host);
 
-      server.once("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE") {
-          console.log(`  Port ${listenPort} is in use, trying ${listenPort + 1}...`);
-          server.close();
-          tryListen(listenPort + 1);
-        } else {
-          reject(err);
-        }
-      });
+        server.once("error", (err: NodeJS.ErrnoException) => {
+          if (err.code === "EADDRINUSE") {
+            console.log(`  Port ${listenPort} is in use, trying ${listenPort + 1}...`);
+            server.close();
+            tryListen(listenPort + 1);
+          } else {
+            reject(err);
+          }
+        });
 
-      server.once("listening", () => resolve());
-    }
+        server.once("listening", () => {
+          const address = server.address();
+          resolve(typeof address === "string" ? listenPort : (address?.port ?? listenPort));
+        });
+      }
 
-    tryListen(port);
-  });
+      tryListen(port);
+    });
+
+    announceReady(actualPort);
+  } else {
+    announceReady(0);
+  }
 
   // Keep process alive
   await new Promise<void>(() => {});

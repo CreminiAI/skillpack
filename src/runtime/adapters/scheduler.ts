@@ -6,8 +6,11 @@ import type {
   IPackAgent,
   AgentEvent,
 } from "./types.js";
-import type { ScheduledJobConfig } from "../config.js";
-import { configManager } from "../config.js";
+import {
+  loadJobFile,
+  saveJobFile,
+  type ScheduledJobConfig,
+} from "../../job-config.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,9 +95,7 @@ export class SchedulerAdapter implements PlatformAdapter {
     this.rootDir = ctx.rootDir;
     this.notifyFn = ctx.notify || (async () => {});
 
-    // Load initial jobs from config
-    const config = configManager.getConfig();
-    const jobConfigs = config.scheduledJobs || [];
+    const jobConfigs = loadJobFile(this.rootDir).jobs;
 
     let scheduledCount = 0;
     let disabledCount = 0;
@@ -226,11 +227,14 @@ export class SchedulerAdapter implements PlatformAdapter {
     };
 
     try {
+      await this.clearJobContext(channelId);
+
       const result = await this.agent.handleMessage(
         "scheduler",
         channelId,
         jobConfig.prompt,
         onEvent,
+        undefined,
       );
 
       if (result.errorMessage) {
@@ -286,12 +290,19 @@ export class SchedulerAdapter implements PlatformAdapter {
     return { text: fullText, notifyFailed };
   }
 
+  private async clearJobContext(channelId: string): Promise<void> {
+    const result = await this.agent.handleCommand("clear", channelId);
+    if (!result.success) {
+      throw new Error(result.message || `Failed to clear context for ${channelId}`);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Dynamic management API
   // -------------------------------------------------------------------------
 
   /**
-   * Add a new job, persist to config.json.
+   * Add a new job, persist to job.json.
    */
   addJob(jobConfig: ScheduledJobConfig): { success: boolean; message: string } {
     if (this.jobs.has(jobConfig.name)) {
@@ -318,7 +329,7 @@ export class SchedulerAdapter implements PlatformAdapter {
   }
 
   /**
-   * Remove a job and persist to config.json.
+   * Remove a job and persist to job.json.
    */
   removeJob(name: string): { success: boolean; message: string } {
     if (!this.jobs.has(name)) {
@@ -329,6 +340,36 @@ export class SchedulerAdapter implements PlatformAdapter {
     this.persistJobs();
 
     return { success: true, message: `Job "${name}" removed.` };
+  }
+
+  updateJob(
+    name: string,
+    updates: Omit<ScheduledJobConfig, "name">,
+  ): { success: boolean; message: string } {
+    const job = this.jobs.get(name);
+    if (!job) {
+      return { success: false, message: `Job "${name}" not found.` };
+    }
+
+    const nextConfig: ScheduledJobConfig = {
+      name,
+      cron: updates.cron,
+      prompt: updates.prompt,
+      notify: updates.notify,
+      enabled: updates.enabled,
+      timezone: updates.timezone,
+    };
+
+    const result = this.registerJob(nextConfig);
+    if (!result.registered) {
+      return { success: false, message: result.message };
+    }
+
+    this.persistJobs();
+    return {
+      success: true,
+      message: `Job "${name}" updated.`,
+    };
   }
 
   /**
@@ -437,14 +478,14 @@ export class SchedulerAdapter implements PlatformAdapter {
   }
 
   /**
-   * Persist all current jobs to data/config.json.
+   * Persist all current jobs to job.json.
    */
   private persistJobs(): void {
     const configs: ScheduledJobConfig[] = [];
     for (const [, job] of this.jobs) {
       configs.push(job.config);
     }
-    configManager.save(this.rootDir, { scheduledJobs: configs });
+    saveJobFile(this.rootDir, { jobs: configs });
   }
 
   // -------------------------------------------------------------------------

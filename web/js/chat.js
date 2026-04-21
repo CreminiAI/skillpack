@@ -1,10 +1,28 @@
 import { state } from "./config.js";
+import {
+  createConversation,
+  getConversationMessages,
+  listConversations,
+} from "./api.js";
 
 export const chatHistory = [];
+const DEFAULT_WEB_CHANNEL_ID = "web";
 let ws = null;
+let wsConnectPromise = null;
 let currentAssistantMsg = null;
+let currentChannelId = DEFAULT_WEB_CHANNEL_ID;
+const pendingSendFileCalls = new Map();
+const anonymousSendFileCalls = [];
+let reconnectTimer = null;
+let shouldMaintainWs = false;
 
-export function initChat() {
+function hasConfiguredWebAuth() {
+  return Boolean(
+    state.config && (state.config.hasApiKey || state.config.oauthConnected)
+  );
+}
+
+export async function initChat() {
   // Send button
   document.getElementById("send-btn").addEventListener("click", sendMessage);
 
@@ -38,6 +56,12 @@ export function initChat() {
         input.style.height = Math.min(input.scrollHeight, 120) + "px";
       }
     });
+  }
+
+  await initializeConversation();
+  shouldMaintainWs = hasConfiguredWebAuth();
+  if (shouldMaintainWs) {
+    void ensureBackgroundWsConnection();
   }
 }
 
@@ -184,30 +208,90 @@ function renderEmbeddedMarkdownBlocks(html) {
   return template.innerHTML;
 }
 
-async function getOrCreateWs() {
+function clearReconnectTimer() {
+  if (reconnectTimer !== null) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleReconnect() {
+  if (!shouldMaintainWs || !hasConfiguredWebAuth() || reconnectTimer !== null) {
+    return;
+  }
+
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null;
+    void ensureBackgroundWsConnection();
+  }, 1000);
+}
+
+async function ensureBackgroundWsConnection() {
+  try {
+    await getOrCreateWs({ background: true });
+  } catch (err) {
+    console.warn("Background WebSocket connection failed:", err);
+  }
+}
+
+export function refreshWebSocketConnectionPreference() {
+  shouldMaintainWs = hasConfiguredWebAuth();
+
+  if (shouldMaintainWs) {
+    void ensureBackgroundWsConnection();
+    return;
+  }
+
+  clearReconnectTimer();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  }
+}
+
+async function getOrCreateWs(options = {}) {
+  const { background = false } = options;
   if (ws && ws.readyState === WebSocket.OPEN) {
     return ws;
   }
 
-  return new Promise((resolve, reject) => {
+  if (wsConnectPromise) {
+    return wsConnectPromise;
+  }
+
+  clearReconnectTimer();
+
+  wsConnectPromise = new Promise((resolve, reject) => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const provider = state.config && state.config.provider ? state.config.provider : "openai";
+    const params = new URLSearchParams({
+      provider,
+      channelId: currentChannelId || DEFAULT_WEB_CHANNEL_ID,
+    });
+    const wsUrl = `${protocol}//${window.location.host}${state.API_BASE}/api/chat?${params.toString()}`;
 
-    const wsUrl = `${protocol}//${window.location.host}${state.API_BASE}/api/chat?provider=${provider}`;
+    const socket = new WebSocket(wsUrl);
+    ws = socket;
 
-    ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => resolve(ws);
-    ws.onerror = (err) => {
+    socket.onopen = () => {
+      shouldMaintainWs = true;
+      wsConnectPromise = null;
+      resolve(socket);
+    };
+    socket.onerror = (err) => {
       console.error(err);
+      wsConnectPromise = null;
       reject(new Error("WebSocket connection failed"));
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
       try {
         const parsed = JSON.parse(event.data);
         if (parsed.error) {
-          handleError(parsed.error);
+          if (background && !currentAssistantMsg) {
+            console.warn("Background WebSocket message error:", parsed.error);
+          } else {
+            handleError(parsed.error);
+          }
         } else if (parsed.done) {
           handleDone();
         } else if (parsed.type) {
@@ -218,11 +302,58 @@ async function getOrCreateWs() {
       }
     };
 
-    ws.onclose = () => {
-      ws = null;
+    socket.onclose = () => {
+      if (ws === socket) {
+        ws = null;
+      }
+      wsConnectPromise = null;
       enableInput();
+      scheduleReconnect();
     };
   });
+
+  return wsConnectPromise;
+}
+
+async function initializeConversation() {
+  const channelId = await ensureConversation();
+  currentChannelId = channelId;
+  await loadConversationHistory(channelId);
+}
+
+async function ensureConversation() {
+  const conversations = await listConversations();
+  const existing = conversations.find(
+    (conversation) => conversation.channelId === DEFAULT_WEB_CHANNEL_ID,
+  );
+  if (existing) {
+    return existing.channelId;
+  }
+
+  const created = await createConversation();
+  return created.channelId || DEFAULT_WEB_CHANNEL_ID;
+}
+
+async function loadConversationHistory(channelId) {
+  const messages = await getConversationMessages(channelId, 200);
+  const messagesEl = document.getElementById("messages");
+  const chatArea = document.getElementById("chat-area");
+
+  messagesEl.innerHTML = "";
+  chatHistory.length = 0;
+
+  for (const message of messages) {
+    appendMessage(message.role, message.text, message.toolCalls);
+    chatHistory.push({ role: message.role, content: message.text });
+  }
+
+  if (messages.length > 0) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
+  } else {
+    chatArea.classList.remove("mode-chat");
+    chatArea.classList.add("mode-welcome");
+  }
 }
 
 function handleError(errorMsg) {
@@ -271,7 +402,28 @@ function hideLoadingIndicator() {
   }
 }
 
+function ensureAssistantMessageForEvent(event) {
+  if (currentAssistantMsg) return;
+
+  if (
+    !["agent_start", "message_start", "text_delta", "thinking_delta", "tool_start"].includes(
+      event.type
+    )
+  ) {
+    return;
+  }
+
+  const chatArea = document.getElementById("chat-area");
+  if (chatArea.classList.contains("mode-welcome")) {
+    chatArea.classList.remove("mode-welcome");
+    chatArea.classList.add("mode-chat");
+  }
+
+  currentAssistantMsg = appendMessage("assistant", "");
+}
+
 function handleAgentEvent(event) {
+  ensureAssistantMessageForEvent(event);
   if (!currentAssistantMsg) return;
 
   if (
@@ -317,6 +469,13 @@ function handleAgentEvent(event) {
       break;
 
     case "tool_start":
+      if (event.toolName === "send_file") {
+        queueSendFileToolCall(event.toolCallId, event.toolInput);
+        scrollToBottom();
+        showLoadingIndicator();
+        break;
+      }
+
       const toolCard = document.createElement("div");
       toolCard.className = "tool-card running collapsed";
       const safeInput =
@@ -360,13 +519,27 @@ function handleAgentEvent(event) {
       }
 
       toolCard.dataset.toolName = event.toolName;
+      toolCard.dataset.toolCallId = event.toolCallId || "";
       scrollToBottom();
       showLoadingIndicator();
       break;
 
     case "tool_end":
+      if (event.toolName === "send_file") {
+        const file = dequeueSendFileToolCall(event.toolCallId);
+        if (!event.isError && file) {
+          appendFileCard(currentAssistantMsg, file.filePath, file.caption);
+        }
+        scrollToBottom();
+        showLoadingIndicator();
+        break;
+      }
+
       const cards = Array.from(currentAssistantMsg.querySelectorAll(".tool-card.running"));
-      const card = cards.reverse().find((c) => c.dataset.toolName === event.toolName);
+      const card = cards.reverse().find((c) =>
+        c.dataset.toolName === event.toolName &&
+        (event.toolCallId ? c.dataset.toolCallId === event.toolCallId : true)
+      );
       if (card) {
         card.classList.remove("running");
         card.classList.add(event.isError ? "error" : "success");
@@ -403,6 +576,100 @@ function handleAgentEvent(event) {
       showLoadingIndicator();
       break;
   }
+}
+
+function queueSendFileToolCall(toolCallId, toolInput) {
+  const file = extractSendFileToolInput(toolInput);
+  if (!file) return;
+
+  if (toolCallId) {
+    pendingSendFileCalls.set(toolCallId, file);
+    return;
+  }
+
+  anonymousSendFileCalls.push(file);
+}
+
+function dequeueSendFileToolCall(toolCallId) {
+  if (toolCallId) {
+    const file = pendingSendFileCalls.get(toolCallId) || null;
+    pendingSendFileCalls.delete(toolCallId);
+    return file;
+  }
+
+  return anonymousSendFileCalls.shift() || null;
+}
+
+function extractSendFileToolInput(toolInput) {
+  if (!toolInput || typeof toolInput !== "object") {
+    return null;
+  }
+
+  const filePath =
+    typeof toolInput.filePath === "string" ? toolInput.filePath.trim() : "";
+  const caption =
+    typeof toolInput.caption === "string" ? toolInput.caption.trim() : "";
+
+  if (!filePath) {
+    return null;
+  }
+
+  return {
+    filePath,
+    caption,
+  };
+}
+
+function getVisibleSendFileToolCalls(toolCalls) {
+  if (!Array.isArray(toolCalls)) {
+    return [];
+  }
+
+  return toolCalls.filter((toolCall) =>
+    toolCall &&
+    toolCall.name === "send_file" &&
+    !toolCall.isError &&
+    toolCall.arguments &&
+    typeof toolCall.arguments.filePath === "string" &&
+    toolCall.arguments.filePath
+  );
+}
+
+function appendFileCard(container, filePath, caption) {
+  const fileName = basename(filePath);
+  const title = caption || fileName;
+  const card = document.createElement("a");
+  card.className = "file-card";
+  card.href = buildFileDownloadUrl(filePath);
+  card.title = filePath;
+  card.setAttribute("download", fileName);
+  card.setAttribute("target", "_blank");
+  card.setAttribute("rel", "noopener noreferrer");
+  card.innerHTML = `
+    <div class="file-card-icon">FILE</div>
+    <div class="file-card-copy">
+      <div class="file-card-title">${escapeHtml(title)}</div>
+      <div class="file-card-meta">${escapeHtml(fileName)}</div>
+    </div>
+    <div class="file-card-action">Download</div>
+  `;
+
+  const indicator = container.querySelector(".loading-indicator");
+  if (indicator) {
+    container.insertBefore(card, indicator);
+  } else {
+    container.appendChild(card);
+  }
+}
+
+function basename(filePath) {
+  const normalized = String(filePath).replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] || String(filePath);
+}
+
+function buildFileDownloadUrl(filePath) {
+  return `${state.API_BASE}/api/files?path=${encodeURIComponent(filePath)}`;
 }
 
 function getOrCreateThinkingBlock() {
@@ -465,10 +732,12 @@ function getOrCreateTextBlock() {
 function enableInput() {
   const sendBtn = document.getElementById("send-btn");
   if (sendBtn) sendBtn.disabled = false;
+  pendingSendFileCalls.clear();
+  anonymousSendFileCalls.length = 0;
   currentAssistantMsg = null;
 }
 
-function appendMessage(role, text) {
+function appendMessage(role, text, toolCalls = []) {
   const messages = document.getElementById("messages");
   const div = document.createElement("div");
   div.className = "message " + role;
@@ -481,6 +750,13 @@ function appendMessage(role, text) {
     tb.dataset.mdContent = text;
     tb.innerHTML = renderMarkdown(text);
     div.appendChild(tb);
+  }
+
+  if (role === "assistant") {
+    const sendFileCalls = getVisibleSendFileToolCalls(toolCalls);
+    sendFileCalls.forEach((toolCall) => {
+      appendFileCard(div, toolCall.arguments.filePath, toolCall.arguments.caption);
+    });
   }
 
   messages.appendChild(div);

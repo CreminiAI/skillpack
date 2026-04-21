@@ -1,5 +1,10 @@
-import { configManager, type DataConfig, type ScheduledJobConfig } from "../config.js";
-import { ConversationService } from "../services/conversation.js";
+import { configManager, type DataConfig } from "../config.js";
+import type { ScheduledJobConfig } from "../../job-config.js";
+import type { ResultsQueryService } from "../artifacts/index.js";
+import {
+  ConversationService,
+  DEFAULT_WEB_CHANNEL_ID,
+} from "../services/conversation.js";
 import type { SchedulerAdapter } from "./scheduler.js";
 import type {
   AdapterContext,
@@ -15,6 +20,13 @@ type IpcRequest =
   | { id: string; type: "get_conversations" }
   | { id: string; type: "create_conversation" }
   | { id: string; type: "get_messages"; channelId: string; limit?: number }
+  | {
+    id: string;
+    type: "get_recent_artifacts";
+    channelId?: string;
+    limit?: number;
+    offset?: number;
+  }
   | { id: string; type: "send_message"; channelId: string; text: string }
   | { id: string; type: "command"; command: BotCommand; channelId: string }
   | { id: string; type: "get_config" }
@@ -22,6 +34,14 @@ type IpcRequest =
   | { id: string; type: "get_status" }
   | { id: string; type: "get_scheduled_jobs" }
   | { id: string; type: "add_scheduled_job"; job: ScheduledJobConfig }
+  | {
+    id: string;
+    type: "update_scheduled_job";
+    name: string;
+    updates: Omit<ScheduledJobConfig, "name">;
+  }
+  | { id: string; type: "set_scheduled_job_enabled"; name: string; enabled: boolean }
+  | { id: string; type: "trigger_scheduled_job"; name: string }
   | { id: string; type: "remove_scheduled_job"; name: string };
 
 export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
@@ -31,6 +51,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
   private rootDir = "";
   private adapterMap: Map<string, PlatformAdapter> | null = null;
   private conversationService: ConversationService | null = null;
+  private resultsQueryService: ResultsQueryService | null = null;
   private readonly createdChannels = new Set<string>();
   private messageListener?: (message: unknown) => void;
   private started = false;
@@ -45,6 +66,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
     this.rootDir = ctx.rootDir;
     this.adapterMap = ctx.adapterMap ?? null;
     this.conversationService = new ConversationService(ctx.rootDir);
+    this.resultsQueryService = ctx.resultsQueryService ?? null;
 
     this.messageListener = (message: unknown) => {
       if (!this.isIpcRequest(message)) return;
@@ -118,13 +140,16 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           for (const channelId of this.createdChannels) {
             activeChannels.add(channelId);
           }
-          const conversations = this.conversationService.listConversations(activeChannels);
+          const conversations = this.conversationService.listConversations(activeChannels, {
+            includeDefaultWeb: true,
+            includeLegacyWeb: false,
+          });
           this.reply(request.id, conversations);
           return;
         }
 
         case "create_conversation": {
-          const channelId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const channelId = DEFAULT_WEB_CHANNEL_ID;
           this.createdChannels.add(channelId);
           this.reply(request.id, { channelId });
           return;
@@ -140,6 +165,19 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             request.limit ?? 100,
           );
           this.reply(request.id, messages);
+          return;
+        }
+
+        case "get_recent_artifacts": {
+          if (!this.resultsQueryService) {
+            this.replyError(request.id, "Results query service is not available");
+            return;
+          }
+          this.reply(request.id, this.resultsQueryService.listRecentArtifacts({
+            channelId: request.channelId,
+            limit: request.limit,
+            offset: request.offset,
+          }));
           return;
         }
 
@@ -228,6 +266,51 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             return;
           }
           const result = scheduler.addJob(request.job);
+          if (!result.success) {
+            this.replyError(request.id, result.message);
+            return;
+          }
+          this.reply(request.id, result);
+          return;
+        }
+
+        case "update_scheduled_job": {
+          const scheduler = this.getSchedulerAdapter();
+          if (!scheduler) {
+            this.replyError(request.id, "Scheduler adapter is not available");
+            return;
+          }
+          const result = scheduler.updateJob(request.name, request.updates);
+          if (!result.success) {
+            this.replyError(request.id, result.message);
+            return;
+          }
+          this.reply(request.id, result);
+          return;
+        }
+
+        case "set_scheduled_job_enabled": {
+          const scheduler = this.getSchedulerAdapter();
+          if (!scheduler) {
+            this.replyError(request.id, "Scheduler adapter is not available");
+            return;
+          }
+          const result = scheduler.setEnabled(request.name, request.enabled);
+          if (!result.success) {
+            this.replyError(request.id, result.message);
+            return;
+          }
+          this.reply(request.id, result);
+          return;
+        }
+
+        case "trigger_scheduled_job": {
+          const scheduler = this.getSchedulerAdapter();
+          if (!scheduler) {
+            this.replyError(request.id, "Scheduler adapter is not available");
+            return;
+          }
+          const result = await scheduler.triggerJob(request.name);
           if (!result.success) {
             this.replyError(request.id, result.message);
             return;

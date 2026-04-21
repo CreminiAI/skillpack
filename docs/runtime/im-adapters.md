@@ -3,7 +3,7 @@
 ## Overview
 
 The runtime supports multiple IM platforms simultaneously through a shared `PackAgent` instance.
-Currently three adapters are implemented: **Web**, **Telegram**, and **Slack**.
+Currently four platform adapters are implemented: **Web**, **Telegram**, **Slack**, and **Scheduler**. The first three are user-facing IM adapters; `SchedulerAdapter` is the internal time-based trigger.
 
 ## Architecture
 
@@ -14,13 +14,13 @@ Currently three adapters are implemented: **Web**, **Telegram**, and **Slack**.
                     │  start adapters  │
                     └────────┬─────────┘
                              │  Create shared PackAgent
-          ┌──────────────────┼──────────────────┬──────────────────┐
-          ▼                  ▼                  ▼                  ▼
-   ┌──────────────┐  ┌───────────────┐  ┌──────────────┐  ┌──────────────┐
-   │  WebAdapter  │  │TelegramAdapter│  │ SlackAdapter │  │  (future)    │
-   └──────┬───────┘  └───────┬───────┘  └──────┬───────┘  └──────────────┘
-          │                  │                  │
-          └────────┬─────────┴──────────────────┘
+          ┌──────────────────┼──────────────────┬──────────────────┬──────────────────┐
+          ▼                  ▼                  ▼                  ▼                  ▼
+   ┌──────────────┐  ┌───────────────┐  ┌──────────────┐  ┌────────────────┐  ┌──────────────┐
+   │  WebAdapter  │  │TelegramAdapter│  │ SlackAdapter │  │SchedulerAdapter│  │  (future)    │
+   └──────┬───────┘  └───────┬───────┘  └──────┬───────┘  └──────┬─────────┘  └──────────────┘
+          │                  │                  │                  │
+          └────────┬─────────┴──────────────────┴──────────────────┘
                    ▼
           ┌────────────────┐
           │   PackAgent    │  Platform-agnostic agent layer
@@ -43,6 +43,7 @@ src/runtime/
     ├── web.ts                   # WebAdapter (HTTP + WebSocket)
     ├── telegram.ts              # TelegramAdapter (polling)
     ├── slack.ts                 # SlackAdapter (Socket Mode)
+    ├── scheduler.ts             # SchedulerAdapter (cron jobs)
     └── markdown.ts              # Markdown → platform text converter
 ```
 
@@ -62,6 +63,8 @@ interface AdapterContext {
   server: http.Server;
   app: Express;
   rootDir: string;
+  notify?: (adapter: string, channelId: string, text: string) => Promise<void>;
+  adapterMap?: Map<string, PlatformAdapter>;
 }
 ```
 
@@ -107,7 +110,7 @@ type AgentEvent =
 
 ## Configuration
 
-Runtime configuration is read from `data/config.json` (this directory is **not** included in the zip). Environment variables take higher priority and override the config file.
+Runtime configuration is read from `data/config.json` (this directory is **not** included in the zip). Scheduled jobs are read separately from root-level `job.json`, which is included in the zip when present. Environment variables take higher priority and override the runtime config file.
 
 ```json
 {
@@ -127,13 +130,15 @@ Runtime configuration is read from `data/config.json` (this directory is **not**
 
 - `data/config.json` is read first.
 - If the `apiKey` / `provider` fields are absent or the file cannot be read, the environment variables `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are used as a fallback.
+- `job.json` is the single source of truth for scheduled jobs.
 - **WebAdapter is always enabled.**
 - TelegramAdapter is only dynamically imported and started when `adapters.telegram.token` is configured.
 - SlackAdapter requires both `adapters.slack.botToken` and `adapters.slack.appToken`; if either is missing a warning is logged and the adapter is skipped.
+- SchedulerAdapter starts after IM adapters and loads optional scheduled jobs from `job.json`.
 
 ## Unified Command System
 
-All adapters support the following commands (triggered by a `/`-prefixed message), handled by `PackAgent.handleCommand()`:
+All user-facing adapters support the following commands (triggered by a `/`-prefixed message), handled by `PackAgent.handleCommand()`:
 
 | Command | Behavior |
 | --- | --- |

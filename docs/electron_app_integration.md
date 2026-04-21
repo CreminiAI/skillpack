@@ -23,7 +23,7 @@
 必须以带 IPC 管道的方式启动 `skill-pack` 子进程，例如：
 
 - 使用 `child_process.fork`，或 `spawn` 且 `stdio` 包含 `"ipc"`
-- 建议设置环境变量：`DAEMON_RUN=1`（避免 skill-pack 自动打开浏览器）
+- 建议设置环境变量：`SKILLPACK_RUNTIME_MODE=embedded`（禁用 web adapter、本地端口和自动打开浏览器）
 
 建议等待 `ready` 事件后再发首个业务请求：
 

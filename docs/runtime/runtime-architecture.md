@@ -4,11 +4,12 @@ The runtime source lives in `src/runtime/` and is compiled by `tsup` into `dist/
 
 ## Distributed Pack Structure
 
-A pack zip produced by `skillpack zip` contains the lightweight runtime essentials plus any optional pack-level prompt files:
+A pack zip produced by `skillpack zip` contains the lightweight runtime essentials plus optional pack-level assets:
 
 ```text
 <pack-name>/
 ├── skillpack.json
+├── job.json
 ├── AGENTS.md
 ├── SOUL.md
 ├── skills/
@@ -40,15 +41,16 @@ Node.js >= 20 is required.
 
 ## Server Architecture
 
-When `skillpack run` executes, it calls `startServer({ rootDir })` from `src/runtime/server.ts`. The server is built on **Express** + **ws** + **`@mariozechner/pi-coding-agent`** and loads IM adapters conditionally based on `data/config.json`.
+When `skillpack run` executes, it calls `startServer({ rootDir })` from `src/runtime/server.ts`. The server is built on **Express** + **ws** + **`@mariozechner/pi-coding-agent`** and loads runtime config from `data/config.json` plus scheduled jobs from root-level `job.json`.
 
 ### `server.ts` (entry)
 
 - Determines `rootDir` from the argument (or `PACK_ROOT` env var).
 - Reads `data/config.json`; environment variables `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` take higher priority.
+- Starts the scheduler from `job.json` when the file exists.
 - Serves `web/` static assets (tries `rootDir/web`, falls back to the package's own `web/`).
 - Creates a shared `PackAgent` instance.
-- Starts `WebAdapter` (always enabled), `TelegramAdapter` (if token configured), and `SlackAdapter` (if both `botToken` and `appToken` are configured).
+- Starts `WebAdapter` (always enabled), `TelegramAdapter` (if token configured), `SlackAdapter` (if both `botToken` and `appToken` are configured), and `SchedulerAdapter`.
 - Listens on `HOST:PORT`, defaults to `127.0.0.1:26313`; auto-increments port on conflict.
 - Opens the browser automatically after a successful start.
 
@@ -142,6 +144,32 @@ Defines all types shared across adapters:
 1. `data/config.json` `apiKey` / `provider` fields — read first.
 2. `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` environment variables — override the config file.
 3. Web frontend `POST /api/config/update` — persists to `data/config.json`; requires a restart to take effect.
+
+### `job.json` scheduled jobs
+
+`job.json` lives at the pack root beside `skillpack.json` and is the only persisted source for scheduler jobs.
+
+```json
+{
+  "jobs": [
+    {
+      "name": "morning-briefing",
+      "cron": "0 9 * * 1-5",
+      "prompt": "Generate the morning market brief.",
+      "notify": {
+        "adapter": "telegram",
+        "channelId": "telegram-1234567890"
+      },
+      "enabled": true,
+      "timezone": "Asia/Shanghai"
+    }
+  ]
+}
+```
+
+- If `job.json` is absent, the scheduler starts with no configured jobs.
+- `job.json` is included in `skillpack zip` when present, so distributed packs can ship with preconfigured schedules.
+- Legacy `data/config.json.scheduledJobs` is ignored and should be migrated into `job.json`.
 
 ### `data/config.json` IM configuration
 

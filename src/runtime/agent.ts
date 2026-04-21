@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
@@ -17,6 +18,11 @@ import {
   attachmentsToImageContent,
   isImageMime,
 } from "./adapters/attachment-utils.js";
+import {
+  ArtifactPersistenceService,
+  createSaveArtifactsTool,
+  type SaveArtifactsCallback,
+} from "./artifacts/index.js";
 import {
   createSendFileTool,
   type FileOutputCallback,
@@ -256,6 +262,8 @@ interface ChannelSession {
   session: any; // AgentSession from pi-coding-agent
   running: boolean;
   pending: Promise<void>;
+  fileOutputCallbackRef: { current: FileOutputCallback | null };
+  finalArtifactsSaveCallbackRef: { current: SaveArtifactsCallback | null };
 }
 
 // ---------------------------------------------------------------------------
@@ -266,14 +274,13 @@ export class PackAgent implements IPackAgent {
   private options: PackAgentOptions;
   private channels = new Map<string, ChannelSession>();
   private pendingSessionCreations = new Map<string, Promise<ChannelSession>>();
-  private fileOutputCallbackRef: { current: FileOutputCallback | null } = {
-    current: null,
-  };
   private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
   private authStorage: AuthStorage;
+  private readonly artifactPersistenceService: ArtifactPersistenceService;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
+    this.artifactPersistenceService = options.artifactPersistenceService;
 
     // Use ConfigFileAuthBackend to persist OAuth credentials in config.json._auth
     const configPath = path.resolve(options.rootDir, "data", "config.json");
@@ -310,9 +317,17 @@ export class PackAgent implements IPackAgent {
     this.schedulerRef.current = scheduler;
   }
 
-  private createCustomTools(adapter: "telegram" | "slack" | "web" | "scheduler", channelId: string) {
-    const tools = [createSendFileTool(this.fileOutputCallbackRef) as any];
-    if (adapter === "telegram" || adapter === "slack") {
+  private createCustomTools(
+    adapter: "telegram" | "slack" | "web" | "scheduler",
+    channelId: string,
+    fileOutputCallbackRef: { current: FileOutputCallback | null },
+    finalArtifactsSaveCallbackRef: { current: SaveArtifactsCallback | null },
+  ) {
+    const tools = [
+      createSendFileTool(fileOutputCallbackRef) as any,
+      createSaveArtifactsTool(this.options.rootDir, finalArtifactsSaveCallbackRef) as any,
+    ];
+    if (adapter !== "scheduler") {
       tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
     }
     return tools;
@@ -428,7 +443,20 @@ export class PackAgent implements IPackAgent {
       await resourceLoader.reload();
 
       const tools = createCodingTools(workspaceDir);
-      const customTools = this.createCustomTools(adapter, channelId);
+      const fileOutputCallbackRef: { current: FileOutputCallback | null } = {
+        current: null,
+      };
+      const finalArtifactsSaveCallbackRef: {
+        current: SaveArtifactsCallback | null;
+      } = {
+        current: null,
+      };
+      const customTools = this.createCustomTools(
+        adapter,
+        channelId,
+        fileOutputCallbackRef,
+        finalArtifactsSaveCallbackRef,
+      );
 
       const { session } = await createAgentSession({
         cwd: workspaceDir,
@@ -445,6 +473,8 @@ export class PackAgent implements IPackAgent {
         session,
         running: false,
         pending: Promise.resolve(),
+        fileOutputCallbackRef,
+        finalArtifactsSaveCallbackRef,
       };
       this.channels.set(channelId, channelSession);
       return channelSession;
@@ -471,94 +501,105 @@ export class PackAgent implements IPackAgent {
       cs.running = true;
 
       let turnHadVisibleOutput = false;
-
-      // Wire up file output callback for this run
-      this.fileOutputCallbackRef.current = (event) => {
-        onEvent(event);
-      };
-
-      // Subscribe to agent events and forward to adapter
-      const unsubscribe = cs.session.subscribe((event: any) => {
-        switch (event.type) {
-          case "agent_start":
-            log("\n=== [AGENT SESSION START] ===");
-            log("System Prompt:\n", cs.session.systemPrompt);
-            log("============================\n");
-            onEvent({ type: "agent_start" });
-            break;
-
-          case "message_start":
-            log(`\n--- [Message Start: ${event.message?.role}] ---`);
-            if (event.message?.role === "user") {
-              log(JSON.stringify(event.message.content, null, 2));
-            }
-            onEvent({ type: "message_start", role: event.message?.role ?? "" });
-            break;
-
-          case "message_update":
-            if (event.assistantMessageEvent?.type === "text_delta") {
-              turnHadVisibleOutput = true;
-              write(event.assistantMessageEvent.delta);
-              onEvent({
-                type: "text_delta",
-                delta: event.assistantMessageEvent.delta,
-              });
-            } else if (event.assistantMessageEvent?.type === "thinking_delta") {
-              turnHadVisibleOutput = true;
-              onEvent({
-                type: "thinking_delta",
-                delta: event.assistantMessageEvent.delta,
-              });
-            }
-            break;
-
-          case "message_end":
-            log(`\n--- [Message End: ${event.message?.role}] ---`);
-            if (event.message?.role === "assistant") {
-              const diagnostics = getAssistantDiagnostics(event.message);
-              if (diagnostics) {
-                log(
-                  `[Assistant Diagnostics] stopReason=${diagnostics.stopReason} text=${diagnostics.hasText ? "yes" : "no"} toolCalls=${diagnostics.toolCalls}`,
-                );
-                if (diagnostics.errorMessage) {
-                  log(`[Assistant Error] ${diagnostics.errorMessage}`);
-                }
-              }
-            }
-            onEvent({ type: "message_end", role: event.message?.role ?? "" });
-            break;
-
-          case "tool_execution_start":
-            turnHadVisibleOutput = true;
-            log(`\n>>> [Tool Start: ${event.toolName}] >>>`);
-            log("Args:", JSON.stringify(event.args, null, 2));
-            onEvent({
-              type: "tool_start",
-              toolName: event.toolName,
-              toolInput: event.args,
-            });
-            break;
-
-          case "tool_execution_end":
-            turnHadVisibleOutput = true;
-            log(`<<< [Tool End: ${event.toolName}] <<<`);
-            log(`Error: ${event.isError ? "Yes" : "No"}`);
-            onEvent({
-              type: "tool_end",
-              toolName: event.toolName,
-              isError: event.isError,
-              result: event.result,
-            });
-            break;
-
-          case "agent_end":
-            log("\n=== [AGENT SESSION END] ===\n");
-            onEvent({ type: "agent_end" });
-            break;
-        }
-      });
+      const runId = randomUUID();
+      let unsubscribe = () => undefined;
 
       try {
+        // Wire up file output callback for this run
+        cs.fileOutputCallbackRef.current = (event) => {
+          onEvent(event);
+        };
+        cs.finalArtifactsSaveCallbackRef.current = (artifacts) => {
+          return this.artifactPersistenceService.saveArtifacts({
+            runId,
+            channelId,
+            artifacts,
+          });
+        };
+
+        // Subscribe to agent events and forward to adapter
+        unsubscribe = cs.session.subscribe((event: any) => {
+          switch (event.type) {
+            case "agent_start":
+              log("\n=== [AGENT SESSION START] ===");
+              log("System Prompt:\n", cs.session.systemPrompt);
+              log("============================\n");
+              onEvent({ type: "agent_start" });
+              break;
+
+            case "message_start":
+              log(`\n--- [Message Start: ${event.message?.role}] ---`);
+              if (event.message?.role === "user") {
+                log(JSON.stringify(event.message.content, null, 2));
+              }
+              onEvent({ type: "message_start", role: event.message?.role ?? "" });
+              break;
+
+            case "message_update":
+              if (event.assistantMessageEvent?.type === "text_delta") {
+                turnHadVisibleOutput = true;
+                write(event.assistantMessageEvent.delta);
+                onEvent({
+                  type: "text_delta",
+                  delta: event.assistantMessageEvent.delta,
+                });
+              } else if (event.assistantMessageEvent?.type === "thinking_delta") {
+                turnHadVisibleOutput = true;
+                onEvent({
+                  type: "thinking_delta",
+                  delta: event.assistantMessageEvent.delta,
+                });
+              }
+              break;
+
+            case "message_end":
+              log(`\n--- [Message End: ${event.message?.role}] ---`);
+              if (event.message?.role === "assistant") {
+                const diagnostics = getAssistantDiagnostics(event.message);
+                if (diagnostics) {
+                  log(
+                    `[Assistant Diagnostics] stopReason=${diagnostics.stopReason} text=${diagnostics.hasText ? "yes" : "no"} toolCalls=${diagnostics.toolCalls}`,
+                  );
+                  if (diagnostics.errorMessage) {
+                    log(`[Assistant Error] ${diagnostics.errorMessage}`);
+                  }
+                }
+              }
+              onEvent({ type: "message_end", role: event.message?.role ?? "" });
+              break;
+
+            case "tool_execution_start":
+              turnHadVisibleOutput = true;
+              log(`\n>>> [Tool Start: ${event.toolName}] >>>`);
+              log("Args:", JSON.stringify(event.args, null, 2));
+              onEvent({
+                type: "tool_start",
+                toolCallId: event.toolCallId ?? "",
+                toolName: event.toolName,
+                toolInput: event.args,
+              });
+              break;
+
+            case "tool_execution_end":
+              turnHadVisibleOutput = true;
+              log(`<<< [Tool End: ${event.toolName}] <<<`);
+              log(`Error: ${event.isError ? "Yes" : "No"}`);
+              onEvent({
+                type: "tool_end",
+                toolCallId: event.toolCallId ?? "",
+                toolName: event.toolName,
+                isError: event.isError,
+                result: event.result,
+              });
+              break;
+
+            case "agent_end":
+              log("\n=== [AGENT SESSION END] ===\n");
+              onEvent({ type: "agent_end" });
+              break;
+          }
+        });
+
         // Build prompt with attachments
         let promptText = text;
         const promptOptions: { images?: Array<{ type: "image"; data: string; mimeType: string }> } = {};
@@ -600,17 +641,19 @@ export class PackAgent implements IPackAgent {
           diagnostics.toolCalls === 0 &&
           !turnHadVisibleOutput
         ) {
+          const errorMessage =
+            "Assistant returned no visible output. Check the server logs for details.";
           return {
             stopReason: diagnostics.stopReason,
-            errorMessage:
-              "Assistant returned no visible output. Check the server logs for details.",
+            errorMessage,
           };
         }
 
         return { stopReason: diagnostics?.stopReason ?? "unknown" };
       } finally {
         cs.running = false;
-        this.fileOutputCallbackRef.current = null;
+        cs.fileOutputCallbackRef.current = null;
+        cs.finalArtifactsSaveCallbackRef.current = null;
         unsubscribe();
       }
     };

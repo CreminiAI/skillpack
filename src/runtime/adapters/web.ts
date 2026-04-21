@@ -4,6 +4,11 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { configManager, SUPPORTED_PROVIDERS } from "../config.js";
 import type { DataConfig } from "../config.js";
 import { resolveCommand } from "../commands/index.js";
+import {
+  ConversationService,
+  DEFAULT_WEB_CHANNEL_ID,
+} from "../services/conversation.js";
+import { isWithinDirectory } from "../files/metadata.js";
 
 import type {
   PlatformAdapter,
@@ -44,6 +49,25 @@ function getRuntimeConfigSignature(config: DataConfig): string {
   });
 }
 
+function parsePositiveInt(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+function resolveDownloadFilePath(
+  rootDir: string,
+  filePath: string,
+): string | null {
+  const resolvedPath = path.isAbsolute(filePath)
+    ? path.resolve(filePath)
+    : path.resolve(rootDir, filePath);
+
+  return isWithinDirectory(rootDir, resolvedPath) ? resolvedPath : null;
+}
+
 // ---------------------------------------------------------------------------
 // WebAdapter
 // ---------------------------------------------------------------------------
@@ -54,11 +78,15 @@ export class WebAdapter implements PlatformAdapter {
   private wss: WebSocketServer | null = null;
   private agent: IPackAgent | null = null;
   private ipcBroadcaster: IpcBroadcaster | null = null;
+  private conversationService: ConversationService | null = null;
+  private socketsByChannel = new Map<string, Set<WebSocket>>();
 
   async start(ctx: AdapterContext): Promise<void> {
     const { agent, server, app, rootDir, lifecycle } = ctx;
     this.agent = agent;
     this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
+    this.conversationService = new ConversationService(rootDir);
+    const resultsQueryService = ctx.resultsQueryService ?? null;
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
 
@@ -212,16 +240,52 @@ export class WebAdapter implements PlatformAdapter {
       res.json({ success: true });
     });
 
-    // -- Reserved: session history endpoints (stub) -------------------------
+    // -- Conversation API ---------------------------------------------------
 
-    app.get("/api/sessions", (_req, res) => {
-      const sessions = agent.listSessions();
-      res.json(sessions);
+    const getWebConversations = () => {
+      const activeChannels = new Set(agent.getActiveChannelIds());
+      return this.conversationService!.listConversations(activeChannels, {
+        includeDefaultWeb: true,
+        includeLegacyWeb: false,
+        allowedPlatforms: ["web"],
+      });
+    };
+
+    app.get("/api/conversations", (_req, res) => {
+      res.json(getWebConversations());
     });
 
-    app.get("/api/sessions/:id", (_req, res) => {
-      // TODO: restore session by id
-      res.status(501).json({ error: "Not implemented yet" });
+    app.post("/api/conversations", (_req, res) => {
+      res.json({ channelId: DEFAULT_WEB_CHANNEL_ID });
+    });
+
+    app.get("/api/conversations/:channelId/messages", (req, res) => {
+      if (req.params.channelId !== DEFAULT_WEB_CHANNEL_ID) {
+        res.status(404).json({ error: "Conversation not found" });
+        return;
+      }
+
+      res.json(
+        this.conversationService!.getMessages(
+          req.params.channelId,
+          parsePositiveInt(req.query.limit, 100),
+        ),
+      );
+    });
+
+    // -- Persisted results API ----------------------------------------------
+
+    app.get("/api/results/artifacts", (req, res) => {
+      if (!resultsQueryService) {
+        res.status(503).json({ error: "Results query service is not available" });
+        return;
+      }
+
+      res.json(resultsQueryService.listRecentArtifacts({
+        channelId: typeof req.query.channelId === "string" ? req.query.channelId : undefined,
+        limit: parsePositiveInt(req.query.limit, 100),
+        offset: parsePositiveInt(req.query.offset, 0),
+      }));
     });
 
     // -- File download endpoint (for outbound attachments) -------------------
@@ -233,10 +297,8 @@ export class WebAdapter implements PlatformAdapter {
         return;
       }
 
-      // Security: only allow files under data/ directory
-      const resolvedPath = path.resolve(filePath);
-      const dataDir = path.resolve(rootDir, "data");
-      if (!resolvedPath.startsWith(dataDir)) {
+      const resolvedPath = resolveDownloadFilePath(rootDir, filePath);
+      if (!resolvedPath) {
         res.status(403).json({ error: "Access denied" });
         return;
       }
@@ -367,8 +429,11 @@ export class WebAdapter implements PlatformAdapter {
         return;
       }
 
-      // Each WebSocket connection maps to a unique channel
-      const channelId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const requestedChannelId = url.searchParams.get("channelId");
+      const channelId =
+        requestedChannelId && requestedChannelId === DEFAULT_WEB_CHANNEL_ID
+          ? requestedChannelId
+          : DEFAULT_WEB_CHANNEL_ID;
 
       this.handleWsConnection(ws, channelId, agent);
     });
@@ -384,7 +449,26 @@ export class WebAdapter implements PlatformAdapter {
       this.wss.close();
       this.wss = null;
     }
+    this.socketsByChannel.clear();
     console.log("[WebAdapter] Stopped");
+  }
+
+  async sendMessage(channelId: string, text: string): Promise<void> {
+    const sockets = this.socketsByChannel.get(channelId);
+    const activeSockets = [...(sockets || [])].filter(
+      (socket) => socket.readyState === socket.OPEN,
+    );
+
+    if (activeSockets.length === 0) {
+      throw new Error(`[Web] No active WebSocket clients for channelId: ${channelId}`);
+    }
+
+    for (const socket of activeSockets) {
+      sendWsEvent(socket, { type: "message_start", role: "assistant" });
+      sendWsEvent(socket, { type: "text_delta", delta: text });
+      sendWsEvent(socket, { type: "message_end", role: "assistant" });
+      socket.send(JSON.stringify({ done: true }));
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -396,6 +480,8 @@ export class WebAdapter implements PlatformAdapter {
     channelId: string,
     agent: IPackAgent,
   ): void {
+    this.addSocket(channelId, ws);
+
     ws.on("message", async (data) => {
       try {
         const payload = JSON.parse(data.toString());
@@ -441,7 +527,28 @@ export class WebAdapter implements PlatformAdapter {
     });
 
     ws.on("close", () => {
-      agent.dispose(channelId);
+      this.removeSocket(channelId, ws);
+      if (channelId !== DEFAULT_WEB_CHANNEL_ID) {
+        agent.dispose(channelId);
+      }
     });
+  }
+
+  private addSocket(channelId: string, ws: WebSocket): void {
+    const sockets = this.socketsByChannel.get(channelId) ?? new Set<WebSocket>();
+    sockets.add(ws);
+    this.socketsByChannel.set(channelId, sockets);
+  }
+
+  private removeSocket(channelId: string, ws: WebSocket): void {
+    const sockets = this.socketsByChannel.get(channelId);
+    if (!sockets) {
+      return;
+    }
+
+    sockets.delete(ws);
+    if (sockets.size === 0) {
+      this.socketsByChannel.delete(channelId);
+    }
   }
 }

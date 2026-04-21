@@ -113,7 +113,7 @@ Confirm that:
 
 - The CLI runs
 - `create` and `run` commands start successfully
-- `zip` produces an archive containing only `skillpack.json`, `skills/`, `start.sh`, and `start.bat`
+- `zip` produces an archive containing `skillpack.json`, optional `job.json`, optional `AGENTS.md` / `SOUL.md`, `skills/`, `start.sh`, and `start.bat`
 
 ## Recommended Release Flow
 

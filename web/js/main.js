@@ -39,13 +39,16 @@ async function init() {
   } catch (err) {
     console.error("Initialization Failed:", err);
   }
-  
-  // Initialize all dialog modules
+
   initApiKeyDialog();
   initChatAppsDialog();
-  initChat();
 
-  // Update action button states based on config
+  try {
+    await initChat();
+  } catch (err) {
+    console.error("Chat initialization failed:", err);
+  }
+
   updateApiKeyButton();
   updateChatAppsButton();
 }

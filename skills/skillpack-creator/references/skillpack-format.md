@@ -57,6 +57,9 @@ The current `zip` command packages only:
 ```text
 <pack-name>/
 ├── skillpack.json
+├── job.json             # Optional scheduled jobs
+├── AGENTS.md            # Optional pack policy
+├── SOUL.md              # Optional pack persona
 ├── skills/
 ├── start.sh
 └── start.bat
@@ -73,4 +76,5 @@ npx -y @cremini/skillpack run .
 - A SkillPack is best for packaging a stable workflow, not an exact execution graph.
 - Put the real reusable process into local skills.
 - Use `prompts` as polished starting instructions for users.
+- Put pack-level scheduled automation into `job.json` when the zip should ship with preconfigured jobs.
 - If stability depends on exact commands or file generation, add scripts inside the local skill instead of relying on a long prompt alone.

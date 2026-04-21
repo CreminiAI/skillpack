@@ -5,7 +5,7 @@ import type {
   AgentToolResult,
 } from "@mariozechner/pi-coding-agent";
 import type { SchedulerAdapter } from "../adapters/scheduler.js";
-import type { ScheduledJobConfig } from "../config.js";
+import type { ScheduledJobConfig } from "../../job-config.js";
 
 // ---------------------------------------------------------------------------
 // Parameter schema (TypeBox)
@@ -47,6 +47,18 @@ const ManageScheduleParams = Type.Object({
         "Optional timezone for the cron schedule, e.g. 'Asia/Shanghai', 'America/New_York'.",
     }),
   ),
+  notifyAdapter: Type.Optional(
+    Type.String({
+      description:
+        "Optional target adapter for notifications. If omitted, the current chat is used when supported (Telegram, Slack, or Web).",
+    }),
+  ),
+  notifyChannelId: Type.Optional(
+    Type.String({
+      description:
+        "Optional target channelId for notifications. Must be provided together with notifyAdapter when overriding the default target.",
+    }),
+  ),
 });
 
 type ManageScheduleInput = Static<typeof ManageScheduleParams>;
@@ -59,15 +71,20 @@ function textResult(text: string): AgentToolResult<undefined> {
   return { content: [{ type: "text", text }], details: undefined };
 }
 
-function getNotifyTarget(
+function getDefaultNotifyTarget(
+  adapter: "telegram" | "slack" | "web" | "scheduler",
   channelId: string,
-): { adapter: "telegram" | "slack"; channelId: string } | null {
-  if (channelId.startsWith("telegram-")) {
+): { adapter: "telegram" | "slack" | "web"; channelId: string } | null {
+  if (adapter === "telegram" && channelId.startsWith("telegram-")) {
     return { adapter: "telegram", channelId };
   }
 
-  if (channelId.startsWith("slack-")) {
+  if (adapter === "slack" && channelId.startsWith("slack-")) {
     return { adapter: "slack", channelId };
+  }
+
+  if (adapter === "web") {
+    return { adapter: "web", channelId };
   }
 
   return null;
@@ -96,7 +113,7 @@ export function createManageScheduleTool(
       "Manage scheduled tasks (cron jobs) that automatically execute prompts and push results to IM channels.",
       "",
       "Actions:",
-      "- add: Create a new scheduled task. Requires: name, cron, prompt. The notification target always uses the current Telegram or Slack chat. The prompt must describe only the work for each run, not the schedule itself.",
+      "- add: Create a new scheduled task. Requires: name, cron, prompt. Notifications default to the current Telegram, Slack, or Web chat. You can override the destination with notifyAdapter + notifyChannelId. The prompt must describe only the work for each run, not the schedule itself.",
       "- list: List all scheduled tasks with their status.",
       "- remove: Remove a scheduled task by name.",
       "- trigger: Manually trigger a scheduled task by name (runs immediately).",
@@ -145,9 +162,26 @@ export function createManageScheduleTool(
               "Error: 'name', 'cron', and 'prompt' are required for adding a task.",
             );
           }
-          if (adapter !== "telegram" && adapter !== "slack") {
+
+          if (
+            (params.notifyAdapter && !params.notifyChannelId) ||
+            (!params.notifyAdapter && params.notifyChannelId)
+          ) {
             return textResult(
-              "Error: Scheduled tasks can only be created from a Telegram or Slack.",
+              "Error: 'notifyAdapter' and 'notifyChannelId' must be provided together when overriding the notification target.",
+            );
+          }
+
+          const notify = params.notifyAdapter && params.notifyChannelId
+            ? {
+              adapter: params.notifyAdapter,
+              channelId: params.notifyChannelId,
+            }
+            : getDefaultNotifyTarget(adapter, channelId);
+
+          if (!notify) {
+            return textResult(
+              "Error: No default notification target is available for this chat. Provide 'notifyAdapter' and 'notifyChannelId'.",
             );
           }
 
@@ -155,10 +189,7 @@ export function createManageScheduleTool(
             name: params.name,
             cron: params.cron,
             prompt: params.prompt,
-            notify: {
-              adapter: adapter,
-              channelId: channelId,
-            },
+            notify,
             enabled: true,
             timezone: params.timezone,
           };

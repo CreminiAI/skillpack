@@ -135,6 +135,9 @@ No options. Always runs in `cwd`.
 | Path in zip | Source |
 | --- | --- |
 | `<name>/skillpack.json` | `skillpack.json` in cwd |
+| `<name>/job.json` | optional `job.json` in cwd |
+| `<name>/AGENTS.md` | optional `AGENTS.md` in cwd |
+| `<name>/SOUL.md` | optional `SOUL.md` in cwd |
 | `<name>/skills/` | `skills/` directory |
 | `<name>/start.sh` | `start.sh` in cwd (execute bit preserved) |
 | `<name>/start.bat` | `start.bat` in cwd |
@@ -143,7 +146,8 @@ No options. Always runs in `cwd`.
 
 1. Reinstalls all configured skills.
 2. Scans `skills/` for `SKILL.md` frontmatter and syncs descriptions back into `skillpack.json`.
-3. Produces `<config.name>.zip` in `cwd`.
+3. Includes `job.json` when the file exists at the pack root.
+4. Produces `<config.name>.zip` in `cwd`.
 
 The output zip is intentionally minimal — no server or web UI is bundled. End users run `start.sh` which invokes `npx @cremini/skillpack run .` to fetch the runtime from npm.
 
@@ -151,7 +155,7 @@ The output zip is intentionally minimal — no server or web UI is bundled. End 
 
 ## Environment Variables
 
-These variables are read by the runtime at startup and can override `data/config.json`.
+These variables are read by the runtime at startup and can override runtime fields in `data/config.json`. Scheduled jobs are loaded separately from pack-root `job.json`.
 
 | Variable | Description | Default |
 | --- | --- | --- |

@@ -43,7 +43,7 @@ program
 // zip command
 program
   .command("zip")
-  .description("Package the current pack as a zip file (skillpack.json + skills/ + start scripts)")
+  .description("Package the current pack as a zip file (skillpack.json + optional job.json + skills/ + start scripts)")
   .action(async () => {
     try {
       await zipCommand(process.cwd());
