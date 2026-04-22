@@ -1,6 +1,6 @@
 {
   "name": "@cremini/skillpack",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Pack AI Skills into Local Agents",
   "type": "module",
   "repository": {
@@ -49,18 +49,17 @@
     "@slack/bolt": "^4.6.0",
     "ajv": "^8.17.1",
     "archiver": "^7.0.1",
-    "better-sqlite3": "^11.10.0",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
     "express": "^5.1.0",
     "inquirer": "^13.3.0",
     "node-cron": "^4.2.1",
     "node-telegram-bot-api": "^0.66.0",
+    "sqlite3": "^5.1.7",
     "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/archiver": "^7.0.0",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.0",
     "@types/inquirer": "^9.0.9",
     "@types/node": "^25.5.0",

@@ -14,7 +14,7 @@ export class ArtifactPersistenceService {
     private readonly resultStore: ResultStore,
   ) {}
 
-  saveArtifacts(input: SaveArtifactsInput): number {
+  async saveArtifacts(input: SaveArtifactsInput): Promise<number> {
     const declaredAt = new Date().toISOString();
     const snapshots = this.snapshotService.createSnapshots(
       input.runId,
@@ -23,7 +23,7 @@ export class ArtifactPersistenceService {
     );
 
     try {
-      this.resultStore.insertArtifacts({
+      await this.resultStore.insertArtifacts({
         runId: input.runId,
         channelId: input.channelId,
         artifacts: snapshots,

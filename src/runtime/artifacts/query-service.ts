@@ -24,7 +24,7 @@ function clampOffset(offset: number | undefined): number {
 export class ResultsQueryService {
   constructor(private readonly resultStore: ResultStore) {}
 
-  listRecentArtifacts(options: ListArtifactsOptions = {}): ResultArtifactRecord[] {
+  async listRecentArtifacts(options: ListArtifactsOptions = {}): Promise<ResultArtifactRecord[]> {
     return this.resultStore.listRecentArtifacts({
       channelId: options.channelId,
       limit: clampLimit(options.limit, 100, 500),

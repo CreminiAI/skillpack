@@ -275,13 +275,13 @@ export class WebAdapter implements PlatformAdapter {
 
     // -- Persisted results API ----------------------------------------------
 
-    app.get("/api/results/artifacts", (req, res) => {
+    app.get("/api/results/artifacts", async (req, res) => {
       if (!resultsQueryService) {
         res.status(503).json({ error: "Results query service is not available" });
         return;
       }
 
-      res.json(resultsQueryService.listRecentArtifacts({
+      res.json(await resultsQueryService.listRecentArtifacts({
         channelId: typeof req.query.channelId === "string" ? req.query.channelId : undefined,
         limit: parsePositiveInt(req.query.limit, 100),
         offset: parsePositiveInt(req.query.offset, 0),

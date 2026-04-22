@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import Database from "better-sqlite3";
+import sqlite3 from "sqlite3";
 
 import type {
   ListArtifactsOptions,
@@ -14,6 +14,9 @@ interface InsertArtifactsInput {
   channelId: string;
   artifacts: SnapshotArtifactRecord[];
 }
+
+type SqliteParameter = string | number | null;
+type SqliteParameters = SqliteParameter[] | Record<string, SqliteParameter>;
 
 type SqliteArtifactRow = {
   artifact_id: string;
@@ -46,18 +49,19 @@ function mapArtifactRow(row: SqliteArtifactRow): ResultArtifactRecord {
 }
 
 export class ResultStore {
-  private readonly db: Database.Database;
+  private db: sqlite3.Database | null = null;
+  private readonly ready: Promise<void>;
 
   constructor(rootDir: string) {
     const dataDir = path.resolve(rootDir, "data");
     fs.mkdirSync(dataDir, { recursive: true });
-    this.db = new Database(path.join(dataDir, "result.db"));
-    this.db.pragma("journal_mode = WAL");
-    this.initialize();
+    this.ready = this.initialize(path.join(dataDir, "result-v2.db"));
   }
 
-  private initialize(): void {
-    this.db.exec(`
+  private async initialize(databasePath: string): Promise<void> {
+    this.db = await openDatabase(databasePath);
+    await this.exec("PRAGMA journal_mode = WAL");
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS artifacts (
         artifact_id TEXT PRIMARY KEY,
         run_id TEXT NOT NULL,
@@ -77,12 +81,14 @@ export class ResultStore {
     `);
   }
 
-  insertArtifacts(input: InsertArtifactsInput): void {
+  async insertArtifacts(input: InsertArtifactsInput): Promise<void> {
+    await this.ready;
+
     if (input.artifacts.length === 0) {
       return;
     }
 
-    const insertArtifact = this.db.prepare(`
+    const insertArtifact = `
       INSERT INTO artifacts (
         artifact_id,
         run_id,
@@ -96,46 +102,51 @@ export class ResultStore {
         is_primary,
         declared_at
       ) VALUES (
-        @artifactId,
-        @runId,
-        @channelId,
-        @originalPath,
-        @snapshotPath,
-        @fileName,
-        @mimeType,
-        @sizeBytes,
-        @title,
-        @isPrimary,
-        @declaredAt
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?,
+        ?
       )
-    `);
+    `;
 
-    const transaction = this.db.transaction((payload: InsertArtifactsInput) => {
-      for (const artifact of payload.artifacts) {
-        insertArtifact.run({
-          artifactId: randomUUID(),
-          runId: payload.runId,
-          channelId: payload.channelId,
-          originalPath: artifact.originalPath,
-          snapshotPath: artifact.snapshotPath,
-          fileName: artifact.fileName,
-          mimeType: artifact.mimeType ?? null,
-          sizeBytes: artifact.sizeBytes,
-          title: artifact.title ?? null,
-          isPrimary: artifact.isPrimary ? 1 : 0,
-          declaredAt: artifact.declaredAt,
-        });
+    await this.exec("BEGIN");
+    try {
+      for (const artifact of input.artifacts) {
+        await this.run(insertArtifact, [
+          randomUUID(),
+          input.runId,
+          input.channelId,
+          artifact.originalPath,
+          artifact.snapshotPath,
+          artifact.fileName,
+          artifact.mimeType ?? null,
+          artifact.sizeBytes,
+          artifact.title ?? null,
+          artifact.isPrimary ? 1 : 0,
+          artifact.declaredAt,
+        ]);
       }
-    });
-
-    transaction(input);
+      await this.exec("COMMIT");
+    } catch (error) {
+      await this.rollback();
+      throw error;
+    }
   }
 
-  listRecentArtifacts(options: ListArtifactsOptions = {}): ResultArtifactRecord[] {
+  async listRecentArtifacts(options: ListArtifactsOptions = {}): Promise<ResultArtifactRecord[]> {
+    await this.ready;
+
     const limit = options.limit ?? 100;
     const offset = options.offset ?? 0;
     const conditions: string[] = [];
-    const params: Array<string | number> = [];
+    const params: SqliteParameter[] = [];
 
     if (options.channelId) {
       conditions.push("channel_id = ?");
@@ -145,14 +156,81 @@ export class ResultStore {
     const whereClause = conditions.length > 0
       ? `WHERE ${conditions.join(" AND ")}`
       : "";
-    const rows = this.db.prepare(`
+    const rows = await this.all<SqliteArtifactRow>(`
       SELECT *
       FROM artifacts
       ${whereClause}
       ORDER BY declared_at DESC, rowid DESC
       LIMIT ? OFFSET ?
-    `).all(...params, limit, offset) as SqliteArtifactRow[];
+    `, [...params, limit, offset]);
 
     return rows.map(mapArtifactRow);
   }
+
+  private getDatabase(): sqlite3.Database {
+    if (!this.db) {
+      throw new Error("Result store database is not ready");
+    }
+
+    return this.db;
+  }
+
+  private exec(sql: string): Promise<void> {
+    const db = this.getDatabase();
+    return new Promise((resolve, reject) => {
+      db.exec(sql, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  private run(sql: string, params: SqliteParameters = []): Promise<void> {
+    const db = this.getDatabase();
+    return new Promise((resolve, reject) => {
+      db.run(sql, params, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  private all<T>(sql: string, params: SqliteParameters = []): Promise<T[]> {
+    const db = this.getDatabase();
+    return new Promise((resolve, reject) => {
+      db.all(sql, params, (error, rows) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(rows as T[]);
+      });
+    });
+  }
+
+  private async rollback(): Promise<void> {
+    try {
+      await this.exec("ROLLBACK");
+    } catch {
+      // Ignore rollback failures so the original write error is preserved.
+    }
+  }
+}
+
+function openDatabase(databasePath: string): Promise<sqlite3.Database> {
+  return new Promise((resolve, reject) => {
+    const db = new sqlite3.Database(databasePath, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(db);
+    });
+  });
 }

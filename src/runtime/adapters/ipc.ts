@@ -173,7 +173,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             this.replyError(request.id, "Results query service is not available");
             return;
           }
-          this.reply(request.id, this.resultsQueryService.listRecentArtifacts({
+          this.reply(request.id, await this.resultsQueryService.listRecentArtifacts({
             channelId: request.channelId,
             limit: request.limit,
             offset: request.offset,
