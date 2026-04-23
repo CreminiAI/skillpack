@@ -62,6 +62,77 @@ test("saveJobFile writes normalized jobs and loadJobFile reads them back", async
   });
 });
 
+test("saveJobFile normalizes blank cron jobs into one-time jobs", async () => {
+  await withTempDir((dir) => {
+    saveJobFile(dir, {
+      jobs: [
+        {
+          name: "  manual-brief  ",
+          cron: "   ",
+          prompt: "Send the manual brief",
+          notify: {
+            adapter: " web ",
+            channelId: " web ",
+          },
+          enabled: false,
+          timezone: " Asia/Shanghai ",
+        },
+      ],
+    });
+
+    assert.deepEqual(loadJobFile(dir), {
+      jobs: [
+        {
+          name: "manual-brief",
+          prompt: "Send the manual brief",
+          notify: {
+            adapter: "web",
+            channelId: "web",
+          },
+        },
+      ],
+    });
+  });
+});
+
+test("loadJobFile accepts jobs without cron", async () => {
+  await withTempDir((dir) => {
+    fs.writeFileSync(
+      getJobFilePath(dir),
+      JSON.stringify(
+        {
+          jobs: [
+            {
+              name: "manual-brief",
+              prompt: "Send the manual brief",
+              notify: {
+                adapter: "web",
+                channelId: "web",
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    assert.deepEqual(loadJobFile(dir), {
+      jobs: [
+        {
+          name: "manual-brief",
+          prompt: "Send the manual brief",
+          notify: {
+            adapter: "web",
+            channelId: "web",
+          },
+        },
+      ],
+    });
+  });
+});
+
 test("loadJobFile rejects invalid job.json structure", async () => {
   await withTempDir((dir) => {
     fs.writeFileSync(

@@ -9,8 +9,10 @@ import type {
 import {
   loadJobFile,
   saveJobFile,
+  normalizeScheduledJobConfig,
   type ScheduledJobConfig,
 } from "../../job-config.js";
+import { hasJobSchedule, normalizeJobCron } from "../../job-schedule.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -25,7 +27,7 @@ const VALID_JOB_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 
 interface ManagedJob {
   config: ScheduledJobConfig;
-  /** null when the job is disabled (no cron task created) */
+  /** null when the job is one-time or disabled (no cron task created) */
   task: ReturnType<typeof cron.schedule> | null;
   lastRunAt?: string;
   lastResult?: string;
@@ -38,7 +40,7 @@ interface ManagedJob {
 
 export interface JobStatus {
   name: string;
-  cron: string;
+  cron?: string;
   prompt: string;
   notify: { adapter: string; channelId: string };
   enabled: boolean;
@@ -74,6 +76,10 @@ function isValidJobName(name: string): boolean {
   return VALID_JOB_NAME.test(name) && name.length <= 64;
 }
 
+function isRecurringJob(jobConfig: ScheduledJobConfig): boolean {
+  return hasJobSchedule(jobConfig);
+}
+
 // ---------------------------------------------------------------------------
 // SchedulerAdapter
 // ---------------------------------------------------------------------------
@@ -99,10 +105,13 @@ export class SchedulerAdapter implements PlatformAdapter {
 
     let scheduledCount = 0;
     let disabledCount = 0;
+    let oneTimeCount = 0;
     for (const jc of jobConfigs) {
       const result = this.registerJob(jc);
       if (result.registered) {
-        if (jc.enabled === false) {
+        if (!isRecurringJob(jc)) {
+          oneTimeCount++;
+        } else if (jc.enabled === false) {
           disabledCount++;
         } else {
           scheduledCount++;
@@ -113,6 +122,7 @@ export class SchedulerAdapter implements PlatformAdapter {
     const parts: string[] = [];
     if (scheduledCount > 0) parts.push(`${scheduledCount} active`);
     if (disabledCount > 0) parts.push(`${disabledCount} disabled`);
+    if (oneTimeCount > 0) parts.push(`${oneTimeCount} one-time`);
     if (parts.length > 0) {
       console.log(`[SchedulerAdapter] Started with ${parts.join(", ")} job(s)`);
     } else {
@@ -131,54 +141,54 @@ export class SchedulerAdapter implements PlatformAdapter {
   private registerJob(
     jobConfig: ScheduledJobConfig,
   ): { registered: boolean; message: string } {
+    const normalizedConfig = normalizeScheduledJobConfig(jobConfig);
+    const normalizedCron = normalizeJobCron(normalizedConfig.cron);
+
     // Validate name
-    if (!isValidJobName(jobConfig.name)) {
-      const msg = `[Scheduler] Invalid job name "${jobConfig.name}": must match ${VALID_JOB_NAME} and be ≤64 chars`;
+    if (!isValidJobName(normalizedConfig.name)) {
+      const msg = `[Scheduler] Invalid job name "${normalizedConfig.name}": must match ${VALID_JOB_NAME} and be ≤64 chars`;
       console.error(msg);
       return { registered: false, message: msg };
     }
 
-    // Validate cron expression
-    if (!cron.validate(jobConfig.cron)) {
-      const msg = `[Scheduler] Invalid cron expression for job "${jobConfig.name}": ${jobConfig.cron}`;
-      console.error(msg);
-      return { registered: false, message: msg };
-    }
+    if (normalizedCron) {
+      // Validate cron expression
+      if (!cron.validate(normalizedCron)) {
+        const msg = `[Scheduler] Invalid cron expression for job "${normalizedConfig.name}": ${normalizedCron}`;
+        console.error(msg);
+        return { registered: false, message: msg };
+      }
 
-    // Validate timezone if provided
-    if (jobConfig.timezone && !isValidTimezone(jobConfig.timezone)) {
-      const msg = `[Scheduler] Invalid timezone for job "${jobConfig.name}": ${jobConfig.timezone}`;
-      console.error(msg);
-      return { registered: false, message: msg };
+      // Validate timezone if provided
+      if (normalizedConfig.timezone && !isValidTimezone(normalizedConfig.timezone)) {
+        const msg = `[Scheduler] Invalid timezone for job "${normalizedConfig.name}": ${normalizedConfig.timezone}`;
+        console.error(msg);
+        return { registered: false, message: msg };
+      }
     }
 
     // Stop/remove existing job with the same name if any
-    this.removeFromMap(jobConfig.name);
+    this.removeFromMap(normalizedConfig.name);
 
-    // Create cron task only when enabled
+    // Create cron task only for recurring enabled jobs
     let task: ReturnType<typeof cron.schedule> | null = null;
-    if (jobConfig.enabled !== false) {
-      task = cron.schedule(
-        jobConfig.cron,
-        () => {
-          void this.runJob(jobConfig);
-        },
-        {
-          timezone: jobConfig.timezone,
-        },
-      );
-
+    if (normalizedCron && normalizedConfig.enabled !== false) {
+      task = this.createCronTask(normalizedConfig);
       console.log(
-        `[Scheduler] Job "${jobConfig.name}" scheduled: ${jobConfig.cron}${jobConfig.timezone ? ` (${jobConfig.timezone})` : ""}`,
+        `[Scheduler] Job "${normalizedConfig.name}" scheduled: ${normalizedCron}${normalizedConfig.timezone ? ` (${normalizedConfig.timezone})` : ""}`,
+      );
+    } else if (normalizedCron) {
+      console.log(
+        `[Scheduler] Job "${normalizedConfig.name}" registered (disabled)`,
       );
     } else {
       console.log(
-        `[Scheduler] Job "${jobConfig.name}" registered (disabled)`,
+        `[Scheduler] Job "${normalizedConfig.name}" registered as one-time (manual trigger only)`,
       );
     }
 
-    this.jobs.set(jobConfig.name, {
-      config: jobConfig,
+    this.jobs.set(normalizedConfig.name, {
+      config: normalizedConfig,
       task,
       running: false,
       notifyFailed: false,
@@ -319,12 +329,15 @@ export class SchedulerAdapter implements PlatformAdapter {
 
     this.persistJobs();
 
-    const enabled = jobConfig.enabled !== false;
+    const recurring = isRecurringJob(jobConfig);
+    const enabled = recurring ? jobConfig.enabled !== false : true;
     return {
       success: true,
-      message: enabled
-        ? `Job "${jobConfig.name}" created and scheduled.`
-        : `Job "${jobConfig.name}" created (disabled).`,
+      message: recurring
+        ? enabled
+          ? `Job "${jobConfig.name}" created and scheduled.`
+          : `Job "${jobConfig.name}" created (disabled).`
+        : `Job "${jobConfig.name}" created as a one-time task.`,
     };
   }
 
@@ -384,19 +397,18 @@ export class SchedulerAdapter implements PlatformAdapter {
       return { success: false, message: `Job "${name}" not found.` };
     }
 
+    if (!isRecurringJob(job.config)) {
+      return {
+        success: false,
+        message: `Job "${name}" does not have a schedule and cannot be enabled or disabled.`,
+      };
+    }
+
     job.config.enabled = enabled;
 
     if (enabled && !job.task) {
       // Create a new cron task for a previously disabled job
-      job.task = cron.schedule(
-        job.config.cron,
-        () => {
-          void this.runJob(job.config);
-        },
-        {
-          timezone: job.config.timezone,
-        },
-      );
+      job.task = this.createCronTask(job.config);
     } else if (enabled && job.task) {
       job.task.start();
     } else if (!enabled && job.task) {
@@ -448,13 +460,13 @@ export class SchedulerAdapter implements PlatformAdapter {
     for (const [, job] of this.jobs) {
       result.push({
         name: job.config.name,
-        cron: job.config.cron,
+        ...(job.config.cron ? { cron: job.config.cron } : {}),
         prompt: job.config.prompt,
         notify: job.config.notify,
-        enabled: job.config.enabled !== false,
-        timezone: job.config.timezone,
-        lastRunAt: job.lastRunAt,
-        lastError: job.lastError,
+        enabled: isRecurringJob(job.config) ? job.config.enabled !== false : true,
+        ...(job.config.timezone ? { timezone: job.config.timezone } : {}),
+        ...(job.lastRunAt ? { lastRunAt: job.lastRunAt } : {}),
+        ...(job.lastError ? { lastError: job.lastError } : {}),
         running: job.running,
         notifyFailed: job.notifyFailed,
       });
@@ -498,5 +510,22 @@ export class SchedulerAdapter implements PlatformAdapter {
     }
     this.jobs.clear();
     console.log("[SchedulerAdapter] All jobs stopped.");
+  }
+
+  private createCronTask(jobConfig: ScheduledJobConfig): ReturnType<typeof cron.schedule> {
+    const cronExpr = normalizeJobCron(jobConfig.cron);
+    if (!cronExpr) {
+      throw new Error(`Job "${jobConfig.name}" does not have a valid cron expression`);
+    }
+
+    return cron.schedule(
+      cronExpr,
+      () => {
+        void this.runJob(jobConfig);
+      },
+      {
+        timezone: jobConfig.timezone,
+      },
+    );
   }
 }

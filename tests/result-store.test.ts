@@ -16,10 +16,10 @@ async function withTempDir(run: (dir: string) => Promise<void> | void): Promise<
 }
 
 test("result store filters recent artifacts by channelId and offset", async () => {
-  await withTempDir((dir) => {
+  await withTempDir(async (dir) => {
     const store = new ResultStore(dir);
 
-    store.insertArtifacts({
+    await store.insertArtifacts({
       runId: "run-1",
       channelId: "scheduler-daily-report",
       artifacts: [
@@ -46,7 +46,7 @@ test("result store filters recent artifacts by channelId and offset", async () =
       ],
     });
 
-    store.insertArtifacts({
+    await store.insertArtifacts({
       runId: "run-2",
       channelId: "web-default",
       artifacts: [
@@ -63,7 +63,7 @@ test("result store filters recent artifacts by channelId and offset", async () =
       ],
     });
 
-    const filtered = store.listRecentArtifacts({
+    const filtered = await store.listRecentArtifacts({
       channelId: "scheduler-daily-report",
       limit: 10,
       offset: 0,
@@ -72,7 +72,7 @@ test("result store filters recent artifacts by channelId and offset", async () =
     assert.equal(filtered[0]?.fileName, "report-2.md");
     assert.equal(filtered[1]?.fileName, "report-1.md");
 
-    const paged = store.listRecentArtifacts({
+    const paged = await store.listRecentArtifacts({
       channelId: "scheduler-daily-report",
       limit: 1,
       offset: 1,

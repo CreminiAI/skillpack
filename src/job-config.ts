@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { normalizeJobCron } from "./job-schedule.js";
+
 export interface ScheduledJobConfig {
   /** Unique job name */
   name: string;
-  /** Standard 5-field cron expression */
-  cron: string;
+  /** Standard 5-field cron expression; omit for one-time manual jobs */
+  cron?: string;
   /** Prompt to send to the Agent when triggered */
   prompt: string;
   /** Where to push the result */
@@ -47,9 +49,9 @@ function validateScheduledJobConfig(
     );
   }
 
-  if (typeof job.cron !== "string" || !job.cron.trim()) {
+  if (job.cron !== undefined && typeof job.cron !== "string") {
     throw new Error(
-      `Invalid job config from ${sourceLabel}: "jobs[${index}].cron" is required`,
+      `Invalid job config from ${sourceLabel}: "jobs[${index}].cron" must be a string`,
     );
   }
 
@@ -120,16 +122,28 @@ export function validateJobFileShape(
 function normalizeJobFile(jobFile: JobFile): JobFile {
   return {
     jobs: jobFile.jobs.map((job) => ({
-      name: job.name.trim(),
-      cron: job.cron.trim(),
-      prompt: job.prompt,
-      notify: {
-        adapter: job.notify.adapter.trim(),
-        channelId: job.notify.channelId.trim(),
-      },
-      ...(job.enabled !== undefined ? { enabled: job.enabled } : {}),
-      ...(job.timezone !== undefined ? { timezone: job.timezone.trim() } : {}),
+      ...normalizeScheduledJobConfig(job),
     })),
+  };
+}
+
+export function normalizeScheduledJobConfig(job: ScheduledJobConfig): ScheduledJobConfig {
+  const normalizedCron = normalizeJobCron(job.cron);
+  const normalizedTimezone =
+    typeof job.timezone === "string" && job.timezone.trim()
+      ? job.timezone.trim()
+      : undefined;
+
+  return {
+    name: job.name.trim(),
+    ...(normalizedCron ? { cron: normalizedCron } : {}),
+    prompt: job.prompt,
+    notify: {
+      adapter: job.notify.adapter.trim(),
+      channelId: job.notify.channelId.trim(),
+    },
+    ...(normalizedCron && job.enabled !== undefined ? { enabled: job.enabled } : {}),
+    ...(normalizedCron && normalizedTimezone ? { timezone: normalizedTimezone } : {}),
   };
 }
 

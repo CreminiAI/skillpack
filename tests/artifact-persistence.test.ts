@@ -60,7 +60,7 @@ test("save_artifacts saves snapshots and database records immediately", async ()
       [{ filePath, title: "Daily report", isPrimary: true }],
     );
 
-    const records = store.listRecentArtifacts({
+    const records = await store.listRecentArtifacts({
       channelId: "scheduler-daily-report",
       limit: 10,
     });
@@ -93,7 +93,7 @@ test("save_artifacts appends multiple saves under the same runId", async () => {
     await executeSaveArtifacts(dir, saveArtifacts, [{ filePath, title: "First save" }]);
     await executeSaveArtifacts(dir, saveArtifacts, [{ filePath, title: "Second save" }]);
 
-    const records = store.listRecentArtifacts({
+    const records = await store.listRecentArtifacts({
       channelId: "scheduler-weekly-summary",
       limit: 10,
     });
@@ -135,7 +135,7 @@ test("save_artifacts fails atomically when any file is invalid", async () => {
     );
 
     assert.equal(
-      store.listRecentArtifacts({ channelId: "scheduler-invalid", limit: 10 }).length,
+      (await store.listRecentArtifacts({ channelId: "scheduler-invalid", limit: 10 })).length,
       0,
     );
     assert.equal(fs.existsSync(path.join(dir, "data", "artifacts")), false);

@@ -343,20 +343,20 @@ export class WebAdapter implements PlatformAdapter {
         return;
       }
       const { name, cron: cronExpr, prompt, notify, enabled, timezone } = req.body;
-      if (!name || !cronExpr || !prompt || !notify?.adapter || !notify?.channelId) {
+      if (!name || !prompt || !notify?.adapter || !notify?.channelId) {
         res.status(400).json({
           success: false,
-          message: "Required fields: name, cron, prompt, notify.adapter, notify.channelId",
+          message: "Required fields: name, prompt, notify.adapter, notify.channelId",
         });
         return;
       }
       const result = scheduler.addJob({
         name,
-        cron: cronExpr,
+        ...(typeof cronExpr === "string" ? { cron: cronExpr } : {}),
         prompt,
         notify,
-        enabled: enabled !== false,
-        timezone,
+        ...(typeof enabled === "boolean" ? { enabled } : {}),
+        ...(typeof timezone === "string" ? { timezone } : {}),
       });
       res.json(result);
     });
