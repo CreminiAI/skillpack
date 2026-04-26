@@ -55,7 +55,6 @@
     "inquirer": "^13.3.0",
     "node-cron": "^4.2.1",
     "node-telegram-bot-api": "^0.66.0",
-    "sqlite3": "^5.1.7",
     "ws": "^8.19.0"
   },
   "devDependencies": {

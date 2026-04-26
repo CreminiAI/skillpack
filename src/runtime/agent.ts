@@ -19,10 +19,10 @@ import {
   isImageMime,
 } from "./adapters/attachment-utils.js";
 import {
-  ArtifactPersistenceService,
-  createSaveArtifactsTool,
-  type SaveArtifactsCallback,
-} from "./artifacts/index.js";
+  createDelegatedCustomTools,
+  DelegatedCustomToolClient,
+  type DelegatedToolRunContextRef,
+} from "./custom-tools/index.js";
 import {
   createSendFileTool,
   type FileOutputCallback,
@@ -263,7 +263,7 @@ interface ChannelSession {
   running: boolean;
   pending: Promise<void>;
   fileOutputCallbackRef: { current: FileOutputCallback | null };
-  finalArtifactsSaveCallbackRef: { current: SaveArtifactsCallback | null };
+  delegatedToolRunContextRef: DelegatedToolRunContextRef;
 }
 
 // ---------------------------------------------------------------------------
@@ -276,11 +276,10 @@ export class PackAgent implements IPackAgent {
   private pendingSessionCreations = new Map<string, Promise<ChannelSession>>();
   private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
   private authStorage: AuthStorage;
-  private readonly artifactPersistenceService: ArtifactPersistenceService;
+  private readonly delegatedCustomToolClient = new DelegatedCustomToolClient();
 
   constructor(options: PackAgentOptions) {
     this.options = options;
-    this.artifactPersistenceService = options.artifactPersistenceService;
 
     // Use ConfigFileAuthBackend to persist OAuth credentials in config.json._auth
     const configPath = path.resolve(options.rootDir, "data", "config.json");
@@ -317,15 +316,21 @@ export class PackAgent implements IPackAgent {
     this.schedulerRef.current = scheduler;
   }
 
-  private createCustomTools(
+  private async createCustomTools(
     adapter: "telegram" | "slack" | "web" | "scheduler",
     channelId: string,
     fileOutputCallbackRef: { current: FileOutputCallback | null },
-    finalArtifactsSaveCallbackRef: { current: SaveArtifactsCallback | null },
-  ) {
+    delegatedToolRunContextRef: DelegatedToolRunContextRef,
+  ): Promise<any[]> {
+    const delegatedDefinitions =
+      await this.delegatedCustomToolClient.listDefinitions();
     const tools = [
       createSendFileTool(fileOutputCallbackRef) as any,
-      createSaveArtifactsTool(this.options.rootDir, finalArtifactsSaveCallbackRef) as any,
+      ...createDelegatedCustomTools(
+        delegatedDefinitions,
+        this.delegatedCustomToolClient,
+        delegatedToolRunContextRef,
+      ),
     ];
     if (adapter !== "scheduler") {
       tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
@@ -446,16 +451,14 @@ export class PackAgent implements IPackAgent {
       const fileOutputCallbackRef: { current: FileOutputCallback | null } = {
         current: null,
       };
-      const finalArtifactsSaveCallbackRef: {
-        current: SaveArtifactsCallback | null;
-      } = {
+      const delegatedToolRunContextRef: DelegatedToolRunContextRef = {
         current: null,
       };
-      const customTools = this.createCustomTools(
+      const customTools = await this.createCustomTools(
         adapter,
         channelId,
         fileOutputCallbackRef,
-        finalArtifactsSaveCallbackRef,
+        delegatedToolRunContextRef,
       );
 
       const { session } = await createAgentSession({
@@ -474,7 +477,7 @@ export class PackAgent implements IPackAgent {
         running: false,
         pending: Promise.resolve(),
         fileOutputCallbackRef,
-        finalArtifactsSaveCallbackRef,
+        delegatedToolRunContextRef,
       };
       this.channels.set(channelId, channelSession);
       return channelSession;
@@ -509,12 +512,10 @@ export class PackAgent implements IPackAgent {
         cs.fileOutputCallbackRef.current = (event) => {
           onEvent(event);
         };
-        cs.finalArtifactsSaveCallbackRef.current = (artifacts) => {
-          return this.artifactPersistenceService.saveArtifacts({
-            runId,
-            channelId,
-            artifacts,
-          });
+        cs.delegatedToolRunContextRef.current = {
+          runId,
+          channelId,
+          adapter,
         };
 
         // Subscribe to agent events and forward to adapter
@@ -653,7 +654,7 @@ export class PackAgent implements IPackAgent {
       } finally {
         cs.running = false;
         cs.fileOutputCallbackRef.current = null;
-        cs.finalArtifactsSaveCallbackRef.current = null;
+        cs.delegatedToolRunContextRef.current = null;
         unsubscribe();
       }
     };
