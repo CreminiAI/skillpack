@@ -23,6 +23,7 @@ import {
   DelegatedCustomToolClient,
   type DelegatedToolRunContextRef,
 } from "./custom-tools/index.js";
+import { HostIpcClient } from "./host-ipc/host-ipc-client.js";
 import {
   createSendFileTool,
   type FileOutputCallback,
@@ -274,9 +275,12 @@ export class PackAgent implements IPackAgent {
   private options: PackAgentOptions;
   private channels = new Map<string, ChannelSession>();
   private pendingSessionCreations = new Map<string, Promise<ChannelSession>>();
-  private schedulerRef: { current: SchedulerAdapter | null } = { current: null };
+  private schedulerRef: { current: SchedulerAdapter | null } = {
+    current: null,
+  };
   private authStorage: AuthStorage;
   private readonly delegatedCustomToolClient = new DelegatedCustomToolClient();
+  private readonly hostIpcClient = new HostIpcClient();
 
   constructor(options: PackAgentOptions) {
     this.options = options;
@@ -333,7 +337,9 @@ export class PackAgent implements IPackAgent {
       ),
     ];
     if (adapter !== "scheduler") {
-      tools.push(createManageScheduleTool(this.schedulerRef, adapter, channelId) as any);
+      tools.push(
+        createManageScheduleTool(this.schedulerRef, adapter, channelId) as any,
+      );
     }
     return tools;
   }
@@ -341,7 +347,10 @@ export class PackAgent implements IPackAgent {
   /**
    * Lazily create (or return existing) session for a channel.
    */
-  private async getOrCreateSession(adapter: "telegram" | "slack" | "web" | "scheduler", channelId: string): Promise<ChannelSession> {
+  private async getOrCreateSession(
+    adapter: "telegram" | "slack" | "web" | "scheduler",
+    channelId: string,
+  ): Promise<ChannelSession> {
     const existing = this.channels.get(channelId);
     if (existing) return existing;
 
@@ -361,7 +370,9 @@ export class PackAgent implements IPackAgent {
       // so default to "openai-completions" unless the user explicitly chose "openai-responses".
       if (baseUrl && modelId) {
         const apiProtocol = this.options.apiProtocol ?? "openai-completions";
-        log(`[PackAgent] Registering custom model ${provider}/${modelId} api=${apiProtocol} baseUrl=${baseUrl}`);
+        log(
+          `[PackAgent] Registering custom model ${provider}/${modelId} api=${apiProtocol} baseUrl=${baseUrl}`,
+        );
         modelRegistry.registerProvider(provider, {
           baseUrl,
           apiKey: this.options.apiKey,
@@ -386,15 +397,12 @@ export class PackAgent implements IPackAgent {
           ? { ...resolvedModel, baseUrl }
           : resolvedModel;
       if (resolvedModel && baseUrl) {
-        log(`[PackAgent] Resolved ${provider}/${modelId} api=${resolvedModel.api} baseUrl=${baseUrl}`);
+        log(
+          `[PackAgent] Resolved ${provider}/${modelId} api=${resolvedModel.api} baseUrl=${baseUrl}`,
+        );
       }
 
-      const sessionDir = path.resolve(
-        rootDir,
-        "data",
-        "sessions",
-        channelId,
-      );
+      const sessionDir = path.resolve(rootDir, "data", "sessions", channelId);
       fs.mkdirSync(sessionDir, { recursive: true });
       const sessionManager = SessionManager.continueRecent(rootDir, sessionDir);
       log(`[PackAgent] Session dir: ${sessionDir}`);
@@ -422,14 +430,22 @@ export class PackAgent implements IPackAgent {
 
       const packPromptFiles = buildPackPromptBlock(rootDir);
       if (packPromptFiles.agentsContent) {
-        log(`[PackAgent] Loaded pack policy from: ${packPromptFiles.agentsPath}`);
+        log(
+          `[PackAgent] Loaded pack policy from: ${packPromptFiles.agentsPath}`,
+        );
       } else {
-        log(`[PackAgent] No pack policy file found at: ${packPromptFiles.agentsPath}`);
+        log(
+          `[PackAgent] No pack policy file found at: ${packPromptFiles.agentsPath}`,
+        );
       }
       if (packPromptFiles.soulContent) {
-        log(`[PackAgent] Loaded pack persona from: ${packPromptFiles.soulPath}`);
+        log(
+          `[PackAgent] Loaded pack persona from: ${packPromptFiles.soulPath}`,
+        );
       } else {
-        log(`[PackAgent] No pack persona file found at: ${packPromptFiles.soulPath}`);
+        log(
+          `[PackAgent] No pack persona file found at: ${packPromptFiles.soulPath}`,
+        );
       }
       log(
         `[PackAgent] Pack prompt injection: ${packPromptFiles.promptBlock ? "enabled" : "disabled"}`,
@@ -533,7 +549,10 @@ export class PackAgent implements IPackAgent {
               if (event.message?.role === "user") {
                 log(JSON.stringify(event.message.content, null, 2));
               }
-              onEvent({ type: "message_start", role: event.message?.role ?? "" });
+              onEvent({
+                type: "message_start",
+                role: event.message?.role ?? "",
+              });
               break;
 
             case "message_update":
@@ -544,7 +563,9 @@ export class PackAgent implements IPackAgent {
                   type: "text_delta",
                   delta: event.assistantMessageEvent.delta,
                 });
-              } else if (event.assistantMessageEvent?.type === "thinking_delta") {
+              } else if (
+                event.assistantMessageEvent?.type === "thinking_delta"
+              ) {
                 turnHadVisibleOutput = true;
                 onEvent({
                   type: "thinking_delta",
@@ -603,24 +624,35 @@ export class PackAgent implements IPackAgent {
 
         // Build prompt with attachments
         let promptText = text;
-        const promptOptions: { images?: Array<{ type: "image"; data: string; mimeType: string }> } = {};
+        const promptOptions: {
+          images?: Array<{ type: "image"; data: string; mimeType: string }>;
+        } = {};
 
         if (attachments && attachments.length > 0) {
           // Separate image vs non-image attachments
-          const imageAttachments = attachments.filter((a) => isImageMime(a.mimeType));
-          const nonImageAttachments = attachments.filter((a) => !isImageMime(a.mimeType));
+          const imageAttachments = attachments.filter((a) =>
+            isImageMime(a.mimeType),
+          );
+          const nonImageAttachments = attachments.filter(
+            (a) => !isImageMime(a.mimeType),
+          );
 
           // Images → ImageContent[] for direct LLM vision
           if (imageAttachments.length > 0) {
             promptOptions.images = attachmentsToImageContent(imageAttachments);
-            log(`[PackAgent] Passing ${imageAttachments.length} image(s) to LLM`);
+            log(
+              `[PackAgent] Passing ${imageAttachments.length} image(s) to LLM`,
+            );
           }
 
           // Non-images → text description prepended to prompt
           if (nonImageAttachments.length > 0) {
-            const attachmentPrompt = formatAttachmentsPrompt(nonImageAttachments);
+            const attachmentPrompt =
+              formatAttachmentsPrompt(nonImageAttachments);
             promptText = `${attachmentPrompt}\n\n${text}`;
-            log(`[PackAgent] Injecting ${nonImageAttachments.length} non-image attachment(s) into prompt`);
+            log(
+              `[PackAgent] Injecting ${nonImageAttachments.length} non-image attachment(s) into prompt`,
+            );
           }
         }
 
@@ -660,7 +692,10 @@ export class PackAgent implements IPackAgent {
     };
 
     const resultPromise = cs.pending.catch(() => undefined).then(run);
-    cs.pending = resultPromise.then(() => undefined, () => undefined);
+    cs.pending = resultPromise.then(
+      () => undefined,
+      () => undefined,
+    );
     return resultPromise;
   }
 
@@ -685,9 +720,13 @@ export class PackAgent implements IPackAgent {
           fs.rmSync(sessionDir, { recursive: true, force: true });
           log(`[PackAgent] Cleared session dir: ${sessionDir}`);
         }
+
+        await this.hostIpcClient.notifyChannelSessionCleared({ channelId });
+
         return {
           success: true,
-          message: command === "new" ? "New session started." : "Session cleared.",
+          message:
+            command === "new" ? "New session started." : "Session cleared.",
         };
       }
 
