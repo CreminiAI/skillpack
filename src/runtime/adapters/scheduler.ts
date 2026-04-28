@@ -5,6 +5,7 @@ import type {
   AdapterContext,
   IPackAgent,
   AgentEvent,
+  IpcBroadcaster,
 } from "./types.js";
 import {
   loadJobFile,
@@ -89,6 +90,7 @@ export class SchedulerAdapter implements PlatformAdapter {
 
   private agent!: IPackAgent;
   private rootDir = "";
+  private ipcBroadcaster: IpcBroadcaster | null = null;
   private notifyFn: (
     adapter: string,
     channelId: string,
@@ -99,7 +101,11 @@ export class SchedulerAdapter implements PlatformAdapter {
   async start(ctx: AdapterContext): Promise<void> {
     this.agent = ctx.agent;
     this.rootDir = ctx.rootDir;
+    this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
     this.notifyFn = ctx.notify || (async () => {});
+    console.log(
+      `[Scheduler] IPC broadcaster ${this.ipcBroadcaster ? "attached" : "not available"} for agent events`,
+    );
 
     const jobConfigs = loadJobFile(this.rootDir).jobs;
 
@@ -224,9 +230,30 @@ export class SchedulerAdapter implements PlatformAdapter {
 
     let fullText = "";
     let agentFailed = false;
+    let loggedFirstTextDelta = false;
+    let sawAgentStart = false;
+    let sawAgentEnd = false;
     const pendingFiles: Array<{ filePath: string; caption?: string }> = [];
 
     const onEvent = (event: AgentEvent) => {
+      if (event.type === "agent_start") {
+        sawAgentStart = true;
+      } else if (event.type === "agent_end") {
+        sawAgentEnd = true;
+      }
+
+      if (event.type === "agent_start" || event.type === "agent_end") {
+        console.log(
+          `[Scheduler] Forwarding ${event.type} for ${channelId} (ipc=${this.ipcBroadcaster ? "yes" : "no"})`,
+        );
+      } else if (event.type === "text_delta" && !loggedFirstTextDelta) {
+        loggedFirstTextDelta = true;
+        console.log(
+          `[Scheduler] Forwarding first text_delta for ${channelId} (${event.delta.length} chars, ipc=${this.ipcBroadcaster ? "yes" : "no"})`,
+        );
+      }
+
+      this.ipcBroadcaster?.broadcastAgentEvent(channelId, event);
       if (event.type === "text_delta") fullText += event.delta;
       if (event.type === "file_output") {
         pendingFiles.push({
@@ -246,6 +273,7 @@ export class SchedulerAdapter implements PlatformAdapter {
         onEvent,
         undefined,
       );
+      this.ensureTerminalAgentEvent(channelId, sawAgentStart, sawAgentEnd, onEvent);
 
       if (result.errorMessage) {
         fullText = `❌ 定时任务 "${jobConfig.name}" 执行失败：${result.errorMessage}`;
@@ -255,6 +283,7 @@ export class SchedulerAdapter implements PlatformAdapter {
         if (job) job.lastError = undefined;
       }
     } catch (err) {
+      this.ensureTerminalAgentEvent(channelId, sawAgentStart, sawAgentEnd, onEvent);
       const errorMsg = err instanceof Error ? err.message : String(err);
       fullText = `❌ 定时任务 "${jobConfig.name}" 异常：${errorMsg}`;
       agentFailed = true;
@@ -301,10 +330,26 @@ export class SchedulerAdapter implements PlatformAdapter {
   }
 
   private async clearJobContext(channelId: string): Promise<void> {
+    console.log(`[Scheduler] Clearing context for ${channelId}`);
     const result = await this.agent.handleCommand("clear", channelId);
     if (!result.success) {
       throw new Error(result.message || `Failed to clear context for ${channelId}`);
     }
+    console.log(`[Scheduler] Context cleared for ${channelId}`);
+  }
+
+  private ensureTerminalAgentEvent(
+    channelId: string,
+    sawAgentStart: boolean,
+    sawAgentEnd: boolean,
+    onEvent: (event: AgentEvent) => void,
+  ): void {
+    if (!sawAgentStart || sawAgentEnd) {
+      return;
+    }
+
+    console.log(`[Scheduler] Synthesizing agent_end for ${channelId}`);
+    onEvent({ type: "agent_end" });
   }
 
   // -------------------------------------------------------------------------

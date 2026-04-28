@@ -110,6 +110,9 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const hasIpcChannel = typeof process.send === "function";
   const ipcAdapter = new IpcAdapter();
   const webEnabled = runtimeMode === "standalone";
+  console.log(
+    `[Runtime] IPC channel ${hasIpcChannel ? "available" : "not available"} (mode=${runtimeMode})`,
+  );
 
   if (hasIpcChannel) {
     await ipcAdapter.start({
@@ -223,6 +226,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
       lifecycle,
       notify: notifyFn,
       adapterMap,
+      ipcBroadcaster,
     });
     adapters.push(schedulerAdapter);
     adapterMap.set(schedulerAdapter.name, schedulerAdapter);
