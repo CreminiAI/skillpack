@@ -86,7 +86,6 @@ export class WebAdapter implements PlatformAdapter {
     this.agent = agent;
     this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
     this.conversationService = new ConversationService(rootDir);
-    const resultsQueryService = ctx.resultsQueryService ?? null;
 
     // -- API key & provider (in-memory, can be overridden by frontend) ------
 
@@ -271,21 +270,6 @@ export class WebAdapter implements PlatformAdapter {
           parsePositiveInt(req.query.limit, 100),
         ),
       );
-    });
-
-    // -- Persisted results API ----------------------------------------------
-
-    app.get("/api/results/artifacts", async (req, res) => {
-      if (!resultsQueryService) {
-        res.status(503).json({ error: "Results query service is not available" });
-        return;
-      }
-
-      res.json(await resultsQueryService.listRecentArtifacts({
-        channelId: typeof req.query.channelId === "string" ? req.query.channelId : undefined,
-        limit: parsePositiveInt(req.query.limit, 100),
-        offset: parsePositiveInt(req.query.offset, 0),
-      }));
     });
 
     // -- File download endpoint (for outbound attachments) -------------------

@@ -15,12 +15,6 @@ import {
   deregister as registryDeregister,
   canonicalizeDir,
 } from "./registry.js";
-import {
-  ArtifactPersistenceService,
-  ArtifactSnapshotService,
-  ResultStore,
-  ResultsQueryService,
-} from "./artifacts/index.js";
 import { loadConfig as loadPackConfig } from "../pack-config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -92,13 +86,6 @@ export async function startServer(options: ServerOptions): Promise<void> {
   });
 
   const lifecycle = new Lifecycle(server);
-  const resultStore = new ResultStore(rootDir);
-  const artifactSnapshotService = new ArtifactSnapshotService(rootDir);
-  const artifactPersistenceService = new ArtifactPersistenceService(
-    artifactSnapshotService,
-    resultStore,
-  );
-  const resultsQueryService = new ResultsQueryService(resultStore);
 
   // ---------------------------------------------------------------------------
   // Create PackAgent (shared instance)
@@ -112,7 +99,6 @@ export async function startServer(options: ServerOptions): Promise<void> {
     baseUrl,
     apiProtocol,
     lifecycleHandler: lifecycle,
-    artifactPersistenceService,
   });
 
   // ---------------------------------------------------------------------------
@@ -124,6 +110,9 @@ export async function startServer(options: ServerOptions): Promise<void> {
   const hasIpcChannel = typeof process.send === "function";
   const ipcAdapter = new IpcAdapter();
   const webEnabled = runtimeMode === "standalone";
+  console.log(
+    `[Runtime] IPC channel ${hasIpcChannel ? "available" : "not available"} (mode=${runtimeMode})`,
+  );
 
   if (hasIpcChannel) {
     await ipcAdapter.start({
@@ -133,7 +122,6 @@ export async function startServer(options: ServerOptions): Promise<void> {
       rootDir,
       lifecycle,
       adapterMap,
-      resultsQueryService,
     });
     adapters.push(ipcAdapter);
     adapterMap.set(ipcAdapter.name, ipcAdapter);
@@ -151,7 +139,6 @@ export async function startServer(options: ServerOptions): Promise<void> {
       lifecycle,
       adapterMap,
       ipcBroadcaster,
-      resultsQueryService,
     });
     adapters.push(webAdapter);
     adapterMap.set(webAdapter.name, webAdapter);
@@ -172,7 +159,6 @@ export async function startServer(options: ServerOptions): Promise<void> {
         lifecycle,
         adapterMap,
         ipcBroadcaster,
-        resultsQueryService,
       });
       adapters.push(telegramAdapter);
       adapterMap.set(telegramAdapter.name, telegramAdapter);
@@ -203,7 +189,6 @@ export async function startServer(options: ServerOptions): Promise<void> {
           lifecycle,
           adapterMap,
           ipcBroadcaster,
-          resultsQueryService,
         });
         adapters.push(slackAdapter);
         adapterMap.set(slackAdapter.name, slackAdapter);
@@ -241,7 +226,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
       lifecycle,
       notify: notifyFn,
       adapterMap,
-      resultsQueryService,
+      ipcBroadcaster,
     });
     adapters.push(schedulerAdapter);
     adapterMap.set(schedulerAdapter.name, schedulerAdapter);

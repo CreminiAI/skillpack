@@ -1,6 +1,5 @@
 import { configManager, type DataConfig } from "../config.js";
 import type { ScheduledJobConfig } from "../../job-config.js";
-import type { ResultsQueryService } from "../artifacts/index.js";
 import {
   ConversationService,
   DEFAULT_WEB_CHANNEL_ID,
@@ -20,13 +19,6 @@ type IpcRequest =
   | { id: string; type: "get_conversations" }
   | { id: string; type: "create_conversation" }
   | { id: string; type: "get_messages"; channelId: string; limit?: number }
-  | {
-    id: string;
-    type: "get_recent_artifacts";
-    channelId?: string;
-    limit?: number;
-    offset?: number;
-  }
   | { id: string; type: "send_message"; channelId: string; text: string }
   | { id: string; type: "command"; command: BotCommand; channelId: string }
   | { id: string; type: "get_config" }
@@ -44,6 +36,23 @@ type IpcRequest =
   | { id: string; type: "trigger_scheduled_job"; name: string }
   | { id: string; type: "remove_scheduled_job"; name: string };
 
+const IPC_REQUEST_TYPES = new Set<IpcRequest["type"]>([
+  "get_conversations",
+  "create_conversation",
+  "get_messages",
+  "send_message",
+  "command",
+  "get_config",
+  "update_config",
+  "get_status",
+  "get_scheduled_jobs",
+  "add_scheduled_job",
+  "update_scheduled_job",
+  "set_scheduled_job_enabled",
+  "trigger_scheduled_job",
+  "remove_scheduled_job",
+]);
+
 export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
   readonly name = "ipc";
 
@@ -51,7 +60,6 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
   private rootDir = "";
   private adapterMap: Map<string, PlatformAdapter> | null = null;
   private conversationService: ConversationService | null = null;
-  private resultsQueryService: ResultsQueryService | null = null;
   private readonly createdChannels = new Set<string>();
   private messageListener?: (message: unknown) => void;
   private started = false;
@@ -66,7 +74,6 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
     this.rootDir = ctx.rootDir;
     this.adapterMap = ctx.adapterMap ?? null;
     this.conversationService = new ConversationService(ctx.rootDir);
-    this.resultsQueryService = ctx.resultsQueryService ?? null;
 
     this.messageListener = (message: unknown) => {
       if (!this.isIpcRequest(message)) return;
@@ -124,7 +131,11 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
   private isIpcRequest(message: unknown): message is IpcRequest {
     if (!message || typeof message !== "object") return false;
     const maybe = message as Record<string, unknown>;
-    return typeof maybe.id === "string" && typeof maybe.type === "string";
+    return (
+      typeof maybe.id === "string" &&
+      typeof maybe.type === "string" &&
+      IPC_REQUEST_TYPES.has(maybe.type as IpcRequest["type"])
+    );
   }
 
   private async handleRequest(request: IpcRequest): Promise<void> {
@@ -165,19 +176,6 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             request.limit ?? 100,
           );
           this.reply(request.id, messages);
-          return;
-        }
-
-        case "get_recent_artifacts": {
-          if (!this.resultsQueryService) {
-            this.replyError(request.id, "Results query service is not available");
-            return;
-          }
-          this.reply(request.id, await this.resultsQueryService.listRecentArtifacts({
-            channelId: request.channelId,
-            limit: request.limit,
-            offset: request.offset,
-          }));
           return;
         }
 

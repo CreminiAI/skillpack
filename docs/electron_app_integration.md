@@ -17,6 +17,9 @@
    - `ready`
    - `agent_event`
    - `inbound_message`（Telegram/Slack 入站）
+9. 子进程发起的自定义工具请求：
+   - `get_custom_tool_definitions`
+   - `execute_custom_tool`
 
 ## 2. 进程启动要求（Electron 主进程）
 
@@ -59,6 +62,8 @@ type IpcResponse =
   | { id: string; type: "error"; message: string };
 ```
 
+同一个响应 envelope 也用于 Electron 回复 skill-pack 发起的自定义工具请求。
+
 ### 3.3 推送事件（skill-pack -> Electron）
 
 ```ts
@@ -74,6 +79,37 @@ type IpcPushEvent =
       timestamp: number;
     };
 ```
+
+### 3.4 自定义工具请求（skill-pack -> Electron）
+
+在 embedded 模式下，skill-pack 可以通过 IPC 向 Electron 主进程请求工具定义和执行工具。详见 [`docs/runtime/ipc-custom-tools.md`](runtime/ipc-custom-tools.md)。
+
+```ts
+type SkillpackCustomToolRequest =
+  | { id: string; type: "get_custom_tool_definitions" }
+  | {
+      id: string;
+      type: "execute_custom_tool";
+      toolName: string;
+      toolCallId: string;
+      runContext: {
+        runId: string;
+        channelId: string;
+        adapter: "telegram" | "slack" | "web" | "scheduler";
+      };
+      params: unknown;
+    };
+```
+
+Electron 必须返回：
+
+```ts
+type SkillpackCustomToolResponse =
+  | { id: string; type: "result"; data: unknown }
+  | { id: string; type: "error"; message: string };
+```
+
+首个迁移工具是 `save_artifacts`：LLM 仍在 skill-pack agent 内看到该工具，但路径校验、快照、SQLite 写入和查询全部由 Frevana 主进程负责。
 
 ## 4. 关键行为说明（对接时必须知晓）
 
@@ -119,6 +155,7 @@ interface ConversationSummary {
 2. `sendRequest(type, payload)` 自动生成 `id` + 超时处理（建议 30-60s）
 3. 统一分流：
    - 带 `id` -> 命中 pending promise
+   - 带 `id` 但未命中 pending，且 `type` 是 `get_custom_tool_definitions` / `execute_custom_tool` -> 作为子进程请求交给 custom tool executor
    - 无 `id` -> 事件总线广播（`ready/agent_event/inbound_message`）
 4. 进程退出时 reject 全部 pending，触发重连逻辑
 

@@ -50,6 +50,7 @@ When `skillpack run` executes, it calls `startServer({ rootDir })` from `src/run
 - Starts the scheduler from `job.json` when the file exists.
 - Serves `web/` static assets (tries `rootDir/web`, falls back to the package's own `web/`).
 - Creates a shared `PackAgent` instance.
+- In embedded mode, loads delegated custom tools from the parent IPC process.
 - Starts `WebAdapter` (always enabled), `TelegramAdapter` (if token configured), `SlackAdapter` (if both `botToken` and `appToken` are configured), and `SchedulerAdapter`.
 - Listens on `HOST:PORT`, defaults to `127.0.0.1:26313`; auto-increments port on conflict.
 - Opens the browser automatically after a successful start.
@@ -87,6 +88,12 @@ Environment variables:
 
 - Checks `diagnostics` (stopReason, errorMessage, visible output) at the end of each turn and returns an error message on failure.
 - Supports `abort(channelId)` to interrupt a running session and `dispose(channelId)` to tear it down.
+
+### Delegated custom tools
+
+Embedded hosts can create SkillPack custom tools through IPC. `skill-pack` requests definitions from the parent process and registers them as pi-coding-agent custom tools; tool execution is then forwarded back to the parent with the active `{ runId, channelId, adapter }` context.
+
+See [`ipc-custom-tools.md`](ipc-custom-tools.md) for the contract and Frevana-side module layout.
 
 ### Pack-level policy and persona files
 

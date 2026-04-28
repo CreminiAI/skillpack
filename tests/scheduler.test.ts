@@ -268,6 +268,127 @@ test("scheduler can manually trigger one-time jobs", async () => {
   });
 });
 
+test("scheduler broadcasts agent events over IPC", async () => {
+  await withTempDir(async (dir) => {
+    saveJobFile(dir, {
+      jobs: [
+        {
+          name: "suggestion-job",
+          prompt: "Run and suggest next steps",
+          notify: {
+            adapter: "web",
+            channelId: "web",
+          },
+        },
+      ],
+    });
+
+    const broadcasts: Array<{ channelId: string; type: string; delta?: string }> = [];
+    const scheduler = new SchedulerAdapter();
+    await scheduler.start({
+      ...createSchedulerContext(dir),
+      ipcBroadcaster: {
+        broadcastInbound: () => undefined,
+        broadcastAgentEvent: (channelId: string, event: any) => {
+          broadcasts.push({
+            channelId,
+            type: event.type,
+            delta: event.type === "text_delta" ? event.delta : undefined,
+          });
+        },
+      },
+      agent: {
+        handleCommand: async () => ({ success: true }),
+        handleMessage: async (
+          _adapter: string,
+          _channelId: string,
+          _text: string,
+          onEvent: (event: any) => void,
+        ) => {
+          onEvent({ type: "agent_start" });
+          onEvent({ type: "text_delta", delta: "Consider increasing budget." });
+          onEvent({ type: "agent_end" });
+          return { errorMessage: undefined };
+        },
+      },
+    } as any);
+
+    const result = await scheduler.triggerJob("suggestion-job");
+    assert.equal(result.success, true);
+    assert.deepEqual(broadcasts, [
+      { channelId: "scheduler-suggestion-job", type: "agent_start", delta: undefined },
+      {
+        channelId: "scheduler-suggestion-job",
+        type: "text_delta",
+        delta: "Consider increasing budget.",
+      },
+      { channelId: "scheduler-suggestion-job", type: "agent_end", delta: undefined },
+    ]);
+
+    await scheduler.stop();
+  });
+});
+
+test("scheduler synthesizes agent_end when the runtime omits it", async () => {
+  await withTempDir(async (dir) => {
+    saveJobFile(dir, {
+      jobs: [
+        {
+          name: "missing-agent-end-job",
+          prompt: "Run and stop without emitting agent_end",
+          notify: {
+            adapter: "web",
+            channelId: "web",
+          },
+        },
+      ],
+    });
+
+    const broadcasts: Array<{ channelId: string; type: string; delta?: string }> = [];
+    const scheduler = new SchedulerAdapter();
+    await scheduler.start({
+      ...createSchedulerContext(dir),
+      ipcBroadcaster: {
+        broadcastInbound: () => undefined,
+        broadcastAgentEvent: (channelId: string, event: any) => {
+          broadcasts.push({
+            channelId,
+            type: event.type,
+            delta: event.type === "text_delta" ? event.delta : undefined,
+          });
+        },
+      },
+      agent: {
+        handleCommand: async () => ({ success: true }),
+        handleMessage: async (
+          _adapter: string,
+          _channelId: string,
+          _text: string,
+          onEvent: (event: any) => void,
+        ) => {
+          onEvent({ type: "agent_start" });
+          onEvent({ type: "text_delta", delta: "Consider trimming low-value searches." });
+          return { errorMessage: undefined };
+        },
+      },
+    } as any);
+
+    const result = await scheduler.triggerJob("missing-agent-end-job");
+    assert.equal(result.success, true);
+    assert.deepEqual(broadcasts, [
+      { channelId: "scheduler-missing-agent-end-job", type: "agent_start", delta: undefined },
+      {
+        channelId: "scheduler-missing-agent-end-job",
+        type: "text_delta",
+        delta: "Consider trimming low-value searches.",
+      },
+      { channelId: "scheduler-missing-agent-end-job", type: "agent_end", delta: undefined },
+    ]);
+
+    await scheduler.stop();
+  });
+});
+
 test("scheduler clears previous context before running and keeps the same channelId", async () => {
   await withTempDir(async (dir) => {
     saveJobFile(dir, {
