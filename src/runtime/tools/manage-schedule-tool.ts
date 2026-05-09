@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Type, type Static } from "@sinclair/typebox";
 
 import type {
@@ -30,7 +31,7 @@ const ManageScheduleParams = Type.Object({
   name: Type.Optional(
     Type.String({
       description:
-        "Unique name for the scheduled task. Required for add/remove/trigger/enable/disable.",
+        "Display name for the scheduled task. Required for add/remove/trigger/enable/disable.",
     }),
   ),
   cron: Type.Optional(
@@ -75,6 +76,34 @@ function textResult(text: string): AgentToolResult<undefined> {
   return { content: [{ type: "text", text }], details: undefined };
 }
 
+function resolveJobId(
+  scheduler: SchedulerAdapter,
+  nameOrId: string,
+): { ok: true; jobId: string } | { ok: false; message: string } {
+  const jobs = scheduler.listJobs();
+  const byId = jobs.find((job) => job.id === nameOrId);
+  if (byId) {
+    return { ok: true, jobId: byId.id };
+  }
+
+  const byName = jobs.filter((job) => job.name === nameOrId);
+  if (byName.length === 1) {
+    return { ok: true, jobId: byName[0].id };
+  }
+
+  if (byName.length > 1) {
+    return {
+      ok: false,
+      message: `Error: Multiple scheduled tasks share the name '${nameOrId}'. Rename one of them before using this action.`,
+    };
+  }
+
+  return {
+    ok: false,
+    message: `Error: Scheduled task '${nameOrId}' was not found.`,
+  };
+}
+
 function getDefaultNotifyTarget(
   adapter: RuntimePlatform,
   channelId: string,
@@ -112,6 +141,7 @@ export function createManageScheduleTool(
   schedulerRef: { current: SchedulerAdapter | null },
   adapter: RuntimePlatform,
   channelId: string,
+  generateJobId: () => string = randomUUID,
 ): ToolDefinition<typeof ManageScheduleParams> {
 
   return {
@@ -123,9 +153,9 @@ export function createManageScheduleTool(
       "Actions:",
       "- add: Create a new scheduled task. Requires: name, cron, prompt. Notifications default to the current Telegram, Slack, Feishu, or Web chat. You can override the destination with notifyAdapter + notifyChannelId. The prompt must describe only the work for each run, not the schedule itself.",
       "- list: List all scheduled tasks with their status.",
-      "- remove: Remove a scheduled task by name.",
-      "- trigger: Manually trigger a scheduled task by name (runs immediately).",
-      "- enable: Enable a disabled scheduled task.",
+      "- remove: Remove a scheduled task by display name.",
+      "- trigger: Manually trigger a scheduled task by display name (runs immediately).",
+      "- enable: Enable a disabled scheduled task by display name.",
       "- disable: Disable a scheduled task without removing it.",
       "",
       "Cron expression format: '* * * * *' (minute hour day month weekday)",
@@ -194,6 +224,7 @@ export function createManageScheduleTool(
           }
 
           const jobConfig: ScheduledJobConfig = {
+            id: generateJobId(),
             name: params.name,
             cron: params.cron,
             prompt: params.prompt,
@@ -212,7 +243,11 @@ export function createManageScheduleTool(
               "Error: 'name' is required for removing a task.",
             );
           }
-          const result = scheduler.removeJob(params.name);
+          const resolved = resolveJobId(scheduler, params.name);
+          if (!resolved.ok) {
+            return textResult(resolved.message);
+          }
+          const result = scheduler.removeJob(resolved.jobId);
           return textResult(result.message);
         }
 
@@ -222,7 +257,11 @@ export function createManageScheduleTool(
               "Error: 'name' is required for triggering a task.",
             );
           }
-          const result = await scheduler.triggerJob(params.name);
+          const resolved = resolveJobId(scheduler, params.name);
+          if (!resolved.ok) {
+            return textResult(resolved.message);
+          }
+          const result = await scheduler.triggerJob(resolved.jobId);
           return textResult(result.message);
         }
 
@@ -232,7 +271,11 @@ export function createManageScheduleTool(
               "Error: 'name' is required for enabling a task.",
             );
           }
-          const result = scheduler.setEnabled(params.name, true);
+          const resolved = resolveJobId(scheduler, params.name);
+          if (!resolved.ok) {
+            return textResult(resolved.message);
+          }
+          const result = scheduler.setEnabled(resolved.jobId, true);
           return textResult(result.message);
         }
 
@@ -242,7 +285,11 @@ export function createManageScheduleTool(
               "Error: 'name' is required for disabling a task.",
             );
           }
-          const result = scheduler.setEnabled(params.name, false);
+          const resolved = resolveJobId(scheduler, params.name);
+          if (!resolved.ok) {
+            return textResult(resolved.message);
+          }
+          const result = scheduler.setEnabled(resolved.jobId, false);
           return textResult(result.message);
         }
 

@@ -16,6 +16,7 @@ test("manage_scheduled_task can create a scheduled job from web chat", async () 
     },
     "web",
     "web",
+    () => "generated-job-id",
   );
 
   const result = await tool.execute(
@@ -34,6 +35,7 @@ test("manage_scheduled_task can create a scheduled job from web chat", async () 
   assert.equal(result.content[0]?.type, "text");
   assert.equal((result.content[0] as any)?.text, "created");
   assert.deepEqual(capturedJob, {
+    id: "generated-job-id",
     name: "daily-brief",
     cron: "0 9 * * 1-5",
     prompt: "Send the daily brief",
@@ -93,6 +95,7 @@ test("manage_scheduled_task can use the current feishu chat as default notify ta
     },
     "feishu",
     "feishu-oc_test_chat",
+    () => "generated-feishu-job-id",
   );
 
   const result = await tool.execute(
@@ -111,6 +114,7 @@ test("manage_scheduled_task can use the current feishu chat as default notify ta
   assert.equal(result.content[0]?.type, "text");
   assert.equal((result.content[0] as any)?.text, "created");
   assert.deepEqual(capturedJob, {
+    id: "generated-feishu-job-id",
     name: "feishu-daily-brief",
     cron: "0 9 * * 1-5",
     prompt: "Send the daily brief",

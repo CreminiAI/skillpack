@@ -4,7 +4,9 @@ import path from "node:path";
 import { normalizeJobCron } from "./job-schedule.js";
 
 export interface ScheduledJobConfig {
-  /** Unique job name */
+  /** Stable machine identifier */
+  id: string;
+  /** Human-readable display name */
   name: string;
   /** Standard 5-field cron expression; omit for one-time manual jobs */
   cron?: string;
@@ -43,6 +45,12 @@ function validateScheduledJobConfig(
   }
 
   const job = value as Record<string, unknown>;
+  if (typeof job.id !== "string" || !job.id.trim()) {
+    throw new Error(
+      `Invalid job config from ${sourceLabel}: "jobs[${index}].id" is required`,
+    );
+  }
+
   if (typeof job.name !== "string" || !job.name.trim()) {
     throw new Error(
       `Invalid job config from ${sourceLabel}: "jobs[${index}].name" is required`,
@@ -106,16 +114,16 @@ export function validateJobFileShape(
     throw new Error(`Invalid job config from ${sourceLabel}: "jobs" must be an array`);
   }
 
-  const names = new Set<string>();
+  const ids = new Set<string>();
   jobFile.jobs.forEach((job, index) => {
     validateScheduledJobConfig(job, sourceLabel, index);
-    const normalizedName = job.name.trim().toLowerCase();
-    if (names.has(normalizedName)) {
+    const normalizedId = job.id.trim().toLowerCase();
+    if (ids.has(normalizedId)) {
       throw new Error(
-        `Invalid job config from ${sourceLabel}: duplicate job name "${job.name}" is not allowed`,
+        `Invalid job config from ${sourceLabel}: duplicate job id "${job.id}" is not allowed`,
       );
     }
-    names.add(normalizedName);
+    ids.add(normalizedId);
   });
 }
 
@@ -135,6 +143,7 @@ export function normalizeScheduledJobConfig(job: ScheduledJobConfig): ScheduledJ
       : undefined;
 
   return {
+    id: job.id.trim(),
     name: job.name.trim(),
     ...(normalizedCron ? { cron: normalizedCron } : {}),
     prompt: job.prompt,

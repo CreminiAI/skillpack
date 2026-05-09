@@ -35,6 +35,7 @@ test("scheduler loads jobs from job.json on startup", async () => {
     saveJobFile(dir, {
       jobs: [
         {
+          id: "daily-brief",
           name: "daily-brief",
           cron: "0 9 * * 1-5",
           prompt: "Send the daily brief",
@@ -51,12 +52,14 @@ test("scheduler loads jobs from job.json on startup", async () => {
 
     assert.deepEqual(
       scheduler.listJobs().map((job) => ({
+        id: job.id,
         name: job.name,
         cron: job.cron,
         enabled: job.enabled,
       })),
       [
         {
+          id: "daily-brief",
           name: "daily-brief",
           cron: "0 9 * * 1-5",
           enabled: true,
@@ -73,6 +76,7 @@ test("scheduler loads one-time jobs without creating a schedule", async () => {
     saveJobFile(dir, {
       jobs: [
         {
+          id: "manual-brief",
           name: "manual-brief",
           prompt: "Send the manual brief",
           notify: {
@@ -88,6 +92,7 @@ test("scheduler loads one-time jobs without creating a schedule", async () => {
 
     assert.deepEqual(scheduler.listJobs(), [
       {
+        id: "manual-brief",
         name: "manual-brief",
         prompt: "Send the manual brief",
         notify: {
@@ -124,6 +129,7 @@ test("scheduler persists add/remove/enable changes only to job.json", async () =
     await scheduler.start(createSchedulerContext(dir));
 
     const added = scheduler.addJob({
+      id: "weekly-summary",
       name: "weekly-summary",
       cron: "0 18 * * 5",
       prompt: "Send the weekly summary",
@@ -158,6 +164,7 @@ test("scheduler persists one-time jobs without cron, enabled, or timezone", asyn
     await scheduler.start(createSchedulerContext(dir));
 
     const added = scheduler.addJob({
+      id: "manual-brief",
       name: "manual-brief",
       cron: "   ",
       prompt: "Send the manual brief",
@@ -173,6 +180,7 @@ test("scheduler persists one-time jobs without cron, enabled, or timezone", asyn
     assert.deepEqual(loadJobFile(dir), {
       jobs: [
         {
+          id: "manual-brief",
           name: "manual-brief",
           prompt: "Send the manual brief",
           notify: {
@@ -192,6 +200,7 @@ test("scheduler triggers jobs with the derived scheduler channelId only", async 
     saveJobFile(dir, {
       jobs: [
         {
+          id: "metadata-job",
           name: "metadata-job",
           cron: "0 9 * * 1-5",
           prompt: "Send the metadata report",
@@ -237,6 +246,7 @@ test("scheduler can manually trigger one-time jobs", async () => {
     saveJobFile(dir, {
       jobs: [
         {
+          id: "manual-job",
           name: "manual-job",
           prompt: "Run once manually",
           notify: {
@@ -273,6 +283,7 @@ test("scheduler broadcasts agent events over IPC", async () => {
     saveJobFile(dir, {
       jobs: [
         {
+          id: "suggestion-job",
           name: "suggestion-job",
           prompt: "Run and suggest next steps",
           notify: {
@@ -334,6 +345,7 @@ test("scheduler synthesizes agent_end when the runtime omits it", async () => {
     saveJobFile(dir, {
       jobs: [
         {
+          id: "missing-agent-end-job",
           name: "missing-agent-end-job",
           prompt: "Run and stop without emitting agent_end",
           notify: {
@@ -394,6 +406,7 @@ test("scheduler clears previous context before running and keeps the same channe
     saveJobFile(dir, {
       jobs: [
         {
+          id: "clean-context-job",
           name: "clean-context-job",
           cron: "0 9 * * 1-5",
           prompt: "Run with a fresh context",
@@ -444,6 +457,7 @@ test("scheduler rejects enable or disable requests for one-time jobs", async () 
     saveJobFile(dir, {
       jobs: [
         {
+          id: "manual-job",
           name: "manual-job",
           prompt: "Run once manually",
           notify: {
@@ -470,6 +484,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
     saveJobFile(dir, {
       jobs: [
         {
+          id: "mutable-job",
           name: "mutable-job",
           cron: "0 9 * * 1-5",
           prompt: "Initial recurring job",
@@ -496,6 +511,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
     assert.deepEqual(loadJobFile(dir), {
       jobs: [
         {
+          id: "mutable-job",
           name: "mutable-job",
           prompt: "Now manual",
           notify: {
@@ -521,6 +537,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
     assert.deepEqual(loadJobFile(dir), {
       jobs: [
         {
+          id: "mutable-job",
           name: "mutable-job",
           cron: "0 18 * * 5",
           prompt: "Back to recurring",

@@ -36,6 +36,7 @@ test("zipCommand includes job.json when it exists", async () => {
     saveJobFile(dir, {
       jobs: [
         {
+          id: "daily-brief",
           name: "daily-brief",
           cron: "0 9 * * 1-5",
           prompt: "Send the daily brief",

@@ -19,8 +19,8 @@ import { hasJobSchedule, normalizeJobCron } from "../../job-schedule.js";
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Only allow safe characters in job names to prevent path traversal. */
-const VALID_JOB_NAME = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+/** Disallow path separators and line breaks because ids are reused in route params and channel ids. */
+const INVALID_JOB_ID_CHARS = /[\\/\r\n]/;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +40,7 @@ interface ManagedJob {
 }
 
 export interface JobStatus {
+  id: string;
   name: string;
   cron?: string;
   prompt: string;
@@ -70,11 +71,12 @@ function isValidTimezone(tz: string): boolean {
 }
 
 /**
- * Validate a job name: must be non-empty, match the safe pattern,
- * and must not contain path-separator tricks.
+ * Validate a job id with minimal safety constraints:
+ * it must be non-empty, reasonably short, and must not contain
+ * path separators or line breaks.
  */
-function isValidJobName(name: string): boolean {
-  return VALID_JOB_NAME.test(name) && name.length <= 64;
+function isValidJobId(id: string): boolean {
+  return id.length > 0 && id.length <= 128 && !INVALID_JOB_ID_CHARS.test(id);
 }
 
 function isRecurringJob(jobConfig: ScheduledJobConfig): boolean {
@@ -150,9 +152,8 @@ export class SchedulerAdapter implements PlatformAdapter {
     const normalizedConfig = normalizeScheduledJobConfig(jobConfig);
     const normalizedCron = normalizeJobCron(normalizedConfig.cron);
 
-    // Validate name
-    if (!isValidJobName(normalizedConfig.name)) {
-      const msg = `[Scheduler] Invalid job name "${normalizedConfig.name}": must match ${VALID_JOB_NAME} and be ≤64 chars`;
+    if (!isValidJobId(normalizedConfig.id)) {
+      const msg = `[Scheduler] Invalid job id "${normalizedConfig.id}": must be non-empty, must not contain "/", "\\\\", or line breaks, and must be ≤128 chars`;
       console.error(msg);
       return { registered: false, message: msg };
     }
@@ -173,8 +174,8 @@ export class SchedulerAdapter implements PlatformAdapter {
       }
     }
 
-    // Stop/remove existing job with the same name if any
-    this.removeFromMap(normalizedConfig.name);
+    // Stop/remove existing job with the same id if any
+    this.removeFromMap(normalizedConfig.id);
 
     // Create cron task only for recurring enabled jobs
     let task: ReturnType<typeof cron.schedule> | null = null;
@@ -193,7 +194,7 @@ export class SchedulerAdapter implements PlatformAdapter {
       );
     }
 
-    this.jobs.set(normalizedConfig.name, {
+    this.jobs.set(normalizedConfig.id, {
       config: normalizedConfig,
       task,
       running: false,
@@ -214,8 +215,8 @@ export class SchedulerAdapter implements PlatformAdapter {
   private async runJob(
     jobConfig: ScheduledJobConfig,
   ): Promise<{ text: string; notifyFailed: boolean }> {
-    const channelId = `scheduler-${jobConfig.name}`;
-    const job = this.jobs.get(jobConfig.name);
+    const channelId = `scheduler-${jobConfig.id}`;
+    const job = this.jobs.get(jobConfig.id);
 
     if (job?.running) {
       console.warn(
@@ -360,7 +361,7 @@ export class SchedulerAdapter implements PlatformAdapter {
    * Add a new job, persist to job.json.
    */
   addJob(jobConfig: ScheduledJobConfig): { success: boolean; message: string } {
-    if (this.jobs.has(jobConfig.name)) {
+    if (this.jobs.has(jobConfig.id)) {
       return {
         success: false,
         message: `Job "${jobConfig.name}" already exists. Remove it first.`,
@@ -389,28 +390,30 @@ export class SchedulerAdapter implements PlatformAdapter {
   /**
    * Remove a job and persist to job.json.
    */
-  removeJob(name: string): { success: boolean; message: string } {
-    if (!this.jobs.has(name)) {
-      return { success: false, message: `Job "${name}" not found.` };
+  removeJob(id: string): { success: boolean; message: string } {
+    const job = this.jobs.get(id);
+    if (!job) {
+      return { success: false, message: `Job "${id}" not found.` };
     }
 
-    this.removeFromMap(name);
+    this.removeFromMap(id);
     this.persistJobs();
 
-    return { success: true, message: `Job "${name}" removed.` };
+    return { success: true, message: `Job "${job.config.name}" removed.` };
   }
 
   updateJob(
-    name: string,
-    updates: Omit<ScheduledJobConfig, "name">,
+    id: string,
+    updates: Omit<ScheduledJobConfig, "id" | "name">,
   ): { success: boolean; message: string } {
-    const job = this.jobs.get(name);
+    const job = this.jobs.get(id);
     if (!job) {
-      return { success: false, message: `Job "${name}" not found.` };
+      return { success: false, message: `Job "${id}" not found.` };
     }
 
     const nextConfig: ScheduledJobConfig = {
-      name,
+      id: job.config.id,
+      name: job.config.name,
       cron: updates.cron,
       prompt: updates.prompt,
       notify: updates.notify,
@@ -426,7 +429,7 @@ export class SchedulerAdapter implements PlatformAdapter {
     this.persistJobs();
     return {
       success: true,
-      message: `Job "${name}" updated.`,
+      message: `Job "${job.config.name}" updated.`,
     };
   }
 
@@ -434,18 +437,18 @@ export class SchedulerAdapter implements PlatformAdapter {
    * Enable or disable a job and persist.
    */
   setEnabled(
-    name: string,
+    id: string,
     enabled: boolean,
   ): { success: boolean; message: string } {
-    const job = this.jobs.get(name);
+    const job = this.jobs.get(id);
     if (!job) {
-      return { success: false, message: `Job "${name}" not found.` };
+      return { success: false, message: `Job "${id}" not found.` };
     }
 
     if (!isRecurringJob(job.config)) {
       return {
         success: false,
-        message: `Job "${name}" does not have a schedule and cannot be enabled or disabled.`,
+        message: `Job "${job.config.name}" does not have a schedule and cannot be enabled or disabled.`,
       };
     }
 
@@ -464,17 +467,17 @@ export class SchedulerAdapter implements PlatformAdapter {
 
     return {
       success: true,
-      message: `Job "${name}" ${enabled ? "enabled" : "disabled"}.`,
+      message: `Job "${job.config.name}" ${enabled ? "enabled" : "disabled"}.`,
     };
   }
 
   /**
    * Manually trigger a job (runs immediately, ignoring cron schedule).
    */
-  async triggerJob(name: string): Promise<{ success: boolean; message: string }> {
-    const job = this.jobs.get(name);
+  async triggerJob(id: string): Promise<{ success: boolean; message: string }> {
+    const job = this.jobs.get(id);
     if (!job) {
-      return { success: false, message: `Job "${name}" not found.` };
+      return { success: false, message: `Job "${id}" not found.` };
     }
 
     const { text, notifyFailed } = await this.runJob(job.config);
@@ -482,18 +485,18 @@ export class SchedulerAdapter implements PlatformAdapter {
     if (!text) {
       return {
         success: true,
-        message: `Job "${name}" triggered but produced no output.`,
+        message: `Job "${job.config.name}" triggered but produced no output.`,
       };
     }
     if (notifyFailed) {
       return {
         success: true,
-        message: `Job "${name}" executed, but notification to ${job.config.notify.adapter} failed. Check logs.`,
+        message: `Job "${job.config.name}" executed, but notification to ${job.config.notify.adapter} failed. Check logs.`,
       };
     }
     return {
       success: true,
-      message: `Job "${name}" triggered. Result sent to ${job.config.notify.adapter}.`,
+      message: `Job "${job.config.name}" triggered. Result sent to ${job.config.notify.adapter}.`,
     };
   }
 
@@ -504,6 +507,7 @@ export class SchedulerAdapter implements PlatformAdapter {
     const result: JobStatus[] = [];
     for (const [, job] of this.jobs) {
       result.push({
+        id: job.config.id,
         name: job.config.name,
         ...(job.config.cron ? { cron: job.config.cron } : {}),
         prompt: job.config.prompt,
@@ -526,11 +530,11 @@ export class SchedulerAdapter implements PlatformAdapter {
   /**
    * Stop the cron task and remove a job from the map (does NOT persist).
    */
-  private removeFromMap(name: string): void {
-    const existing = this.jobs.get(name);
+  private removeFromMap(id: string): void {
+    const existing = this.jobs.get(id);
     if (existing) {
       existing.task?.stop();
-      this.jobs.delete(name);
+      this.jobs.delete(id);
     }
   }
 
