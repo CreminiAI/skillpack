@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import type {
   LarkChannel,
@@ -26,10 +28,11 @@ export type FeishuMessageHandlingDecision =
   | { action: "handle"; text: string };
 
 const MAX_MESSAGE_LENGTH = 1800;
+const ACK_REACTION = "THUMBSUP";
 const UNSUPPORTED_MESSAGE_REPLY =
-  "目前只支持文本消息，请发送文字内容。";
-const FILE_OUTPUT_REPLY =
-  "已生成文件输出；飞书暂不支持直接回传文件，请到 SkillPack Web 查看。";
+  "Only text messages are currently supported. Please send plain text.";
+const FILE_DELIVERY_FAILED_REPLY =
+  "A file was generated, but Feishu could not deliver it.";
 
 export function parseFeishuChannelId(channelId: string): string {
   if (!channelId.startsWith("feishu-")) {
@@ -129,6 +132,22 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     await this.sendLongMessage(chatId, text);
   }
 
+  async sendFile(
+    channelId: string,
+    filePath: string,
+    caption?: string,
+  ): Promise<void> {
+    if (!this.channel) {
+      throw new Error("[Feishu] Channel not initialized");
+    }
+
+    const chatId = parseFeishuChannelId(channelId);
+    const sent = await this.sendFileSafe(chatId, filePath, caption);
+    if (!sent) {
+      throw new Error(`[Feishu] Failed to send file: ${filePath}`);
+    }
+  }
+
   private async handleIncomingMessage(message: NormalizedMessage): Promise<void> {
     if (!this.channel || !this.agent) {
       return;
@@ -138,6 +157,8 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     if (decision.action === "ignore") {
       return;
     }
+
+    await this.tryAckReaction(message.messageId);
 
     const channelId = `feishu-${message.chatId}`;
     if (decision.action === "unsupported") {
@@ -170,7 +191,7 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     let finalText = "";
     let hasError = false;
     let errorMessage = "";
-    let hasFileOutput = false;
+    const pendingFiles: Array<{ filePath: string; caption?: string }> = [];
 
     const onEvent = (event: AgentEvent) => {
       switch (event.type) {
@@ -178,7 +199,10 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
           finalText += event.delta;
           break;
         case "file_output":
-          hasFileOutput = true;
+          pendingFiles.push({
+            filePath: event.filePath,
+            caption: event.caption,
+          });
           break;
       }
       this.ipcBroadcaster?.broadcastAgentEvent(channelId, event);
@@ -208,12 +232,28 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
 
     if (finalText.trim()) {
       await this.sendLongMessage(message.chatId, finalText, message.messageId);
-    } else if (!hasFileOutput) {
+    } else if (pendingFiles.length === 0) {
       await this.sendSafe(message.chatId, "(No response generated)", message.messageId);
     }
 
-    if (hasFileOutput) {
-      await this.sendSafe(message.chatId, FILE_OUTPUT_REPLY, message.messageId);
+    let sentFileCount = 0;
+    for (const file of pendingFiles) {
+      if (await this.sendFileSafe(
+        message.chatId,
+        file.filePath,
+        file.caption,
+        message.messageId,
+      )) {
+        sentFileCount += 1;
+      }
+    }
+
+    if (pendingFiles.length > 0 && sentFileCount === 0) {
+      await this.sendSafe(
+        message.chatId,
+        FILE_DELIVERY_FAILED_REPLY,
+        message.messageId,
+      );
     }
   }
 
@@ -261,6 +301,55 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     }
 
     return chunks;
+  }
+
+  private async tryAckReaction(messageId: string): Promise<void> {
+    if (!this.channel) {
+      return;
+    }
+
+    try {
+      await this.channel.addReaction(messageId, ACK_REACTION);
+    } catch (error) {
+      console.error("[Feishu] Failed to add ack reaction:", error);
+    }
+  }
+
+  private async sendFileSafe(
+    chatId: string,
+    filePath: string,
+    caption?: string,
+    replyTo?: string,
+  ): Promise<boolean> {
+    if (!this.channel) {
+      return false;
+    }
+
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.error(`[Feishu] File not found for sending: ${filePath}`);
+        return false;
+      }
+
+      if (caption?.trim()) {
+        await this.sendSafe(chatId, caption, replyTo);
+      }
+
+      await this.channel.send(
+        chatId,
+        {
+          file: {
+            source: filePath,
+            fileName: path.basename(filePath),
+          },
+        },
+        replyTo ? { replyTo } : undefined,
+      );
+      return true;
+    } catch (error) {
+      console.error("[Feishu] Failed to send file:", error);
+      return false;
+    }
   }
 
   private async sendSafe(
