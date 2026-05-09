@@ -12,8 +12,9 @@ import type {
   IPackAgent,
   IpcBroadcaster,
   PlatformAdapter,
+  RuntimePlatform,
 } from "./types.js";
-import { isMessageSender } from "./types.js";
+import { detectPlatformFromChannelId, isMessageSender } from "./types.js";
 
 type IpcRequest =
   | { id: string; type: "get_conversations" }
@@ -348,11 +349,8 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
 
   private detectPlatform(
     channelId: string,
-  ): "telegram" | "slack" | "web" | "scheduler" {
-    if (channelId.startsWith("telegram-")) return "telegram";
-    if (channelId.startsWith("slack-")) return "slack";
-    if (channelId.startsWith("scheduler-")) return "scheduler";
-    return "web";
+  ): RuntimePlatform {
+    return detectPlatformFromChannelId(channelId);
   }
 
   private sendIpc(payload: unknown): void {

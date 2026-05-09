@@ -36,7 +36,7 @@ function sendWsEvent(ws: WebSocket, event: AgentEvent): void {
   ws.send(JSON.stringify(event));
 }
 
-function getRuntimeConfigSignature(config: DataConfig): string {
+export function getRuntimeConfigSignature(config: DataConfig): string {
   return JSON.stringify({
     apiKey: config.apiKey || "",
     provider: config.provider || "openai",
@@ -46,6 +46,8 @@ function getRuntimeConfigSignature(config: DataConfig): string {
     telegramToken: config.adapters?.telegram?.token || "",
     slackBotToken: config.adapters?.slack?.botToken || "",
     slackAppToken: config.adapters?.slack?.appToken || "",
+    feishuAppId: config.adapters?.feishu?.appId || "",
+    feishuAppSecret: config.adapters?.feishu?.appSecret || "",
   });
 }
 

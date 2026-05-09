@@ -5,6 +5,10 @@ import type {
   AgentToolResult,
 } from "@mariozechner/pi-coding-agent";
 import type { SchedulerAdapter } from "../adapters/scheduler.js";
+import type {
+  NotifyTargetPlatform,
+  RuntimePlatform,
+} from "../adapters/types.js";
 import type { ScheduledJobConfig } from "../../job-config.js";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +54,7 @@ const ManageScheduleParams = Type.Object({
   notifyAdapter: Type.Optional(
     Type.String({
       description:
-        "Optional target adapter for notifications. If omitted, the current chat is used when supported (Telegram, Slack, or Web).",
+        "Optional target adapter for notifications. If omitted, the current chat is used when supported (Telegram, Slack, Feishu, or Web).",
     }),
   ),
   notifyChannelId: Type.Optional(
@@ -72,15 +76,19 @@ function textResult(text: string): AgentToolResult<undefined> {
 }
 
 function getDefaultNotifyTarget(
-  adapter: "telegram" | "slack" | "web" | "scheduler",
+  adapter: RuntimePlatform,
   channelId: string,
-): { adapter: "telegram" | "slack" | "web"; channelId: string } | null {
+): { adapter: NotifyTargetPlatform; channelId: string } | null {
   if (adapter === "telegram" && channelId.startsWith("telegram-")) {
     return { adapter: "telegram", channelId };
   }
 
   if (adapter === "slack" && channelId.startsWith("slack-")) {
     return { adapter: "slack", channelId };
+  }
+
+  if (adapter === "feishu" && channelId.startsWith("feishu-")) {
+    return { adapter: "feishu", channelId };
   }
 
   if (adapter === "web") {
@@ -102,7 +110,7 @@ function getDefaultNotifyTarget(
  */
 export function createManageScheduleTool(
   schedulerRef: { current: SchedulerAdapter | null },
-  adapter: "telegram" | "slack" | "web" | "scheduler",
+  adapter: RuntimePlatform,
   channelId: string,
 ): ToolDefinition<typeof ManageScheduleParams> {
 
@@ -113,7 +121,7 @@ export function createManageScheduleTool(
       "Manage scheduled tasks (cron jobs) that automatically execute prompts and push results to IM channels.",
       "",
       "Actions:",
-      "- add: Create a new scheduled task. Requires: name, cron, prompt. Notifications default to the current Telegram, Slack, or Web chat. You can override the destination with notifyAdapter + notifyChannelId. The prompt must describe only the work for each run, not the schedule itself.",
+      "- add: Create a new scheduled task. Requires: name, cron, prompt. Notifications default to the current Telegram, Slack, Feishu, or Web chat. You can override the destination with notifyAdapter + notifyChannelId. The prompt must describe only the work for each run, not the schedule itself.",
       "- list: List all scheduled tasks with their status.",
       "- remove: Remove a scheduled task by name.",
       "- trigger: Manually trigger a scheduled task by name (runs immediately).",

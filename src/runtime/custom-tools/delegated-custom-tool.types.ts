@@ -1,4 +1,6 @@
-export type DelegatedToolAdapter = "telegram" | "slack" | "web" | "scheduler";
+import type { RuntimePlatform } from "../adapters/types.js";
+
+export type DelegatedToolAdapter = RuntimePlatform;
 
 export interface DelegatedToolRunContext {
   runId: string;
@@ -51,4 +53,3 @@ export interface DelegatedCustomToolExecutor {
 export type DelegatedToolRunContextRef = {
   current: DelegatedToolRunContext | null;
 };
-

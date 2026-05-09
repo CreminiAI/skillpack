@@ -5,6 +5,10 @@ import {
   type SessionEntry,
   type SessionMessageEntry,
 } from "@mariozechner/pi-coding-agent";
+import {
+  detectPlatformFromChannelId,
+  type RuntimePlatform,
+} from "../adapters/types.js";
 
 export const DEFAULT_WEB_CHANNEL_ID = "web";
 
@@ -45,7 +49,7 @@ export type ConversationBlock =
 
 export interface ConversationSummary {
   channelId: string;
-  platform: "telegram" | "slack" | "web" | "scheduler";
+  platform: RuntimePlatform;
   sessionFile: string | null;
   messageCount: number;
   lastMessageAt: string;
@@ -604,11 +608,8 @@ export class ConversationService {
 
   private detectPlatform(
     channelId: string,
-  ): "telegram" | "slack" | "web" | "scheduler" {
-    if (channelId.startsWith("telegram-")) return "telegram";
-    if (channelId.startsWith("slack-")) return "slack";
-    if (channelId.startsWith("scheduler-")) return "scheduler";
-    return "web";
+  ): RuntimePlatform {
+    return detectPlatformFromChannelId(channelId);
   }
 
   private isLegacyWebConversation(channelId: string): boolean {
