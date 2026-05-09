@@ -76,6 +76,10 @@ export interface DataConfig {
       botToken?: string;
       appToken?: string;
     };
+    feishu?: {
+      appId?: string;
+      appSecret?: string;
+    };
     [key: string]: any;
   };
   /** OAuth credentials managed by AuthStorage (do not edit manually) */

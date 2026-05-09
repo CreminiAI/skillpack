@@ -14,7 +14,24 @@ export interface CommandResult {
   message?: string;
 }
 
-export type LifecycleTrigger = "web" | "telegram" | "slack" | "signal";
+export type RuntimePlatform =
+  | "telegram"
+  | "slack"
+  | "feishu"
+  | "web"
+  | "scheduler";
+
+export type NotifyTargetPlatform = Exclude<RuntimePlatform, "scheduler">;
+
+export type LifecycleTrigger = Exclude<RuntimePlatform, "scheduler"> | "signal";
+
+export function detectPlatformFromChannelId(channelId: string): RuntimePlatform {
+  if (channelId.startsWith("telegram-")) return "telegram";
+  if (channelId.startsWith("slack-")) return "slack";
+  if (channelId.startsWith("feishu-")) return "feishu";
+  if (channelId.startsWith("scheduler-")) return "scheduler";
+  return "web";
+}
 
 
 export interface LifecycleHandler {
@@ -104,7 +121,7 @@ export interface PackAgentOptions {
 export interface IPackAgent {
   /** Handle an incoming message with streaming events */
   handleMessage(
-    adapter: "telegram" | "slack" | "web" | "scheduler",
+    adapter: RuntimePlatform,
     channelId: string,
     text: string,
     onEvent: (event: AgentEvent) => void,

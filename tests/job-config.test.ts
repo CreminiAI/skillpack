@@ -30,6 +30,7 @@ test("saveJobFile writes normalized jobs and loadJobFile reads them back", async
     saveJobFile(dir, {
       jobs: [
         {
+          id: "  morning-brief-id  ",
           name: "  morning-brief  ",
           cron: " 0 9 * * 1-5 ",
           prompt: "Send the morning brief",
@@ -47,6 +48,7 @@ test("saveJobFile writes normalized jobs and loadJobFile reads them back", async
     assert.deepEqual(loadJobFile(dir), {
       jobs: [
         {
+          id: "morning-brief-id",
           name: "morning-brief",
           cron: "0 9 * * 1-5",
           prompt: "Send the morning brief",
@@ -67,6 +69,7 @@ test("saveJobFile normalizes blank cron jobs into one-time jobs", async () => {
     saveJobFile(dir, {
       jobs: [
         {
+          id: "  manual-brief-id  ",
           name: "  manual-brief  ",
           cron: "   ",
           prompt: "Send the manual brief",
@@ -83,6 +86,7 @@ test("saveJobFile normalizes blank cron jobs into one-time jobs", async () => {
     assert.deepEqual(loadJobFile(dir), {
       jobs: [
         {
+          id: "manual-brief-id",
           name: "manual-brief",
           prompt: "Send the manual brief",
           notify: {
@@ -103,6 +107,7 @@ test("loadJobFile accepts jobs without cron", async () => {
         {
           jobs: [
             {
+              id: "manual-brief-id",
               name: "manual-brief",
               prompt: "Send the manual brief",
               notify: {
@@ -121,6 +126,7 @@ test("loadJobFile accepts jobs without cron", async () => {
     assert.deepEqual(loadJobFile(dir), {
       jobs: [
         {
+          id: "manual-brief-id",
           name: "manual-brief",
           prompt: "Send the manual brief",
           notify: {

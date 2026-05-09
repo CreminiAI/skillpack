@@ -41,8 +41,10 @@ import type {
   CommandResult,
   ChannelAttachment,
   LifecycleTrigger,
+  RuntimePlatform,
   SessionInfo,
 } from "./adapters/types.js";
+import { detectPlatformFromChannelId } from "./adapters/types.js";
 
 const DEBUG = true;
 const log = (...args: unknown[]) => DEBUG && console.log(...args);
@@ -250,9 +252,8 @@ function getAssistantDiagnostics(message: any): AssistantDiagnostics | null {
 }
 
 function getLifecycleTrigger(channelId: string): LifecycleTrigger {
-  if (channelId.startsWith("telegram-")) return "telegram";
-  if (channelId.startsWith("slack-")) return "slack";
-  return "web";
+  const platform = detectPlatformFromChannelId(channelId);
+  return platform === "scheduler" ? "web" : platform;
 }
 
 // ---------------------------------------------------------------------------
@@ -321,7 +322,7 @@ export class PackAgent implements IPackAgent {
   }
 
   private async createCustomTools(
-    adapter: "telegram" | "slack" | "web" | "scheduler",
+    adapter: RuntimePlatform,
     channelId: string,
     fileOutputCallbackRef: { current: FileOutputCallback | null },
     delegatedToolRunContextRef: DelegatedToolRunContextRef,
@@ -348,7 +349,7 @@ export class PackAgent implements IPackAgent {
    * Lazily create (or return existing) session for a channel.
    */
   private async getOrCreateSession(
-    adapter: "telegram" | "slack" | "web" | "scheduler",
+    adapter: RuntimePlatform,
     channelId: string,
   ): Promise<ChannelSession> {
     const existing = this.channels.get(channelId);
@@ -509,7 +510,7 @@ export class PackAgent implements IPackAgent {
   }
 
   async handleMessage(
-    adapter: "telegram" | "slack" | "web" | "scheduler",
+    adapter: RuntimePlatform,
     channelId: string,
     text: string,
     onEvent: (event: AgentEvent) => void,

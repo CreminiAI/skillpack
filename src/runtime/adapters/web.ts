@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -36,7 +37,7 @@ function sendWsEvent(ws: WebSocket, event: AgentEvent): void {
   ws.send(JSON.stringify(event));
 }
 
-function getRuntimeConfigSignature(config: DataConfig): string {
+export function getRuntimeConfigSignature(config: DataConfig): string {
   return JSON.stringify({
     apiKey: config.apiKey || "",
     provider: config.provider || "openai",
@@ -46,6 +47,8 @@ function getRuntimeConfigSignature(config: DataConfig): string {
     telegramToken: config.adapters?.telegram?.token || "",
     slackBotToken: config.adapters?.slack?.botToken || "",
     slackAppToken: config.adapters?.slack?.appToken || "",
+    feishuAppId: config.adapters?.feishu?.appId || "",
+    feishuAppSecret: config.adapters?.feishu?.appSecret || "",
   });
 }
 
@@ -326,7 +329,15 @@ export class WebAdapter implements PlatformAdapter {
         res.status(503).json({ success: false, message: "Scheduler not available" });
         return;
       }
-      const { name, cron: cronExpr, prompt, notify, enabled, timezone } = req.body;
+      const {
+        id,
+        name,
+        cron: cronExpr,
+        prompt,
+        notify,
+        enabled,
+        timezone,
+      } = req.body;
       if (!name || !prompt || !notify?.adapter || !notify?.channelId) {
         res.status(400).json({
           success: false,
@@ -335,6 +346,7 @@ export class WebAdapter implements PlatformAdapter {
         return;
       }
       const result = scheduler.addJob({
+        id: typeof id === "string" && id.trim() ? id.trim() : randomUUID(),
         name,
         ...(typeof cronExpr === "string" ? { cron: cronExpr } : {}),
         prompt,
@@ -345,27 +357,27 @@ export class WebAdapter implements PlatformAdapter {
       res.json(result);
     });
 
-    app.delete("/api/scheduler/jobs/:name", (req, res) => {
+    app.delete("/api/scheduler/jobs/:jobId", (req, res) => {
       const scheduler = getScheduler();
       if (!scheduler) {
         res.status(503).json({ success: false, message: "Scheduler not available" });
         return;
       }
-      const result = scheduler.removeJob(req.params.name);
+      const result = scheduler.removeJob(req.params.jobId);
       res.json(result);
     });
 
-    app.post("/api/scheduler/jobs/:name/trigger", async (req, res) => {
+    app.post("/api/scheduler/jobs/:jobId/trigger", async (req, res) => {
       const scheduler = getScheduler();
       if (!scheduler) {
         res.status(503).json({ success: false, message: "Scheduler not available" });
         return;
       }
-      const result = await scheduler.triggerJob(req.params.name);
+      const result = await scheduler.triggerJob(req.params.jobId);
       res.json(result);
     });
 
-    app.patch("/api/scheduler/jobs/:name", (req, res) => {
+    app.patch("/api/scheduler/jobs/:jobId", (req, res) => {
       const scheduler = getScheduler();
       if (!scheduler) {
         res.status(503).json({ success: false, message: "Scheduler not available" });
@@ -376,7 +388,7 @@ export class WebAdapter implements PlatformAdapter {
         res.status(400).json({ success: false, message: "Field 'enabled' (boolean) is required" });
         return;
       }
-      const result = scheduler.setEnabled(req.params.name, enabled);
+      const result = scheduler.setEnabled(req.params.jobId, enabled);
       res.json(result);
     });
 

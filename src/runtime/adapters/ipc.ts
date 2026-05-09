@@ -12,8 +12,9 @@ import type {
   IPackAgent,
   IpcBroadcaster,
   PlatformAdapter,
+  RuntimePlatform,
 } from "./types.js";
-import { isMessageSender } from "./types.js";
+import { detectPlatformFromChannelId, isMessageSender } from "./types.js";
 
 type IpcRequest =
   | { id: string; type: "get_conversations" }
@@ -29,12 +30,12 @@ type IpcRequest =
   | {
     id: string;
     type: "update_scheduled_job";
-    name: string;
-    updates: Omit<ScheduledJobConfig, "name">;
+    jobId: string;
+    updates: Omit<ScheduledJobConfig, "id" | "name">;
   }
-  | { id: string; type: "set_scheduled_job_enabled"; name: string; enabled: boolean }
-  | { id: string; type: "trigger_scheduled_job"; name: string }
-  | { id: string; type: "remove_scheduled_job"; name: string };
+  | { id: string; type: "set_scheduled_job_enabled"; jobId: string; enabled: boolean }
+  | { id: string; type: "trigger_scheduled_job"; jobId: string }
+  | { id: string; type: "remove_scheduled_job"; jobId: string };
 
 const IPC_REQUEST_TYPES = new Set<IpcRequest["type"]>([
   "get_conversations",
@@ -278,7 +279,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             this.replyError(request.id, "Scheduler adapter is not available");
             return;
           }
-          const result = scheduler.updateJob(request.name, request.updates);
+          const result = scheduler.updateJob(request.jobId, request.updates);
           if (!result.success) {
             this.replyError(request.id, result.message);
             return;
@@ -293,7 +294,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             this.replyError(request.id, "Scheduler adapter is not available");
             return;
           }
-          const result = scheduler.setEnabled(request.name, request.enabled);
+          const result = scheduler.setEnabled(request.jobId, request.enabled);
           if (!result.success) {
             this.replyError(request.id, result.message);
             return;
@@ -308,7 +309,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             this.replyError(request.id, "Scheduler adapter is not available");
             return;
           }
-          const result = await scheduler.triggerJob(request.name);
+          const result = await scheduler.triggerJob(request.jobId);
           if (!result.success) {
             this.replyError(request.id, result.message);
             return;
@@ -323,7 +324,7 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             this.replyError(request.id, "Scheduler adapter is not available");
             return;
           }
-          const result = scheduler.removeJob(request.name);
+          const result = scheduler.removeJob(request.jobId);
           if (!result.success) {
             this.replyError(request.id, result.message);
             return;
@@ -348,11 +349,8 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
 
   private detectPlatform(
     channelId: string,
-  ): "telegram" | "slack" | "web" | "scheduler" {
-    if (channelId.startsWith("telegram-")) return "telegram";
-    if (channelId.startsWith("slack-")) return "slack";
-    if (channelId.startsWith("scheduler-")) return "scheduler";
-    return "web";
+  ): RuntimePlatform {
+    return detectPlatformFromChannelId(channelId);
   }
 
   private sendIpc(payload: unknown): void {

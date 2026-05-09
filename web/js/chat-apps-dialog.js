@@ -1,7 +1,7 @@
 /**
  * Chat Apps (IM Bots) Dialog Module
  * 
- * 负责 IM Bots（Telegram / Slack）Token 的配置管理。
+ * 负责 IM Bots（Telegram / Slack / Feishu）配置管理。
  * 独立的 Dialog，从原 SettingDialog 的 IM Bots 部分拆分出来。
  */
 import { state } from "./config.js";
@@ -16,7 +16,21 @@ let restartBtn;
 let telegramTokenInput;
 let slackBotTokenInput;
 let slackAppTokenInput;
+let feishuAppIdInput;
+let feishuAppSecretInput;
 let statusEl;
+
+function hasConfiguredChatApp(adapters = {}) {
+  const telegramConfigured = Boolean(adapters.telegram?.token);
+  const slackConfigured = Boolean(
+    adapters.slack?.botToken && adapters.slack?.appToken,
+  );
+  const feishuConfigured = Boolean(
+    adapters.feishu?.appId && adapters.feishu?.appSecret,
+  );
+
+  return telegramConfigured || slackConfigured || feishuConfigured;
+}
 
 // --- Public API ---
 
@@ -29,6 +43,8 @@ export function initChatAppsDialog() {
   telegramTokenInput = document.getElementById("chatapps-telegram-token");
   slackBotTokenInput = document.getElementById("chatapps-slack-bot-token");
   slackAppTokenInput = document.getElementById("chatapps-slack-app-token");
+  feishuAppIdInput = document.getElementById("chatapps-feishu-app-id");
+  feishuAppSecretInput = document.getElementById("chatapps-feishu-app-secret");
   statusEl = document.getElementById("chatapps-status");
 
   if (!dialog) return;
@@ -54,9 +70,7 @@ export function updateChatAppsButton() {
   if (!openBtn) return;
   const config = state.config;
   const adapters = config?.adapters || {};
-  const hasAnyToken =
-    (adapters.telegram && adapters.telegram.token) ||
-    (adapters.slack && (adapters.slack.botToken || adapters.slack.appToken));
+  const hasAnyToken = hasConfiguredChatApp(adapters);
 
   if (hasAnyToken) {
     openBtn.classList.add("connected");
@@ -99,6 +113,14 @@ function populateForm() {
     slackAppTokenInput.value = "";
   }
 
+  if (adapters.feishu) {
+    feishuAppIdInput.value = adapters.feishu.appId || "";
+    feishuAppSecretInput.value = adapters.feishu.appSecret || "";
+  } else {
+    feishuAppIdInput.value = "";
+    feishuAppSecretInput.value = "";
+  }
+
   // Restart required status
   if (state.restartRequired) {
     setStatus(
@@ -116,6 +138,8 @@ async function handleSave() {
   const telegramToken = telegramTokenInput.value.trim();
   const slackBotToken = slackBotTokenInput.value.trim();
   const slackAppToken = slackAppTokenInput.value.trim();
+  const feishuAppId = feishuAppIdInput.value.trim();
+  const feishuAppSecret = feishuAppSecretInput.value.trim();
 
   // 始终写入所有 adapter 键，空值也要显式传递，让后端能感知「清空」操作
   const adapters = {
@@ -125,6 +149,13 @@ async function handleSave() {
         ? {
             botToken: slackBotToken || undefined,
             appToken: slackAppToken || undefined,
+          }
+        : null,
+    feishu:
+      feishuAppId || feishuAppSecret
+        ? {
+            appId: feishuAppId || undefined,
+            appSecret: feishuAppSecret || undefined,
           }
         : null,
   };

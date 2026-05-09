@@ -29,7 +29,7 @@ export interface ServerOptions {
 /**
  * Start the SkillPack runtime server.
  * Reads skillpack.json plus pack/runtime config files from rootDir, starts
- * Express + WS, and loads adapters (Web always, Telegram/Slack if configured).
+ * Express + WS, and loads adapters (Web always, IM adapters if configured).
  */
 export async function startServer(options: ServerOptions): Promise<void> {
   const {
@@ -194,6 +194,37 @@ export async function startServer(options: ServerOptions): Promise<void> {
         adapterMap.set(slackAdapter.name, slackAdapter);
       } catch (err) {
         console.error("[Slack] Failed to start:", err);
+      }
+    }
+  }
+
+  // Feishu adapter (conditional)
+  const feishuConfig = dataConfig.adapters?.feishu;
+  if (feishuConfig?.appId || feishuConfig?.appSecret) {
+    if (!feishuConfig.appId || !feishuConfig.appSecret) {
+      console.warn(
+        "[Feishu] Skipped: both adapters.feishu.appId and adapters.feishu.appSecret are required.",
+      );
+    } else {
+      try {
+        const { FeishuAdapter } = await import("./adapters/feishu.js");
+        const feishuAdapter = new FeishuAdapter({
+          appId: feishuConfig.appId,
+          appSecret: feishuConfig.appSecret,
+        });
+        await feishuAdapter.start({
+          agent,
+          server,
+          app,
+          rootDir,
+          lifecycle,
+          adapterMap,
+          ipcBroadcaster,
+        });
+        adapters.push(feishuAdapter);
+        adapterMap.set(feishuAdapter.name, feishuAdapter);
+      } catch (err) {
+        console.error("[Feishu] Failed to start:", err);
       }
     }
   }

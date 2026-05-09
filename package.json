@@ -1,6 +1,6 @@
 {
   "name": "@cremini/skillpack",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "description": "Pack AI Skills into Local Agents",
   "type": "module",
   "repository": {
@@ -44,6 +44,7 @@
   "author": "CreminiAI",
   "license": "MIT",
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.63.1",
     "@mariozechner/pi-coding-agent": "^0.57.1",
     "@sinclair/typebox": "^0.34.41",
     "@slack/bolt": "^4.6.0",
