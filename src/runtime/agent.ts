@@ -521,13 +521,41 @@ export class PackAgent implements IPackAgent {
       cs.running = true;
 
       let turnHadVisibleOutput = false;
+      let sawAgentStart = false;
+      let sawAgentEnd = false;
       const runId = randomUUID();
       let unsubscribe = () => undefined;
+      const waitForQueuedAgentEvents = async (): Promise<void> => {
+        const maybeQueue = (cs.session as { _agentEventQueue?: unknown })
+          ._agentEventQueue;
+        if (!maybeQueue || typeof (maybeQueue as Promise<unknown>).then !== "function") {
+          return;
+        }
+
+        try {
+          await maybeQueue;
+        } catch (error) {
+          log("[PackAgent] Waiting for queued agent events failed:", error);
+        }
+      };
 
       try {
+        const forwardAgentEvent = (event: AgentEvent): void => {
+          if (event.type === "agent_start") {
+            sawAgentStart = true;
+          } else if (event.type === "agent_end") {
+            if (sawAgentEnd) {
+              return;
+            }
+            sawAgentEnd = true;
+          }
+
+          onEvent(event);
+        };
+
         // Wire up file output callback for this run
         cs.fileOutputCallbackRef.current = (event) => {
-          onEvent(event);
+          forwardAgentEvent(event);
         };
         cs.delegatedToolRunContextRef.current = {
           runId,
@@ -542,7 +570,7 @@ export class PackAgent implements IPackAgent {
               log("\n=== [AGENT SESSION START] ===");
               log("System Prompt:\n", cs.session.systemPrompt);
               log("============================\n");
-              onEvent({ type: "agent_start" });
+              forwardAgentEvent({ type: "agent_start" });
               break;
 
             case "message_start":
@@ -550,7 +578,7 @@ export class PackAgent implements IPackAgent {
               if (event.message?.role === "user") {
                 log(JSON.stringify(event.message.content, null, 2));
               }
-              onEvent({
+              forwardAgentEvent({
                 type: "message_start",
                 role: event.message?.role ?? "",
               });
@@ -560,7 +588,7 @@ export class PackAgent implements IPackAgent {
               if (event.assistantMessageEvent?.type === "text_delta") {
                 turnHadVisibleOutput = true;
                 write(event.assistantMessageEvent.delta);
-                onEvent({
+                forwardAgentEvent({
                   type: "text_delta",
                   delta: event.assistantMessageEvent.delta,
                 });
@@ -568,7 +596,7 @@ export class PackAgent implements IPackAgent {
                 event.assistantMessageEvent?.type === "thinking_delta"
               ) {
                 turnHadVisibleOutput = true;
-                onEvent({
+                forwardAgentEvent({
                   type: "thinking_delta",
                   delta: event.assistantMessageEvent.delta,
                 });
@@ -588,14 +616,17 @@ export class PackAgent implements IPackAgent {
                   }
                 }
               }
-              onEvent({ type: "message_end", role: event.message?.role ?? "" });
+              forwardAgentEvent({
+                type: "message_end",
+                role: event.message?.role ?? "",
+              });
               break;
 
             case "tool_execution_start":
               turnHadVisibleOutput = true;
               log(`\n>>> [Tool Start: ${event.toolName}] >>>`);
               log("Args:", JSON.stringify(event.args, null, 2));
-              onEvent({
+              forwardAgentEvent({
                 type: "tool_start",
                 toolCallId: event.toolCallId ?? "",
                 toolName: event.toolName,
@@ -607,7 +638,7 @@ export class PackAgent implements IPackAgent {
               turnHadVisibleOutput = true;
               log(`<<< [Tool End: ${event.toolName}] <<<`);
               log(`Error: ${event.isError ? "Yes" : "No"}`);
-              onEvent({
+              forwardAgentEvent({
                 type: "tool_end",
                 toolCallId: event.toolCallId ?? "",
                 toolName: event.toolName,
@@ -618,7 +649,7 @@ export class PackAgent implements IPackAgent {
 
             case "agent_end":
               log("\n=== [AGENT SESSION END] ===\n");
-              onEvent({ type: "agent_end" });
+              forwardAgentEvent({ type: "agent_end" });
               break;
           }
         });
@@ -685,6 +716,12 @@ export class PackAgent implements IPackAgent {
 
         return { stopReason: diagnostics?.stopReason ?? "unknown" };
       } finally {
+        await waitForQueuedAgentEvents();
+        if (sawAgentStart && !sawAgentEnd) {
+          sawAgentEnd = true;
+          log(`[PackAgent] Synthesizing terminal agent_end for ${channelId}`);
+          onEvent({ type: "agent_end" });
+        }
         cs.running = false;
         cs.fileOutputCallbackRef.current = null;
         cs.delegatedToolRunContextRef.current = null;
