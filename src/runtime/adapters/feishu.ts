@@ -20,6 +20,7 @@ import { resolveCommand } from "../commands/index.js";
 export interface FeishuAdapterOptions {
   appId: string;
   appSecret: string;
+  domain?: "feishu" | "lark";
 }
 
 export type FeishuMessageHandlingDecision =
@@ -33,6 +34,20 @@ const UNSUPPORTED_MESSAGE_REPLY =
   "Only text messages are currently supported. Please send plain text.";
 const FILE_DELIVERY_FAILED_REPLY =
   "A file was generated, but Feishu could not deliver it.";
+
+export function normalizeFeishuDomain(
+  domain: unknown,
+): "feishu" | "lark" {
+  return domain === "lark" ? "lark" : "feishu";
+}
+
+export function resolveFeishuSdkDomain(
+  domain: unknown,
+): Lark.Domain {
+  return normalizeFeishuDomain(domain) === "lark"
+    ? Lark.Domain.Lark
+    : Lark.Domain.Feishu;
+}
 
 export function parseFeishuChannelId(channelId: string): string {
   if (!channelId.startsWith("feishu-")) {
@@ -83,10 +98,12 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
   async start(ctx: AdapterContext): Promise<void> {
     this.agent = ctx.agent;
     this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
+    const domain = normalizeFeishuDomain(this.options.domain);
 
     this.channel = Lark.createLarkChannel({
       appId: this.options.appId,
       appSecret: this.options.appSecret,
+      domain: resolveFeishuSdkDomain(domain),
       loggerLevel: Lark.LoggerLevel.info,
       transport: "websocket",
       source: "skillpack",
@@ -110,8 +127,8 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     const botName = this.channel.botIdentity?.name;
     console.log(
       botName
-        ? `[FeishuAdapter] Started as ${botName}`
-        : "[FeishuAdapter] Started",
+        ? `[FeishuAdapter] Started as ${botName} (domain=${domain})`
+        : `[FeishuAdapter] Started (domain=${domain})`,
     );
   }
 

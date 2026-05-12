@@ -211,6 +211,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
         const feishuAdapter = new FeishuAdapter({
           appId: feishuConfig.appId,
           appSecret: feishuConfig.appSecret,
+          domain: feishuConfig.domain,
         });
         await feishuAdapter.start({
           agent,

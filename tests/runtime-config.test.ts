@@ -58,3 +58,27 @@ test("runtime config signature changes when feishu credentials change", () => {
 
   assert.notEqual(before, after);
 });
+
+test("runtime config signature changes when feishu domain changes", () => {
+  const before = getRuntimeConfigSignature({
+    adapters: {
+      feishu: {
+        appId: "cli_test_a",
+        appSecret: "secret_a",
+        domain: "feishu",
+      },
+    },
+  });
+
+  const after = getRuntimeConfigSignature({
+    adapters: {
+      feishu: {
+        appId: "cli_test_a",
+        appSecret: "secret_a",
+        domain: "lark",
+      },
+    },
+  });
+
+  assert.notEqual(before, after);
+});

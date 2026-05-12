@@ -79,11 +79,28 @@ export interface DataConfig {
     feishu?: {
       appId?: string;
       appSecret?: string;
+      domain?: "feishu" | "lark";
     };
     [key: string]: any;
   };
   /** OAuth credentials managed by AuthStorage (do not edit manually) */
   _auth?: Record<string, unknown>;
+}
+
+function normalizeFeishuAdapterConfig(
+  value: unknown,
+): { appId?: string; appSecret?: string; domain?: "feishu" | "lark" } | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const raw = value as Record<string, unknown>;
+
+  return {
+    appId: typeof raw.appId === "string" ? raw.appId : undefined,
+    appSecret: typeof raw.appSecret === "string" ? raw.appSecret : undefined,
+    domain: raw.domain === "lark" ? "lark" : "feishu",
+  };
 }
 
 function normalizeDataConfig(value: unknown): DataConfig {
@@ -113,7 +130,13 @@ function normalizeDataConfig(value: unknown): DataConfig {
     normalized.apiProtocol = raw.apiProtocol;
   }
   if (raw.adapters && typeof raw.adapters === "object" && !Array.isArray(raw.adapters)) {
-    normalized.adapters = raw.adapters as DataConfig["adapters"];
+    const rawAdapters = raw.adapters as Record<string, unknown>;
+    const adapters = { ...rawAdapters } as NonNullable<DataConfig["adapters"]>;
+    const feishu = normalizeFeishuAdapterConfig(rawAdapters.feishu);
+    if (feishu) {
+      adapters.feishu = feishu;
+    }
+    normalized.adapters = adapters;
   }
   if (raw._auth && typeof raw._auth === "object" && !Array.isArray(raw._auth)) {
     normalized._auth = raw._auth as Record<string, unknown>;

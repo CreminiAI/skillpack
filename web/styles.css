@@ -947,6 +947,9 @@ body {
   transform: scale(0.95) translateY(10px);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
+#chatapps-dialog {
+  width: 580px;
+}
 .settings-modal[open] {
   opacity: 1;
   transform: scale(1) translateY(0);
@@ -996,6 +999,89 @@ body {
   padding: 24px;
   max-height: calc(85vh - 140px);
   overflow-y: auto;
+}
+.chatapps-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--bg-tertiary);
+  margin-bottom: 16px;
+}
+.chatapps-tab {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.chatapps-tab:hover {
+  color: var(--text-primary);
+}
+.chatapps-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+.chatapps-panel {
+  padding: 0;
+}
+.chatapps-panel[hidden] {
+  display: none;
+}
+.chatapps-guide-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--bg-tertiary);
+  margin-bottom: 16px;
+}
+.chatapps-guide-card-static {
+  justify-content: flex-start;
+}
+.chatapps-guide-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.chatapps-guide-btn {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.chatapps-guide-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+@media (max-width: 640px) {
+  .chatapps-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .chatapps-guide-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chatapps-guide-btn {
+    width: 100%;
+  }
 }
 .settings-section {
   margin-bottom: 28px;

@@ -7,11 +7,29 @@ import test from "node:test";
 import {
   FeishuAdapter,
   normalizeFeishuMessage,
+  normalizeFeishuDomain,
   parseFeishuChannelId,
+  resolveFeishuSdkDomain,
 } from "../src/runtime/adapters/feishu.js";
+import * as Lark from "@larksuiteoapi/node-sdk";
 
 test("parseFeishuChannelId extracts chat id", () => {
   assert.equal(parseFeishuChannelId("feishu-oc_123"), "oc_123");
+});
+
+test("normalizeFeishuDomain defaults to feishu", () => {
+  assert.equal(normalizeFeishuDomain(undefined), "feishu");
+  assert.equal(normalizeFeishuDomain("unexpected"), "feishu");
+});
+
+test("normalizeFeishuDomain accepts lark", () => {
+  assert.equal(normalizeFeishuDomain("lark"), "lark");
+});
+
+test("resolveFeishuSdkDomain maps supported domains", () => {
+  assert.equal(resolveFeishuSdkDomain(undefined), Lark.Domain.Feishu);
+  assert.equal(resolveFeishuSdkDomain("feishu"), Lark.Domain.Feishu);
+  assert.equal(resolveFeishuSdkDomain("lark"), Lark.Domain.Lark);
 });
 
 test("normalizeFeishuMessage handles direct text messages", () => {

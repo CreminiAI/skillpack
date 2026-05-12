@@ -49,6 +49,7 @@ export function getRuntimeConfigSignature(config: DataConfig): string {
     slackAppToken: config.adapters?.slack?.appToken || "",
     feishuAppId: config.adapters?.feishu?.appId || "",
     feishuAppSecret: config.adapters?.feishu?.appSecret || "",
+    feishuDomain: config.adapters?.feishu?.domain || "feishu",
   });
 }
 

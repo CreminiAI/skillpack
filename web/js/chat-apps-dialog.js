@@ -1,11 +1,17 @@
 /**
  * Chat Apps (IM Bots) Dialog Module
- * 
- * 负责 IM Bots（Telegram / Slack / Feishu）配置管理。
+ *
+ * 负责 IM Bots（Telegram / Slack / Feishu / Lark）配置管理。
  * 独立的 Dialog，从原 SettingDialog 的 IM Bots 部分拆分出来。
  */
 import { state } from "./config.js";
 import { saveConfigData, restartRuntime } from "./api.js";
+
+const TELEGRAM_GUIDE_URL =
+  "https://skillpack.gitbook.io/skillpack-docs/getting-started/telegram-integration";
+const SLACK_GUIDE_URL =
+  "https://skillpack.gitbook.io/skillpack-docs/getting-started/slack-integration";
+const DEFAULT_FEISHU_DOMAIN = "feishu";
 
 // --- DOM Elements ---
 let dialog;
@@ -16,9 +22,18 @@ let restartBtn;
 let telegramTokenInput;
 let slackBotTokenInput;
 let slackAppTokenInput;
+let feishuDomainSelect;
 let feishuAppIdInput;
 let feishuAppSecretInput;
+let telegramGuideBtn;
+let slackGuideBtn;
 let statusEl;
+let tabButtons = [];
+let tabPanels = [];
+
+function normalizeFeishuDomain(domain) {
+  return domain === "lark" ? "lark" : DEFAULT_FEISHU_DOMAIN;
+}
 
 function hasConfiguredChatApp(adapters = {}) {
   const telegramConfigured = Boolean(adapters.telegram?.token);
@@ -32,6 +47,42 @@ function hasConfiguredChatApp(adapters = {}) {
   return telegramConfigured || slackConfigured || feishuConfigured;
 }
 
+function getInitialChatAppsTab(adapters = {}) {
+  if (adapters.telegram?.token) {
+    return "telegram";
+  }
+
+  if (adapters.slack?.botToken || adapters.slack?.appToken) {
+    return "slack";
+  }
+
+  if (
+    adapters.feishu?.appId ||
+    adapters.feishu?.appSecret ||
+    normalizeFeishuDomain(adapters.feishu?.domain) !== DEFAULT_FEISHU_DOMAIN
+  ) {
+    return "feishu";
+  }
+
+  return "telegram";
+}
+
+function openGuide(url) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function selectChatAppsTab(tabName) {
+  tabButtons.forEach((button) => {
+    const isActive = button.dataset.chatappsTab === tabName;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  tabPanels.forEach((panel) => {
+    panel.hidden = panel.dataset.chatappsPanel !== tabName;
+  });
+}
+
 // --- Public API ---
 
 export function initChatAppsDialog() {
@@ -43,9 +94,14 @@ export function initChatAppsDialog() {
   telegramTokenInput = document.getElementById("chatapps-telegram-token");
   slackBotTokenInput = document.getElementById("chatapps-slack-bot-token");
   slackAppTokenInput = document.getElementById("chatapps-slack-app-token");
+  feishuDomainSelect = document.getElementById("chatapps-feishu-domain");
   feishuAppIdInput = document.getElementById("chatapps-feishu-app-id");
   feishuAppSecretInput = document.getElementById("chatapps-feishu-app-secret");
+  telegramGuideBtn = document.getElementById("chatapps-open-telegram-guide");
+  slackGuideBtn = document.getElementById("chatapps-open-slack-guide");
   statusEl = document.getElementById("chatapps-status");
+  tabButtons = Array.from(document.querySelectorAll("[data-chatapps-tab]"));
+  tabPanels = Array.from(document.querySelectorAll("[data-chatapps-panel]"));
 
   if (!dialog) return;
 
@@ -61,6 +117,18 @@ export function initChatAppsDialog() {
   if (restartBtn) {
     restartBtn.addEventListener("click", handleRestart);
   }
+  if (telegramGuideBtn) {
+    telegramGuideBtn.addEventListener("click", () => openGuide(TELEGRAM_GUIDE_URL));
+  }
+  if (slackGuideBtn) {
+    slackGuideBtn.addEventListener("click", () => openGuide(SLACK_GUIDE_URL));
+  }
+
+  tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      selectChatAppsTab(button.dataset.chatappsTab || "telegram");
+    });
+  });
 }
 
 /**
@@ -85,6 +153,7 @@ export function updateChatAppsButton() {
 
 function open() {
   populateForm();
+  selectChatAppsTab(getInitialChatAppsTab(state.config?.adapters || {}));
   dialog.showModal();
 }
 
@@ -114,14 +183,15 @@ function populateForm() {
   }
 
   if (adapters.feishu) {
+    feishuDomainSelect.value = normalizeFeishuDomain(adapters.feishu.domain);
     feishuAppIdInput.value = adapters.feishu.appId || "";
     feishuAppSecretInput.value = adapters.feishu.appSecret || "";
   } else {
+    feishuDomainSelect.value = DEFAULT_FEISHU_DOMAIN;
     feishuAppIdInput.value = "";
     feishuAppSecretInput.value = "";
   }
 
-  // Restart required status
   if (state.restartRequired) {
     setStatus(
       "Settings changed. Restart service to apply.",
@@ -138,8 +208,14 @@ async function handleSave() {
   const telegramToken = telegramTokenInput.value.trim();
   const slackBotToken = slackBotTokenInput.value.trim();
   const slackAppToken = slackAppTokenInput.value.trim();
+  const feishuDomain = normalizeFeishuDomain(feishuDomainSelect.value);
   const feishuAppId = feishuAppIdInput.value.trim();
   const feishuAppSecret = feishuAppSecretInput.value.trim();
+  const hasFeishuConfig = Boolean(
+    feishuAppId ||
+      feishuAppSecret ||
+      feishuDomain !== DEFAULT_FEISHU_DOMAIN,
+  );
 
   // 始终写入所有 adapter 键，空值也要显式传递，让后端能感知「清空」操作
   const adapters = {
@@ -151,13 +227,13 @@ async function handleSave() {
             appToken: slackAppToken || undefined,
           }
         : null,
-    feishu:
-      feishuAppId || feishuAppSecret
-        ? {
-            appId: feishuAppId || undefined,
-            appSecret: feishuAppSecret || undefined,
-          }
-        : null,
+    feishu: hasFeishuConfig
+      ? {
+          appId: feishuAppId || undefined,
+          appSecret: feishuAppSecret || undefined,
+          domain: feishuDomain,
+        }
+      : null,
   };
 
   const updates = { adapters };

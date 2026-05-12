@@ -146,15 +146,38 @@
     </div>
     <div class="settings-modal-body">
       <div class="settings-sections">
-        <div class="settings-section">
-          <h3 class="section-title">Telegram</h3>
+        <div class="chatapps-tabs" role="tablist" aria-label="Chat Apps">
+          <button type="button" class="chatapps-tab active" data-chatapps-tab="telegram" role="tab" aria-selected="true">
+            Telegram
+          </button>
+          <button type="button" class="chatapps-tab" data-chatapps-tab="slack" role="tab" aria-selected="false">
+            Slack
+          </button>
+          <button type="button" class="chatapps-tab" data-chatapps-tab="feishu" role="tab" aria-selected="false">
+            Feishu / Lark
+          </button>
+        </div>
+
+        <div class="chatapps-panel" data-chatapps-panel="telegram">
+          <div class="chatapps-guide-card">
+            <p class="chatapps-guide-text">Need setup steps? Open the integration guide for this app.</p>
+            <button type="button" id="chatapps-open-telegram-guide" class="chatapps-guide-btn">
+              Open guide
+            </button>
+          </div>
           <div class="form-group">
             <label>Bot Token</label>
             <input type="password" id="chatapps-telegram-token" placeholder="123456:ABC-DEF..." class="form-input" />
           </div>
         </div>
-        <div class="settings-section">
-          <h3 class="section-title">Slack</h3>
+
+        <div class="chatapps-panel" data-chatapps-panel="slack" hidden>
+          <div class="chatapps-guide-card">
+            <p class="chatapps-guide-text">Need setup steps? Open the integration guide for this app.</p>
+            <button type="button" id="chatapps-open-slack-guide" class="chatapps-guide-btn">
+              Open guide
+            </button>
+          </div>
           <div class="form-group">
             <label>Bot Token</label>
             <input type="password" id="chatapps-slack-bot-token" placeholder="xoxb-..." class="form-input" />
@@ -164,8 +187,20 @@
             <input type="password" id="chatapps-slack-app-token" placeholder="xapp-..." class="form-input" />
           </div>
         </div>
-        <div class="settings-section">
-          <h3 class="section-title">Feishu</h3>
+
+        <div class="chatapps-panel" data-chatapps-panel="feishu" hidden>
+          <div class="chatapps-guide-card chatapps-guide-card-static">
+            <p class="chatapps-guide-text">Choose the region that matches your developer app before saving your credentials.</p>
+          </div>
+          <div class="form-group">
+            <label>Region</label>
+            <div class="provider-select-wrapper">
+              <select id="chatapps-feishu-domain">
+                <option value="feishu">Feishu (China)</option>
+                <option value="lark">Lark (Global)</option>
+              </select>
+            </div>
+          </div>
           <div class="form-group">
             <label>App ID</label>
             <input type="password" id="chatapps-feishu-app-id" placeholder="cli_a1b2c3d4..." class="form-input" />
