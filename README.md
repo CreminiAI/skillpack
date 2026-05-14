@@ -113,10 +113,10 @@ If present, `AGENTS.md` and `SOUL.md` are read by SkillPack itself when a new ch
 Talk to your Agents on Slack and Telegram
 
 ### 5 mins to get Slack `App Token` and `Bot Token`
-https://skillpack.gitbook.io/skillpack-docs/getting-started/slack-integration
+https://frevana.gitbook.io/frevana-docs/integrations/slack-integration
 
 ### 1 min to get Telegram `Bot Token`
-https://skillpack.gitbook.io/skillpack-docs/getting-started/telegram-integration
+https://frevana.gitbook.io/frevana-docs/integrations/telegram-integration
 
 ---
 
