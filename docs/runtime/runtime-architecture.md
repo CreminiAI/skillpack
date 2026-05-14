@@ -160,9 +160,14 @@ Defines all types shared across adapters:
 {
   "jobs": [
     {
+      "id": "morning-briefing",
       "name": "morning-briefing",
       "cron": "0 9 * * 1-5",
       "prompt": "Generate the morning market brief.",
+      "promptExamples": [
+        "Summarize the top pre-market headlines",
+        "List the stocks with the biggest moves"
+      ],
       "notify": {
         "adapter": "telegram",
         "channelId": "telegram-1234567890"

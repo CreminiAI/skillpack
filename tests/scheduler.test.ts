@@ -39,6 +39,7 @@ test("scheduler loads jobs from job.json on startup", async () => {
           name: "daily-brief",
           cron: "0 9 * * 1-5",
           prompt: "Send the daily brief",
+          promptExamples: ["Summarize key headlines", "List notable movers"],
           notify: {
             adapter: "telegram",
             channelId: "telegram-123",
@@ -55,6 +56,7 @@ test("scheduler loads jobs from job.json on startup", async () => {
         id: job.id,
         name: job.name,
         cron: job.cron,
+        promptExamples: job.promptExamples,
         enabled: job.enabled,
       })),
       [
@@ -62,6 +64,7 @@ test("scheduler loads jobs from job.json on startup", async () => {
           id: "daily-brief",
           name: "daily-brief",
           cron: "0 9 * * 1-5",
+          promptExamples: ["Summarize key headlines", "List notable movers"],
           enabled: true,
         },
       ],
@@ -133,6 +136,7 @@ test("scheduler persists add/remove/enable changes only to job.json", async () =
       name: "weekly-summary",
       cron: "0 18 * * 5",
       prompt: "Send the weekly summary",
+      promptExamples: ["Summarize weekly wins", "Highlight blockers"],
       notify: {
         adapter: "slack",
         channelId: "slack-dm-1",
@@ -141,7 +145,19 @@ test("scheduler persists add/remove/enable changes only to job.json", async () =
 
     assert.equal(added.success, true);
     assert.equal(fs.existsSync(getJobFilePath(dir)), true);
-    assert.deepEqual(loadJobFile(dir).jobs.map((job) => job.name), ["weekly-summary"]);
+    assert.deepEqual(loadJobFile(dir).jobs, [
+      {
+        id: "weekly-summary",
+        name: "weekly-summary",
+        cron: "0 18 * * 5",
+        prompt: "Send the weekly summary",
+        promptExamples: ["Summarize weekly wins", "Highlight blockers"],
+        notify: {
+          adapter: "slack",
+          channelId: "slack-dm-1",
+        },
+      },
+    ]);
     assert.equal(fs.readFileSync(configPath, "utf-8"), originalConfig);
 
     const disabled = scheduler.setEnabled("weekly-summary", false);
@@ -488,6 +504,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
           name: "mutable-job",
           cron: "0 9 * * 1-5",
           prompt: "Initial recurring job",
+          promptExamples: ["Initial example", "Second example"],
           notify: {
             adapter: "web",
             channelId: "web",
@@ -501,6 +518,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
 
     const toOneTime = scheduler.updateJob("mutable-job", {
       prompt: "Now manual",
+      promptExamples: ["Manual example", "  ", "Investigate a one-off issue"],
       notify: {
         adapter: "web",
         channelId: "web",
@@ -514,6 +532,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
           id: "mutable-job",
           name: "mutable-job",
           prompt: "Now manual",
+          promptExamples: ["Manual example", "Investigate a one-off issue"],
           notify: {
             adapter: "web",
             channelId: "web",
@@ -525,6 +544,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
     const toRecurring = scheduler.updateJob("mutable-job", {
       cron: "0 18 * * 5",
       prompt: "Back to recurring",
+      promptExamples: ["Weekly wrap-up", "Highlight anomalies"],
       notify: {
         adapter: "web",
         channelId: "web",
@@ -541,6 +561,7 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
           name: "mutable-job",
           cron: "0 18 * * 5",
           prompt: "Back to recurring",
+          promptExamples: ["Weekly wrap-up", "Highlight anomalies"],
           notify: {
             adapter: "web",
             channelId: "web",

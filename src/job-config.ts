@@ -12,6 +12,8 @@ export interface ScheduledJobConfig {
   cron?: string;
   /** Prompt to send to the Agent when triggered */
   prompt: string;
+  /** Optional prompt suggestions shown in host applications */
+  promptExamples?: string[];
   /** Where to push the result */
   notify: {
     adapter: string;
@@ -31,6 +33,19 @@ export const JOB_FILE = "job.json";
 
 export function getJobFilePath(workDir: string): string {
   return path.join(workDir, JOB_FILE);
+}
+
+function normalizePromptExamples(promptExamples: string[] | undefined): string[] | undefined {
+  if (!Array.isArray(promptExamples)) {
+    return undefined;
+  }
+
+  const normalized = promptExamples
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function validateScheduledJobConfig(
@@ -66,6 +81,16 @@ function validateScheduledJobConfig(
   if (typeof job.prompt !== "string" || !job.prompt.trim()) {
     throw new Error(
       `Invalid job config from ${sourceLabel}: "jobs[${index}].prompt" is required`,
+    );
+  }
+
+  if (
+    job.promptExamples !== undefined &&
+    (!Array.isArray(job.promptExamples) ||
+      job.promptExamples.some((item) => typeof item !== "string"))
+  ) {
+    throw new Error(
+      `Invalid job config from ${sourceLabel}: "jobs[${index}].promptExamples" must be an array of strings`,
     );
   }
 
@@ -137,6 +162,7 @@ function normalizeJobFile(jobFile: JobFile): JobFile {
 
 export function normalizeScheduledJobConfig(job: ScheduledJobConfig): ScheduledJobConfig {
   const normalizedCron = normalizeJobCron(job.cron);
+  const normalizedPromptExamples = normalizePromptExamples(job.promptExamples);
   const normalizedTimezone =
     typeof job.timezone === "string" && job.timezone.trim()
       ? job.timezone.trim()
@@ -147,6 +173,7 @@ export function normalizeScheduledJobConfig(job: ScheduledJobConfig): ScheduledJ
     name: job.name.trim(),
     ...(normalizedCron ? { cron: normalizedCron } : {}),
     prompt: job.prompt,
+    ...(normalizedPromptExamples ? { promptExamples: normalizedPromptExamples } : {}),
     notify: {
       adapter: job.notify.adapter.trim(),
       channelId: job.notify.channelId.trim(),

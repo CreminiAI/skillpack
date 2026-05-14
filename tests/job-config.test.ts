@@ -34,6 +34,7 @@ test("saveJobFile writes normalized jobs and loadJobFile reads them back", async
           name: "  morning-brief  ",
           cron: " 0 9 * * 1-5 ",
           prompt: "Send the morning brief",
+          promptExamples: ["  Summarize the market open  ", " ", "Draft a quick recap"],
           notify: {
             adapter: " telegram ",
             channelId: " telegram-123 ",
@@ -52,6 +53,7 @@ test("saveJobFile writes normalized jobs and loadJobFile reads them back", async
           name: "morning-brief",
           cron: "0 9 * * 1-5",
           prompt: "Send the morning brief",
+          promptExamples: ["Summarize the market open", "Draft a quick recap"],
           notify: {
             adapter: "telegram",
             channelId: "telegram-123",
@@ -150,6 +152,38 @@ test("loadJobFile rejects invalid job.json structure", async () => {
     assert.throws(
       () => loadJobFile(dir),
       /"jobs" must be an array/,
+    );
+  });
+});
+
+test("loadJobFile rejects non-string promptExamples items", async () => {
+  await withTempDir((dir) => {
+    fs.writeFileSync(
+      getJobFilePath(dir),
+      JSON.stringify(
+        {
+          jobs: [
+            {
+              id: "bad-job",
+              name: "bad-job",
+              prompt: "Bad prompt examples",
+              promptExamples: ["valid", 123],
+              notify: {
+                adapter: "web",
+                channelId: "web",
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    assert.throws(
+      () => loadJobFile(dir),
+      /"jobs\[0\]\.promptExamples" must be an array of strings/,
     );
   });
 });

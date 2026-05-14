@@ -44,6 +44,7 @@ export interface JobStatus {
   name: string;
   cron?: string;
   prompt: string;
+  promptExamples?: string[];
   notify: { adapter: string; channelId: string };
   enabled: boolean;
   timezone?: string;
@@ -416,6 +417,7 @@ export class SchedulerAdapter implements PlatformAdapter {
       name: job.config.name,
       cron: updates.cron,
       prompt: updates.prompt,
+      promptExamples: updates.promptExamples,
       notify: updates.notify,
       enabled: updates.enabled,
       timezone: updates.timezone,
@@ -511,6 +513,7 @@ export class SchedulerAdapter implements PlatformAdapter {
         name: job.config.name,
         ...(job.config.cron ? { cron: job.config.cron } : {}),
         prompt: job.config.prompt,
+        ...(job.config.promptExamples ? { promptExamples: job.config.promptExamples } : {}),
         notify: job.config.notify,
         enabled: isRecurringJob(job.config) ? job.config.enabled !== false : true,
         ...(job.config.timezone ? { timezone: job.config.timezone } : {}),
