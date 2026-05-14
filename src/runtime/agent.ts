@@ -454,6 +454,7 @@ export class PackAgent implements IPackAgent {
 
       const resourceLoader = new DefaultResourceLoader({
         cwd: rootDir,
+        noSkills: true,
         additionalSkillPaths: [skillsPath],
         skillsOverride: (base) =>
           overrideBuiltinSkillCreator(base, materializedSkillCreator),
