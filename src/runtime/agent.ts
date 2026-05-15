@@ -78,6 +78,21 @@ interface PackPromptFiles {
   promptBlock?: string;
 }
 
+export function createCustomProviderModelConfig(
+  options: Pick<PackAgentOptions, "modelId" | "apiProtocol" | "reasoning">,
+) {
+  return {
+    id: options.modelId,
+    name: options.modelId,
+    api: (options.apiProtocol ?? "openai-completions") as any,
+    reasoning: options.reasoning ?? false,
+    input: ["text"] as Array<"text" | "image">,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000,
+    maxTokens: 4096,
+  };
+}
+
 function materializeBuiltinSkillCreator(
   rootDir: string,
   skillsPath: string,
@@ -370,25 +385,14 @@ export class PackAgent implements IPackAgent {
       // correct API protocol. Most proxies/local endpoints use the Completions API,
       // so default to "openai-completions" unless the user explicitly chose "openai-responses".
       if (baseUrl && modelId) {
-        const apiProtocol = this.options.apiProtocol ?? "openai-completions";
+        const customModel = createCustomProviderModelConfig(this.options);
         log(
-          `[PackAgent] Registering custom model ${provider}/${modelId} api=${apiProtocol} baseUrl=${baseUrl}`,
+          `[PackAgent] Registering custom model ${provider}/${modelId} api=${customModel.api} baseUrl=${baseUrl}`,
         );
         modelRegistry.registerProvider(provider, {
           baseUrl,
           apiKey: this.options.apiKey,
-          models: [
-            {
-              id: modelId,
-              name: modelId,
-              api: apiProtocol as any,
-              reasoning: false,
-              input: ["text"],
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-              contextWindow: 128000,
-              maxTokens: 4096,
-            },
-          ],
+          models: [customModel],
         });
       }
 

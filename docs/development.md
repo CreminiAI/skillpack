@@ -162,8 +162,21 @@ These variables are read by the runtime at startup and can override runtime fiel
 | `PACK_ROOT` | Pack root directory | argument passed to `startServer` |
 | `HOST` | Listen address | `127.0.0.1` |
 | `PORT` | Listen port | `26313` |
-| `OPENAI_API_KEY` | OpenAI API key (highest priority) | — |
-| `ANTHROPIC_API_KEY` | Anthropic API key | — |
+| `SKILLPACK_API_KEY` | Highest-priority runtime API key override | — |
+| `SKILLPACK_PROVIDER` | Highest-priority runtime provider override | — |
+| `SKILLPACK_BASE_URL` | Highest-priority runtime base URL override | — |
+| `SKILLPACK_API_PROTOCOL` | Highest-priority runtime API protocol override | — |
+| `SKILLPACK_REASONING` | Highest-priority runtime reasoning flag override | — |
+| `OPENAI_API_KEY` | OpenAI API key fallback | — |
+| `ANTHROPIC_API_KEY` | Anthropic API key fallback | — |
+
+Priority order for PackAgent runtime auth/config is:
+
+1. `SKILLPACK_*`
+2. `data/config.json`
+3. Provider fallback env vars such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`
+
+In embedded hosts such as Frevana, prefer injecting `SKILLPACK_*` at process start instead of writing those values into `data/config.json`.
 
 Example:
 

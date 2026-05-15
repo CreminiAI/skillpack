@@ -70,6 +70,7 @@ export interface DataConfig {
   baseUrl?: string;
   modelId?: string;
   apiProtocol?: "openai-responses" | "openai-completions";
+  reasoning?: boolean;
   adapters?: {
     telegram?: { token?: string };
     slack?: {
@@ -85,6 +86,45 @@ export interface DataConfig {
   };
   /** OAuth credentials managed by AuthStorage (do not edit manually) */
   _auth?: Record<string, unknown>;
+}
+
+export const SKILLPACK_RUNTIME_ENV = {
+  apiKey: "SKILLPACK_API_KEY",
+  provider: "SKILLPACK_PROVIDER",
+  baseUrl: "SKILLPACK_BASE_URL",
+  apiProtocol: "SKILLPACK_API_PROTOCOL",
+  reasoning: "SKILLPACK_REASONING",
+} as const;
+
+const TRUE_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
+const FALSE_ENV_VALUES = new Set(["0", "false", "no", "off"]);
+
+function hasEnvOverride(env: NodeJS.ProcessEnv, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(env, key);
+}
+
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (TRUE_ENV_VALUES.has(normalized)) {
+    return true;
+  }
+  if (FALSE_ENV_VALUES.has(normalized)) {
+    return false;
+  }
+  return undefined;
 }
 
 function normalizeFeishuAdapterConfig(
@@ -129,6 +169,9 @@ function normalizeDataConfig(value: unknown): DataConfig {
   ) {
     normalized.apiProtocol = raw.apiProtocol;
   }
+  if (typeof raw.reasoning === "boolean") {
+    normalized.reasoning = raw.reasoning;
+  }
   if (raw.adapters && typeof raw.adapters === "object" && !Array.isArray(raw.adapters)) {
     const rawAdapters = raw.adapters as Record<string, unknown>;
     const adapters = { ...rawAdapters } as NonNullable<DataConfig["adapters"]>;
@@ -145,9 +188,75 @@ function normalizeDataConfig(value: unknown): DataConfig {
   return normalized;
 }
 
+export function resolveRuntimeConfig(
+  value: unknown,
+  env: NodeJS.ProcessEnv = process.env,
+): DataConfig {
+  const normalized = normalizeDataConfig(value);
+  let { apiKey = "", provider = "openai", baseUrl = "" } = normalized;
+  let { apiProtocol, reasoning } = normalized;
+
+  if (!apiKey) {
+    if (env.OPENAI_API_KEY) {
+      apiKey = env.OPENAI_API_KEY;
+      provider = "openai";
+    } else if (env.ANTHROPIC_API_KEY) {
+      apiKey = env.ANTHROPIC_API_KEY;
+      provider = "anthropic";
+    } else if (env.GOOGLE_API_KEY) {
+      apiKey = env.GOOGLE_API_KEY;
+      provider = "google";
+    }
+  }
+
+  if (hasEnvOverride(env, SKILLPACK_RUNTIME_ENV.apiKey)) {
+    apiKey = env[SKILLPACK_RUNTIME_ENV.apiKey] ?? "";
+  }
+
+  if (hasEnvOverride(env, SKILLPACK_RUNTIME_ENV.provider)) {
+    const providerOverride = normalizeOptionalString(env[SKILLPACK_RUNTIME_ENV.provider]);
+    if (providerOverride) {
+      provider = providerOverride;
+    }
+  }
+
+  if (hasEnvOverride(env, SKILLPACK_RUNTIME_ENV.baseUrl)) {
+    baseUrl = env[SKILLPACK_RUNTIME_ENV.baseUrl] ?? "";
+  }
+
+  if (hasEnvOverride(env, SKILLPACK_RUNTIME_ENV.apiProtocol)) {
+    const apiProtocolOverride = env[SKILLPACK_RUNTIME_ENV.apiProtocol];
+    if (
+      apiProtocolOverride === "openai-responses" ||
+      apiProtocolOverride === "openai-completions"
+    ) {
+      apiProtocol = apiProtocolOverride;
+    } else if ((apiProtocolOverride ?? "").trim() === "") {
+      apiProtocol = undefined;
+    }
+  }
+
+  if (hasEnvOverride(env, SKILLPACK_RUNTIME_ENV.reasoning)) {
+    const reasoningOverride = parseBooleanEnv(env[SKILLPACK_RUNTIME_ENV.reasoning]);
+    if (reasoningOverride !== undefined) {
+      reasoning = reasoningOverride;
+    }
+  }
+
+  return {
+    ...normalized,
+    apiKey,
+    provider,
+    baseUrl: baseUrl?.trim() || undefined,
+    apiProtocol,
+    reasoning,
+  };
+}
+
 export class ConfigManager {
   private static instance: ConfigManager;
   private configData: DataConfig = {};
+  private fileConfigData: DataConfig = {};
   private configPath: string = "";
 
   private constructor() {}
@@ -162,6 +271,7 @@ export class ConfigManager {
   public load(rootDir: string): DataConfig {
     this.configPath = path.join(rootDir, "data", "config.json");
     this.configData = {};
+    this.fileConfigData = {};
     if (fs.existsSync(this.configPath)) {
       try {
         const parsed = JSON.parse(fs.readFileSync(this.configPath, "utf-8")) as unknown;
@@ -174,31 +284,13 @@ export class ConfigManager {
             '  Warning: data/config.json contains deprecated "scheduledJobs". Move them to job.json at the pack root; the old field is ignored.',
           );
         }
-        this.configData = normalizeDataConfig(parsed);
+        this.fileConfigData = normalizeDataConfig(parsed);
         console.log("  Loaded config from data/config.json");
       } catch (err) {
         console.warn("  Warning: Failed to parse data/config.json:", err);
       }
     }
-
-    // Environment variables as fallback if not set in config file
-    let { apiKey = "", provider = "openai", baseUrl = "" } = this.configData;
-    if (!apiKey) {
-      if (process.env.OPENAI_API_KEY) {
-        apiKey = process.env.OPENAI_API_KEY;
-        provider = "openai";
-      } else if (process.env.ANTHROPIC_API_KEY) {
-        apiKey = process.env.ANTHROPIC_API_KEY;
-        provider = "anthropic";
-      } else if (process.env.GOOGLE_API_KEY) {
-        apiKey = process.env.GOOGLE_API_KEY;
-        provider = "google";
-      }
-    }
-
-    this.configData.apiKey = apiKey;
-    this.configData.provider = provider;
-    this.configData.baseUrl = baseUrl?.trim() || undefined;
+    this.configData = resolveRuntimeConfig(this.fileConfigData);
     return this.configData;
   }
 
@@ -216,21 +308,24 @@ export class ConfigManager {
     }
 
     // Merge configuration
-    if (updates.apiKey !== undefined) this.configData.apiKey = updates.apiKey;
-    if (updates.provider !== undefined) this.configData.provider = updates.provider;
+    if (updates.apiKey !== undefined) this.fileConfigData.apiKey = updates.apiKey;
+    if (updates.provider !== undefined) this.fileConfigData.provider = updates.provider;
     if (updates.baseUrl !== undefined) {
-      this.configData.baseUrl = updates.baseUrl?.trim() || undefined;
+      this.fileConfigData.baseUrl = updates.baseUrl?.trim() || undefined;
     }
     if (updates.modelId !== undefined) {
-      this.configData.modelId = updates.modelId?.trim() || undefined;
+      this.fileConfigData.modelId = updates.modelId?.trim() || undefined;
     }
     if (updates.apiProtocol !== undefined) {
-      this.configData.apiProtocol = updates.apiProtocol || undefined;
+      this.fileConfigData.apiProtocol = updates.apiProtocol || undefined;
+    }
+    if (updates.reasoning !== undefined) {
+      this.fileConfigData.reasoning = updates.reasoning;
     }
 
     // Per-adapter key handling: null = delete, object = overwrite
     if (updates.adapters !== undefined) {
-      const merged: DataConfig["adapters"] = { ...(this.configData.adapters || {}) };
+      const merged: DataConfig["adapters"] = { ...(this.fileConfigData.adapters || {}) };
       for (const [adapterKey, adapterVal] of Object.entries(updates.adapters)) {
         if (adapterVal === null || adapterVal === undefined) {
           delete merged[adapterKey];
@@ -238,14 +333,19 @@ export class ConfigManager {
           merged[adapterKey] = adapterVal;
         }
       }
-      this.configData.adapters = merged;
+      this.fileConfigData.adapters = merged;
+    }
+
+    if (updates._auth !== undefined) {
+      this.fileConfigData._auth = updates._auth;
     }
 
     try {
-      this.configData = normalizeDataConfig(this.configData);
+      this.fileConfigData = normalizeDataConfig(this.fileConfigData);
+      this.configData = resolveRuntimeConfig(this.fileConfigData);
       fs.writeFileSync(
         this.configPath,
-        JSON.stringify(this.configData, null, 2),
+        JSON.stringify(this.fileConfigData, null, 2),
         "utf-8",
       );
     } catch (err) {

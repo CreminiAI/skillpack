@@ -111,6 +111,7 @@ export interface PackAgentOptions {
   modelId: string;
   baseUrl?: string;
   apiProtocol?: "openai-responses" | "openai-completions";
+  reasoning?: boolean;
   lifecycleHandler: LifecycleHandler;
 }
 

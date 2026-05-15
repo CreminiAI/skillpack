@@ -56,6 +56,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     dataConfig.modelId?.trim() ||
     (SUPPORTED_PROVIDERS[provider]?.defaultModelId ?? SUPPORTED_PROVIDERS.openai.defaultModelId);
   const apiProtocol = dataConfig.apiProtocol;
+  const reasoning = dataConfig.reasoning;
 
   // ---------------------------------------------------------------------------
   // Create Express app & HTTP server
@@ -98,6 +99,7 @@ export async function startServer(options: ServerOptions): Promise<void> {
     modelId,
     baseUrl,
     apiProtocol,
+    reasoning,
     lifecycleHandler: lifecycle,
   });
 

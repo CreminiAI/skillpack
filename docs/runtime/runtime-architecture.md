@@ -148,9 +148,12 @@ Defines all types shared across adapters:
 
 ### API key priority
 
-1. `data/config.json` `apiKey` / `provider` fields — read first.
-2. `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` environment variables — override the config file.
-3. Web frontend `POST /api/config/update` — persists to `data/config.json`; requires a restart to take effect.
+1. `SKILLPACK_API_KEY`, `SKILLPACK_PROVIDER`, `SKILLPACK_BASE_URL`, `SKILLPACK_API_PROTOCOL`, `SKILLPACK_REASONING` — highest-priority runtime overrides.
+2. `data/config.json` `apiKey` / `provider` / `baseUrl` / `apiProtocol` / `reasoning` fields — baseline runtime config.
+3. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` — provider-specific fallback only when no API key is present in config.
+4. Web frontend `POST /api/config/update` — persists to `data/config.json`; requires a restart to take effect.
+
+For embedded hosts such as Frevana, inject `SKILLPACK_*` when spawning `skillpack run` so the child process can receive the host token and proxy URL without persisting them to disk.
 
 ### `job.json` scheduled jobs
 

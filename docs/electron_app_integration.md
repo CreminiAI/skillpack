@@ -27,6 +27,8 @@
 
 - 使用 `child_process.fork`，或 `spawn` 且 `stdio` 包含 `"ipc"`
 - 建议设置环境变量：`SKILLPACK_RUNTIME_MODE=embedded`（禁用 web adapter、本地端口和自动打开浏览器）
+- 若宿主需要把自己的鉴权与 OpenAI 代理透传给 `PackAgent`，应在启动时注入 `SKILLPACK_API_KEY`、`SKILLPACK_PROVIDER`、`SKILLPACK_BASE_URL`、`SKILLPACK_API_PROTOCOL`、`SKILLPACK_REASONING`
+- `FREVANA_TOKEN` 这类宿主自定义 env 可以继续保留，供 pack 内脚本或 skills 直接使用；它不会替代上面的 `SKILLPACK_*`
 
 建议等待 `ready` 事件后再发首个业务请求：
 
