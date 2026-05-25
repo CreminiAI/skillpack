@@ -105,7 +105,7 @@ The archive produced by `zip` is intentionally lightweight:
 └── start.bat            # One-click launcher for Windows
 ```
 
-The start scripts use `npx @cremini/skillpack run .` so Node.js is the only prerequisite — no pre-bundled server directory is included.
+The start scripts use `npx @cremini/skillpack run .` so Node.js `22.19.0+` is the only prerequisite — no pre-bundled server directory is included.
 
 If present, `job.json` defines scheduled jobs that travel with the pack and are loaded by the scheduler at runtime.
 

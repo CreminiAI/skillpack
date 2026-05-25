@@ -37,11 +37,11 @@ cd /d "%~dp0"
 npx -y @cremini/skillpack run .
 ```
 
-Node.js >= 20 is required.
+Node.js >= 22.19.0 is required.
 
 ## Server Architecture
 
-When `skillpack run` executes, it calls `startServer({ rootDir })` from `src/runtime/server.ts`. The server is built on **Express** + **ws** + **`@mariozechner/pi-coding-agent`** and loads runtime config from `data/config.json` plus scheduled jobs from root-level `job.json`.
+When `skillpack run` executes, it calls `startServer({ rootDir })` from `src/runtime/server.ts`. The server is built on **Express** + **ws** + **`@earendil-works/pi-coding-agent`** and loads runtime config from `data/config.json` plus scheduled jobs from root-level `job.json`.
 
 ### `server.ts` (entry)
 

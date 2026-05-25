@@ -4,7 +4,7 @@ import {
   parseSessionEntries,
   type SessionEntry,
   type SessionMessageEntry,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   detectPlatformFromChannelId,
   type RuntimePlatform,

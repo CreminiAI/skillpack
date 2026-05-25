@@ -14,7 +14,7 @@
     {
       "name": "web-research",
       "source": "https://github.com/langchain-ai/deepagents",
-      "description": "Use this skill for requests related to web research; it provides a structured approach to conducting comprehensive web research"
+      "description": "Searches multiple web sources, synthesizes findings, and produces cited research reports using delegated subagents. Use when the user asks to research a topic online, search the web, look something up, find current information, compare options, or produce a research report."
     },
     {
       "name": "competitive-analysis",
