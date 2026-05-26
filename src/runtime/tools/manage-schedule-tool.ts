@@ -4,7 +4,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import type {
   ToolDefinition,
   AgentToolResult,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import type { SchedulerAdapter } from "../adapters/scheduler.js";
 import type {
   NotifyTargetPlatform,

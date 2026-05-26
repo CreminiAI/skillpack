@@ -198,7 +198,7 @@ cd /d "%~dp0"
 npx -y @cremini/skillpack run .
 ```
 
-Node.js >= 20 is required.
+Node.js >= 22.19.0 is required.
 
 ---
 

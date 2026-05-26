@@ -5,12 +5,13 @@ import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
   createAgentSession,
-  createCodingTools,
+  createSyntheticSourceInfo,
+  getAgentDir,
   ModelRegistry,
   SessionManager,
   DefaultResourceLoader,
   type Skill,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { ConfigFileAuthBackend, SUPPORTED_PROVIDERS } from "./config.js";
 
 import {
@@ -58,6 +59,7 @@ const BUILTIN_SKILL_CREATOR_TEMPLATE_DIR = fileURLToPath(
 );
 const PACK_AGENTS_FILE = "AGENTS.md";
 const PACK_SOUL_FILE = "SOUL.md";
+const BUILTIN_TOOL_NAMES = ["read", "bash", "edit", "write"];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,7 +161,10 @@ function materializeBuiltinSkillCreator(
     description: BUILTIN_SKILL_CREATOR_DESCRIPTION,
     filePath: skillPath,
     baseDir: skillDir,
-    source: "path",
+    sourceInfo: createSyntheticSourceInfo(skillPath, {
+      source: "path",
+      baseDir: skillDir,
+    }),
     disableModelInvocation: false,
   };
 }
@@ -276,7 +281,7 @@ function getLifecycleTrigger(channelId: string): LifecycleTrigger {
 // ---------------------------------------------------------------------------
 
 interface ChannelSession {
-  session: any; // AgentSession from pi-coding-agent
+  session: any; // AgentSession from @earendil-works/pi-coding-agent
   running: boolean;
   pending: Promise<void>;
   fileOutputCallbackRef: { current: FileOutputCallback | null };
@@ -379,7 +384,7 @@ export class PackAgent implements IPackAgent {
       // Use the shared AuthStorage instance (supports both API Key and OAuth)
       const authStorage = this.authStorage;
 
-      const modelRegistry = new ModelRegistry(authStorage);
+      const modelRegistry = ModelRegistry.create(authStorage);
 
       // When a custom base URL is provided, register a custom model entry with the
       // correct API protocol. Most proxies/local endpoints use the Completions API,
@@ -458,6 +463,7 @@ export class PackAgent implements IPackAgent {
 
       const resourceLoader = new DefaultResourceLoader({
         cwd: rootDir,
+        agentDir: getAgentDir(),
         noSkills: true,
         additionalSkillPaths: [skillsPath],
         skillsOverride: (base) =>
@@ -469,7 +475,6 @@ export class PackAgent implements IPackAgent {
       });
       await resourceLoader.reload();
 
-      const tools = createCodingTools(workspaceDir);
       const fileOutputCallbackRef: { current: FileOutputCallback | null } = {
         current: null,
       };
@@ -490,7 +495,7 @@ export class PackAgent implements IPackAgent {
         sessionManager,
         resourceLoader,
         model,
-        tools,
+        tools: BUILTIN_TOOL_NAMES,
         customTools,
       });
 

@@ -5,7 +5,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import type {
   ToolDefinition,
   AgentToolResult,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { detectMimeType } from "../files/metadata.js";
 
 // ---------------------------------------------------------------------------

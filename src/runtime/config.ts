@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { AuthStorageBackend } from "@mariozechner/pi-coding-agent";
+import type { AuthStorageBackend } from "@earendil-works/pi-coding-agent";
 
 type LockResult<T> = { result: T; next?: string };
 

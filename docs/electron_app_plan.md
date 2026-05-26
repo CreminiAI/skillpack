@@ -124,7 +124,7 @@ import {
   type SessionEntry,
   type SessionMessageEntry,
   type FileEntry,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 export interface ConversationSummary {
   /* 见上方定义 */

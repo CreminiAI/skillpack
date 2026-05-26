@@ -1,7 +1,7 @@
 import type {
   AgentToolResult,
   ToolDefinition,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 
 import type {
@@ -51,4 +51,3 @@ export function createDelegatedCustomTools(
     },
   }));
 }
-

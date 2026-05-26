@@ -22,7 +22,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "build": "tsup",
@@ -45,7 +45,7 @@
   "license": "MIT",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.63.1",
-    "@mariozechner/pi-coding-agent": "^0.57.1",
+    "@earendil-works/pi-coding-agent": "^0.75.5",
     "@sinclair/typebox": "^0.34.41",
     "@slack/bolt": "^4.6.0",
     "ajv": "^8.17.1",
