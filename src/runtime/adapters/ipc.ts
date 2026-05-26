@@ -1,4 +1,5 @@
 import { configManager, type DataConfig } from "../config.js";
+import { resolveCommand } from "../commands/index.js";
 import type { ScheduledJobConfig } from "../../job-config.js";
 import {
   ConversationService,
@@ -192,6 +193,28 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
 
           const platform = this.detectPlatform(request.channelId);
           this.createdChannels.add(request.channelId);
+
+          const command = resolveCommand(request.text);
+          if (command) {
+            const result = await this.agent.handleCommand(command, request.channelId);
+            const message = result.message ?? "";
+
+            const response: {
+              stopReason: string;
+              text: string;
+              errorMessage?: string;
+            } = {
+              stopReason: "command",
+              text: message,
+            };
+            if (!result.success) {
+              response.errorMessage = message;
+            }
+
+            this.reply(request.id, response);
+            return;
+          }
+
           let fullText = "";
 
           const result = await this.agent.handleMessage(

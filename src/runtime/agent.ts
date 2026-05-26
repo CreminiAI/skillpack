@@ -60,6 +60,7 @@ const BUILTIN_SKILL_CREATOR_TEMPLATE_DIR = fileURLToPath(
 const PACK_AGENTS_FILE = "AGENTS.md";
 const PACK_SOUL_FILE = "SOUL.md";
 const BUILTIN_TOOL_NAMES = ["read", "bash", "edit", "write"];
+const FREVANA_SYSTEM_PROMPTS_ENV = "FREVANA_SYSTEM_PROMPTS";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,6 +94,30 @@ export function createCustomProviderModelConfig(
     contextWindow: 128000,
     maxTokens: 4096,
   };
+}
+
+export function readFrevanaSystemPrompts(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const content = env[FREVANA_SYSTEM_PROMPTS_ENV]?.trim();
+  return content ? content : undefined;
+}
+
+export function buildSystemPromptOverrides(
+  packPromptBlock?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const prompts: string[] = [];
+  const frevanaSystemPrompts = readFrevanaSystemPrompts(env);
+
+  if (frevanaSystemPrompts) {
+    prompts.push(frevanaSystemPrompts);
+  }
+  if (packPromptBlock) {
+    prompts.push(packPromptBlock);
+  }
+
+  return prompts;
 }
 
 function materializeBuiltinSkillCreator(
@@ -460,6 +485,9 @@ export class PackAgent implements IPackAgent {
       log(
         `[PackAgent] Pack prompt injection: ${packPromptFiles.promptBlock ? "enabled" : "disabled"}`,
       );
+      log(
+        `[PackAgent] Frevana system prompt injection: ${readFrevanaSystemPrompts() ? "enabled" : "disabled"}`,
+      );
 
       const resourceLoader = new DefaultResourceLoader({
         cwd: rootDir,
@@ -471,7 +499,7 @@ export class PackAgent implements IPackAgent {
         agentsFilesOverride: () => ({ agentsFiles: [] }),
         systemPromptOverride: () => undefined,
         appendSystemPromptOverride: () =>
-          packPromptFiles.promptBlock ? [packPromptFiles.promptBlock] : [],
+          buildSystemPromptOverrides(packPromptFiles.promptBlock),
       });
       await resourceLoader.reload();
 
