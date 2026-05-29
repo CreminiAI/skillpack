@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildActiveToolNames,
   buildSystemPromptOverrides,
   createCustomProviderModelConfig,
   readFrevanaSystemPrompts,
@@ -59,5 +60,18 @@ test("Frevana system prompts trim outer whitespace and preserve internal newline
   assert.equal(
     readFrevanaSystemPrompts(env),
     "# Host Policy\n\nLine one\nLine two",
+  );
+});
+
+test("active tool allowlist includes SDK custom tools", () => {
+  assert.deepEqual(
+    buildActiveToolNames([
+      { name: "send_file" },
+      { name: "save_artifacts" },
+      { name: "send_file" },
+      { name: "" },
+      { name: undefined },
+    ]),
+    ["read", "bash", "edit", "write", "send_file", "save_artifacts"],
   );
 });

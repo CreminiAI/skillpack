@@ -120,6 +120,20 @@ export function buildSystemPromptOverrides(
   return prompts;
 }
 
+export function buildActiveToolNames(
+  customTools: Array<{ name?: unknown }> = [],
+): string[] {
+  const toolNames = [...BUILTIN_TOOL_NAMES];
+
+  for (const tool of customTools) {
+    if (typeof tool.name === "string" && tool.name.length > 0) {
+      toolNames.push(tool.name);
+    }
+  }
+
+  return [...new Set(toolNames)];
+}
+
 function materializeBuiltinSkillCreator(
   rootDir: string,
   skillsPath: string,
@@ -515,6 +529,7 @@ export class PackAgent implements IPackAgent {
         fileOutputCallbackRef,
         delegatedToolRunContextRef,
       );
+      const activeToolNames = buildActiveToolNames(customTools);
 
       const { session } = await createAgentSession({
         cwd: workspaceDir,
@@ -523,7 +538,7 @@ export class PackAgent implements IPackAgent {
         sessionManager,
         resourceLoader,
         model,
-        tools: BUILTIN_TOOL_NAMES,
+        tools: activeToolNames,
         customTools,
       });
 
