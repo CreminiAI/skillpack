@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { IpcAdapter } from "../src/runtime/adapters/ipc.js";
 
@@ -65,4 +68,72 @@ test("ipc send_message handles slash commands before prompting the agent", async
       },
     ]);
   });
+});
+
+test("ipc send_message forwards validated attachments to the agent", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "skillpack-ipc-"));
+  const attachmentDir = path.join(
+    rootDir,
+    "data",
+    "sessions",
+    "web",
+    "attachments",
+  );
+  fs.mkdirSync(attachmentDir, { recursive: true });
+  const attachmentPath = path.join(attachmentDir, "report.txt");
+  fs.writeFileSync(attachmentPath, "hello", "utf-8");
+
+  try {
+    await withCapturedIpc(async (sent) => {
+      const calls: unknown[] = [];
+      const adapter = new IpcAdapter();
+
+      (adapter as any).rootDir = rootDir;
+      (adapter as any).agent = {
+        handleMessage: async (
+          platform: string,
+          channelId: string,
+          text: string,
+          _onEvent: unknown,
+          attachments: unknown,
+        ) => {
+          calls.push({ platform, channelId, text, attachments });
+          return { stopReason: "done" };
+        },
+      };
+      (adapter as any).conversationService = {};
+
+      await (adapter as any).handleRequest({
+        id: "req-2",
+        type: "send_message",
+        channelId: "web",
+        text: "Review this",
+        attachments: [
+          {
+            filename: "report.txt",
+            localPath: attachmentPath,
+            mimeType: "text/plain",
+          },
+        ],
+      });
+
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0], {
+        platform: "web",
+        channelId: "web",
+        text: "Review this",
+        attachments: [
+          {
+            filename: "report.txt",
+            localPath: attachmentPath,
+            mimeType: "text/plain",
+            size: 5,
+          },
+        ],
+      });
+      assert.equal((sent[0] as any).type, "result");
+    });
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
 });

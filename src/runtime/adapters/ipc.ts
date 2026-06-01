@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { configManager, type DataConfig } from "../config.js";
 import { resolveCommand } from "../commands/index.js";
 import type { ScheduledJobConfig } from "../../job-config.js";
@@ -10,6 +12,7 @@ import type {
   AdapterContext,
   AgentEvent,
   BotCommand,
+  ChannelAttachment,
   IPackAgent,
   IpcBroadcaster,
   PlatformAdapter,
@@ -21,7 +24,13 @@ type IpcRequest =
   | { id: string; type: "get_conversations" }
   | { id: string; type: "create_conversation" }
   | { id: string; type: "get_messages"; channelId: string; limit?: number }
-  | { id: string; type: "send_message"; channelId: string; text: string }
+  | {
+      id: string;
+      type: "send_message";
+      channelId: string;
+      text: string;
+      attachments?: ChannelAttachment[];
+    }
   | { id: string; type: "command"; command: BotCommand; channelId: string }
   | { id: string; type: "get_config" }
   | { id: string; type: "update_config"; updates: Partial<DataConfig> }
@@ -29,12 +38,17 @@ type IpcRequest =
   | { id: string; type: "get_scheduled_jobs" }
   | { id: string; type: "add_scheduled_job"; job: ScheduledJobConfig }
   | {
-    id: string;
-    type: "update_scheduled_job";
-    jobId: string;
-    updates: Omit<ScheduledJobConfig, "id" | "name">;
-  }
-  | { id: string; type: "set_scheduled_job_enabled"; jobId: string; enabled: boolean }
+      id: string;
+      type: "update_scheduled_job";
+      jobId: string;
+      updates: Omit<ScheduledJobConfig, "id" | "name">;
+    }
+  | {
+      id: string;
+      type: "set_scheduled_job_enabled";
+      jobId: string;
+      enabled: boolean;
+    }
   | { id: string; type: "trigger_scheduled_job"; jobId: string }
   | { id: string; type: "remove_scheduled_job"; jobId: string };
 
@@ -153,10 +167,13 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           for (const channelId of this.createdChannels) {
             activeChannels.add(channelId);
           }
-          const conversations = this.conversationService.listConversations(activeChannels, {
-            includeDefaultWeb: true,
-            includeLegacyWeb: false,
-          });
+          const conversations = this.conversationService.listConversations(
+            activeChannels,
+            {
+              includeDefaultWeb: true,
+              includeLegacyWeb: false,
+            },
+          );
           this.reply(request.id, conversations);
           return;
         }
@@ -192,11 +209,15 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           }
 
           const platform = this.detectPlatform(request.channelId);
+          const attachments = this.normalizeAttachments(request.attachments);
           this.createdChannels.add(request.channelId);
 
           const command = resolveCommand(request.text);
           if (command) {
-            const result = await this.agent.handleCommand(command, request.channelId);
+            const result = await this.agent.handleCommand(
+              command,
+              request.channelId,
+            );
             const message = result.message ?? "";
 
             const response: {
@@ -227,9 +248,14 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
               }
               this.broadcastAgentEvent(request.channelId, event);
             },
+            attachments,
           );
 
-          if (fullText.trim() && platform !== "web" && platform !== "scheduler") {
+          if (
+            fullText.trim() &&
+            platform !== "web" &&
+            platform !== "scheduler"
+          ) {
             const adapter = this.adapterMap?.get(platform);
             if (adapter && isMessageSender(adapter)) {
               await adapter.sendMessage(request.channelId, fullText);
@@ -248,7 +274,10 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
             this.replyError(request.id, "channelId is required");
             return;
           }
-          const result = await this.agent.handleCommand(request.command, request.channelId);
+          const result = await this.agent.handleCommand(
+            request.command,
+            request.channelId,
+          );
           this.reply(request.id, result);
           return;
         }
@@ -370,9 +399,76 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
     return adapter as SchedulerAdapter;
   }
 
-  private detectPlatform(
-    channelId: string,
-  ): RuntimePlatform {
+  private normalizeAttachments(
+    attachments: unknown,
+  ): ChannelAttachment[] | undefined {
+    if (attachments === undefined) {
+      return undefined;
+    }
+
+    if (!Array.isArray(attachments)) {
+      throw new Error("attachments must be an array");
+    }
+
+    const root = path.resolve(this.rootDir);
+    return attachments.map((attachment, index) => {
+      if (!attachment || typeof attachment !== "object") {
+        throw new Error(`attachment ${index + 1} must be an object`);
+      }
+
+      const maybeAttachment = attachment as Record<string, unknown>;
+      const filename =
+        typeof maybeAttachment.filename === "string"
+          ? maybeAttachment.filename.trim()
+          : "";
+      const localPath =
+        typeof maybeAttachment.localPath === "string"
+          ? maybeAttachment.localPath.trim()
+          : "";
+      const mimeType =
+        typeof maybeAttachment.mimeType === "string"
+          ? maybeAttachment.mimeType.trim()
+          : undefined;
+      const size =
+        typeof maybeAttachment.size === "number" &&
+        Number.isFinite(maybeAttachment.size)
+          ? maybeAttachment.size
+          : undefined;
+
+      if (!filename) {
+        throw new Error(`attachment ${index + 1} filename is required`);
+      }
+      if (!localPath) {
+        throw new Error(`attachment ${index + 1} localPath is required`);
+      }
+
+      const resolvedPath = path.resolve(localPath);
+      const relativePath = path.relative(root, resolvedPath);
+      if (
+        relativePath === ".." ||
+        relativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePath)
+      ) {
+        throw new Error(
+          `attachment ${index + 1} is outside the skillpack root`,
+        );
+      }
+
+      const stats = fs.statSync(resolvedPath);
+      if (!stats.isFile()) {
+        throw new Error(`attachment ${index + 1} must point to a file`);
+      }
+
+      return {
+        filename,
+        localPath: resolvedPath,
+        ...(mimeType ? { mimeType } : {}),
+        size: size ?? stats.size,
+      };
+    });
+  }
+
+  private detectPlatform(channelId: string): RuntimePlatform {
     return detectPlatformFromChannelId(channelId);
   }
 

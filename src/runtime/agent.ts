@@ -89,7 +89,7 @@ export function createCustomProviderModelConfig(
     name: options.modelId,
     api: (options.apiProtocol ?? "openai-completions") as any,
     reasoning: options.reasoning ?? false,
-    input: ["text"] as Array<"text" | "image">,
+    input: ["text", "image"] as Array<"text" | "image">,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
     maxTokens: 4096,
@@ -581,7 +581,10 @@ export class PackAgent implements IPackAgent {
       const waitForQueuedAgentEvents = async (): Promise<void> => {
         const maybeQueue = (cs.session as { _agentEventQueue?: unknown })
           ._agentEventQueue;
-        if (!maybeQueue || typeof (maybeQueue as Promise<unknown>).then !== "function") {
+        if (
+          !maybeQueue ||
+          typeof (maybeQueue as Promise<unknown>).then !== "function"
+        ) {
           return;
         }
 
