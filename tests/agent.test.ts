@@ -17,6 +17,7 @@ test("custom provider model config enables reasoning when requested", () => {
 
   assert.equal(customModel.api, "openai-completions");
   assert.equal(customModel.reasoning, true);
+  assert.deepEqual(customModel.input, ["text", "image"]);
 });
 
 test("system prompt overrides preserve existing behavior without Frevana prompts", () => {
@@ -47,9 +48,7 @@ test("system prompt overrides prepend Frevana prompts before pack prompts", () =
 test("system prompt overrides can inject only Frevana prompts", () => {
   const env = { FREVANA_SYSTEM_PROMPTS: "host prompt" };
 
-  assert.deepEqual(buildSystemPromptOverrides(undefined, env), [
-    "host prompt",
-  ]);
+  assert.deepEqual(buildSystemPromptOverrides(undefined, env), ["host prompt"]);
 });
 
 test("Frevana system prompts trim outer whitespace and preserve internal newlines", () => {
