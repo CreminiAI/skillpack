@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import type {
-  LarkChannel,
   NormalizedMessage,
 } from "@larksuiteoapi/node-sdk";
 
@@ -15,6 +14,10 @@ import type {
   MessageSender,
   PlatformAdapter,
 } from "./types.js";
+import {
+  createResilientLarkChannel,
+  type ResilientLarkChannel,
+} from "./resilient-lark-channel.js";
 import { resolveCommand } from "../commands/index.js";
 
 export interface FeishuAdapterOptions {
@@ -86,7 +89,7 @@ export function normalizeFeishuMessage(
 export class FeishuAdapter implements PlatformAdapter, MessageSender {
   readonly name = "feishu";
 
-  private channel: LarkChannel | null = null;
+  private channel: ResilientLarkChannel | null = null;
   private agent: IPackAgent | null = null;
   private ipcBroadcaster: IpcBroadcaster | null = null;
   private readonly options: FeishuAdapterOptions;
@@ -100,7 +103,7 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
     const domain = normalizeFeishuDomain(this.options.domain);
 
-    this.channel = Lark.createLarkChannel({
+    this.channel = createResilientLarkChannel({
       appId: this.options.appId,
       appSecret: this.options.appSecret,
       domain: resolveFeishuSdkDomain(domain),
@@ -121,6 +124,14 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
 
     this.channel.on("error", (error) => {
       console.error("[Feishu] Channel error:", error);
+    });
+
+    this.channel.on("reconnecting", () => {
+      console.warn("[Feishu] Channel reconnecting");
+    });
+
+    this.channel.on("reconnected", () => {
+      console.log("[Feishu] Channel reconnected");
     });
 
     await this.channel.connect();
