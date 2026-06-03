@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { buffer as streamToBuffer } from "node:stream/consumers";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import type {
   NormalizedMessage,
+  ResourceDescriptor,
 } from "@larksuiteoapi/node-sdk";
 
 import type {
@@ -37,12 +39,14 @@ export type FeishuMessageHandlingDecision =
 const MAX_MESSAGE_LENGTH = 1800;
 const ACK_REACTION = "THUMBSUP";
 const UNSUPPORTED_MESSAGE_REPLY =
-  "Only text messages are currently supported. Please send plain text.";
+  "Only text, image, and file messages are currently supported.";
 const FILE_DELIVERY_FAILED_REPLY =
   "A file was generated, but Feishu could not deliver it.";
-const IMAGE_DOWNLOAD_FAILED_REPLY =
-  "The image could not be downloaded from Feishu.";
-const IMAGE_MESSAGE_TEXT = "(User sent an image)";
+const ATTACHMENT_DOWNLOAD_FAILED_REPLY =
+  "The attachment could not be downloaded from Feishu.";
+const ATTACHMENT_MESSAGE_TEXT = "(User sent an attachment)";
+
+type FeishuSupportedResourceType = "image" | "file";
 
 export function normalizeFeishuDomain(
   domain: unknown,
@@ -80,20 +84,18 @@ export function normalizeFeishuMessage(
     return { action: "ignore" };
   }
 
-  const hasImageResource = message.resources.some(
-    (resource) => resource.type === "image",
-  );
+  const hasSupportedResource = message.resources.some(isSupportedResource);
 
-  if (message.rawContentType !== "text" && !hasImageResource) {
+  if (message.rawContentType !== "text" && !hasSupportedResource) {
     return { action: "unsupported" };
   }
 
   const text = message.rawContentType === "text" ? message.content.trim() : "";
   if (!text) {
-    if (hasImageResource) {
+    if (hasSupportedResource) {
       return {
         action: "handle",
-        text: IMAGE_MESSAGE_TEXT,
+        text: ATTACHMENT_MESSAGE_TEXT,
       };
     }
     return { action: "ignore" };
@@ -103,6 +105,12 @@ export function normalizeFeishuMessage(
     action: "handle",
     text,
   };
+}
+
+function isSupportedResource(
+  resource: ResourceDescriptor,
+): resource is ResourceDescriptor & { type: FeishuSupportedResourceType } {
+  return resource.type === "image" || resource.type === "file";
 }
 
 export class FeishuAdapter implements PlatformAdapter, MessageSender {
@@ -216,13 +224,13 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     }
 
     const userText = decision.text;
-    const attachments = await this.extractImageAttachments(message, channelId);
+    const attachments = await this.extractResourceAttachments(message, channelId);
     if (
-      userText === IMAGE_MESSAGE_TEXT &&
-      this.hasImageResources(message) &&
+      userText === ATTACHMENT_MESSAGE_TEXT &&
+      this.hasSupportedResources(message) &&
       attachments.length === 0
     ) {
-      await this.sendSafe(message.chatId, IMAGE_DOWNLOAD_FAILED_REPLY, message.messageId);
+      await this.sendSafe(message.chatId, ATTACHMENT_DOWNLOAD_FAILED_REPLY, message.messageId);
       return;
     }
 
@@ -375,11 +383,11 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     }
   }
 
-  private hasImageResources(message: NormalizedMessage): boolean {
-    return message.resources.some((resource) => resource.type === "image");
+  private hasSupportedResources(message: NormalizedMessage): boolean {
+    return message.resources.some(isSupportedResource);
   }
 
-  private async extractImageAttachments(
+  private async extractResourceAttachments(
     message: NormalizedMessage,
     channelId: string,
   ): Promise<ChannelAttachment[]> {
@@ -387,36 +395,91 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
       return [];
     }
 
-    const imageResources = message.resources.filter(
-      (resource) => resource.type === "image",
-    );
+    const resources = message.resources.filter(isSupportedResource);
     const attachments: ChannelAttachment[] = [];
 
-    for (const [index, resource] of imageResources.entries()) {
+    for (const [index, resource] of resources.entries()) {
       try {
-        const buffer = await this.channel.downloadResource(
+        const buffer = await this.downloadMessageResource(
+          message.messageId,
           resource.fileKey,
-          "image",
+          resource.type,
         );
-        const filename = resource.fileName?.trim() || `image-${index + 1}.png`;
+        const filename = this.resolveResourceFilename(resource, index);
         attachments.push(
           await saveAttachment(
             this.rootDir,
             channelId,
             filename,
             buffer,
-            detectMimeType(filename) || "image/png",
+            this.resolveResourceMimeType(resource, filename),
           ),
         );
       } catch (error) {
         console.error(
-          `[Feishu] Failed to download image ${resource.fileKey}:`,
+          `[Feishu] Failed to download ${resource.type} ${resource.fileKey}:`,
           error,
         );
       }
     }
 
     return attachments;
+  }
+
+  private resolveResourceFilename(
+    resource: ResourceDescriptor & { type: FeishuSupportedResourceType },
+    index: number,
+  ): string {
+    const filename = resource.fileName?.trim();
+    if (filename) {
+      return filename;
+    }
+    return resource.type === "image" ? `image-${index + 1}.png` : `file-${index + 1}`;
+  }
+
+  private resolveResourceMimeType(
+    resource: ResourceDescriptor & { type: FeishuSupportedResourceType },
+    filename: string,
+  ): string | undefined {
+    return detectMimeType(filename) || (resource.type === "image" ? "image/png" : undefined);
+  }
+
+  private async downloadMessageResource(
+    messageId: string,
+    fileKey: string,
+    type: FeishuSupportedResourceType,
+  ): Promise<Buffer> {
+    if (!this.channel) {
+      throw new Error("[Feishu] Channel not initialized");
+    }
+
+    const rawClient = this.channel.rawClient as
+      | {
+          im?: {
+            v1?: {
+              messageResource?: {
+                get?: (payload: {
+                  path: { message_id: string; file_key: string };
+                  params: { type: string };
+                }) => Promise<{ getReadableStream: () => NodeJS.ReadableStream }>;
+              };
+            };
+          };
+        }
+      | undefined;
+    const getMessageResource = rawClient?.im?.v1?.messageResource?.get;
+    if (getMessageResource) {
+      const response = await getMessageResource({
+        path: {
+          message_id: messageId,
+          file_key: fileKey,
+        },
+        params: { type },
+      });
+      return streamToBuffer(response.getReadableStream());
+    }
+
+    return this.channel.downloadResource(fileKey, type);
   }
 
   private async sendFileSafe(

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
 
 import {
@@ -90,12 +91,28 @@ test("normalizeFeishuMessage accepts image messages", () => {
     }),
     {
       action: "handle",
-      text: "(User sent an image)",
+      text: "(User sent an attachment)",
     },
   );
 });
 
-test("normalizeFeishuMessage returns fallback for non-image messages", () => {
+test("normalizeFeishuMessage accepts file messages", () => {
+  assert.deepEqual(
+    normalizeFeishuMessage({
+      chatType: "p2p",
+      mentionedBot: false,
+      rawContentType: "file",
+      content: "",
+      resources: [{ type: "file", fileKey: "file_key", fileName: "report.pdf" }],
+    }),
+    {
+      action: "handle",
+      text: "(User sent an attachment)",
+    },
+  );
+});
+
+test("normalizeFeishuMessage returns fallback for unsupported resources", () => {
   assert.deepEqual(
     normalizeFeishuMessage({
       chatType: "p2p",
@@ -115,7 +132,10 @@ test("FeishuAdapter downloads inbound images for the agent", async () => {
   const imageBuffer = Buffer.from("fake image body");
 
   try {
-    const downloadCalls: Array<{ fileKey: string; type: string }> = [];
+    const resourceCalls: Array<{
+      path: { message_id: string; file_key: string };
+      params: { type: string };
+    }> = [];
     const sendCalls: Array<{
       chatId: string;
       input: unknown;
@@ -141,9 +161,22 @@ test("FeishuAdapter downloads inbound images for the agent", async () => {
     (adapter as any).rootDir = tempDir;
     (adapter as any).channel = {
       addReaction: async () => "reaction-id",
-      downloadResource: async (fileKey: string, type: string) => {
-        downloadCalls.push({ fileKey, type });
-        return imageBuffer;
+      rawClient: {
+        im: {
+          v1: {
+            messageResource: {
+              get: async (payload: {
+                path: { message_id: string; file_key: string };
+                params: { type: string };
+              }) => {
+                resourceCalls.push(payload);
+                return {
+                  getReadableStream: () => Readable.from([imageBuffer]),
+                };
+              },
+            },
+          },
+        },
       },
       send: async (
         chatId: string,
@@ -193,10 +226,15 @@ test("FeishuAdapter downloads inbound images for the agent", async () => {
       createTime: 0,
     });
 
-    assert.deepEqual(downloadCalls, [{ fileKey: "img_key", type: "image" }]);
+    assert.deepEqual(resourceCalls, [
+      {
+        path: { message_id: "om_image", file_key: "img_key" },
+        params: { type: "image" },
+      },
+    ]);
     assert.equal(handled?.platform, "feishu");
     assert.equal(handled?.channelId, "feishu-oc_image_chat");
-    assert.equal(handled?.text, "(User sent an image)");
+    assert.equal(handled?.text, "(User sent an attachment)");
     assert.equal(handled?.attachments?.length, 1);
     assert.equal(handled?.attachments?.[0]?.filename, "chart.png");
     assert.equal(handled?.attachments?.[0]?.mimeType, "image/png");
@@ -217,7 +255,115 @@ test("FeishuAdapter downloads inbound images for the agent", async () => {
   }
 });
 
-test("FeishuAdapter replies when inbound image download fails", async () => {
+test("FeishuAdapter downloads inbound files for the agent", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "feishu-adapter-"));
+  const fileBuffer = Buffer.from("quarterly report");
+
+  try {
+    const resourceCalls: Array<{
+      path: { message_id: string; file_key: string };
+      params: { type: string };
+    }> = [];
+    let handled: {
+      platform: string;
+      channelId: string;
+      text: string;
+      attachments?: Array<{
+        filename: string;
+        localPath: string;
+        mimeType?: string;
+        size?: number;
+      }>;
+    } | null = null;
+
+    const adapter = new FeishuAdapter({
+      appId: "app-id",
+      appSecret: "app-secret",
+    });
+
+    (adapter as any).rootDir = tempDir;
+    (adapter as any).channel = {
+      addReaction: async () => "reaction-id",
+      rawClient: {
+        im: {
+          v1: {
+            messageResource: {
+              get: async (payload: {
+                path: { message_id: string; file_key: string };
+                params: { type: string };
+              }) => {
+                resourceCalls.push(payload);
+                return {
+                  getReadableStream: () => Readable.from([fileBuffer]),
+                };
+              },
+            },
+          },
+        },
+      },
+      send: async () => ({ messageId: "outbound-message" }),
+    };
+
+    (adapter as any).agent = {
+      handleMessage: async (
+        platform: string,
+        channelId: string,
+        text: string,
+        _onEvent: (event: any) => void,
+        attachments?: any[],
+      ) => {
+        handled = { platform, channelId, text, attachments };
+        return { stopReason: "completed" };
+      },
+      handleCommand: async () => ({ success: true }),
+      abort: () => {},
+      isRunning: () => false,
+      dispose: () => {},
+      listSessions: () => [],
+      restoreSession: async () => {},
+      getActiveChannelIds: () => [],
+      getAuthStorage: () => null,
+      updateAuth: () => {},
+    };
+
+    await (adapter as any).handleIncomingMessage({
+      messageId: "om_file",
+      chatId: "oc_file_chat",
+      chatType: "p2p",
+      senderId: "ou_789",
+      senderName: "alice",
+      content: "",
+      rawContentType: "file",
+      resources: [{ type: "file", fileKey: "file_key", fileName: "report.txt" }],
+      mentions: [],
+      mentionAll: false,
+      mentionedBot: false,
+      createTime: 0,
+    });
+
+    assert.deepEqual(resourceCalls, [
+      {
+        path: { message_id: "om_file", file_key: "file_key" },
+        params: { type: "file" },
+      },
+    ]);
+    assert.equal(handled?.platform, "feishu");
+    assert.equal(handled?.channelId, "feishu-oc_file_chat");
+    assert.equal(handled?.text, "(User sent an attachment)");
+    assert.equal(handled?.attachments?.length, 1);
+    assert.equal(handled?.attachments?.[0]?.filename, "report.txt");
+    assert.equal(handled?.attachments?.[0]?.mimeType, "text/plain");
+    assert.equal(handled?.attachments?.[0]?.size, fileBuffer.byteLength);
+    assert.equal(
+      fs.readFileSync(handled!.attachments![0]!.localPath, "utf-8"),
+      "quarterly report",
+    );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("FeishuAdapter replies when inbound attachment download fails", async () => {
   const sendCalls: Array<{
     chatId: string;
     input: unknown;
@@ -239,8 +385,16 @@ test("FeishuAdapter replies when inbound image download fails", async () => {
 
     (adapter as any).channel = {
       addReaction: async () => "reaction-id",
-      downloadResource: async () => {
-        throw new Error("download failed");
+      rawClient: {
+        im: {
+          v1: {
+            messageResource: {
+              get: async () => {
+                throw new Error("download failed");
+              },
+            },
+          },
+        },
       },
       send: async (
         chatId: string,
@@ -269,14 +423,14 @@ test("FeishuAdapter replies when inbound image download fails", async () => {
     };
 
     await (adapter as any).handleIncomingMessage({
-      messageId: "om_image",
-      chatId: "oc_image_chat",
+      messageId: "om_file",
+      chatId: "oc_file_chat",
       chatType: "p2p",
       senderId: "ou_789",
       senderName: "alice",
       content: "",
-      rawContentType: "image",
-      resources: [{ type: "image", fileKey: "img_key", fileName: "chart.png" }],
+      rawContentType: "file",
+      resources: [{ type: "file", fileKey: "file_key", fileName: "report.pdf" }],
       mentions: [],
       mentionAll: false,
       mentionedBot: false,
@@ -284,12 +438,12 @@ test("FeishuAdapter replies when inbound image download fails", async () => {
     });
 
     assert.equal(handled, false);
-    assert.match(String(consoleErrors[0]?.[0]), /Failed to download image/);
+    assert.match(String(consoleErrors[0]?.[0]), /Failed to download file/);
     assert.deepEqual(sendCalls, [
       {
-        chatId: "oc_image_chat",
-        input: { markdown: "The image could not be downloaded from Feishu." },
-        opts: { replyTo: "om_image" },
+        chatId: "oc_file_chat",
+        input: { markdown: "The attachment could not be downloaded from Feishu." },
+        opts: { replyTo: "om_file" },
       },
     ]);
   } finally {
