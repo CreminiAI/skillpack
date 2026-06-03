@@ -44,7 +44,7 @@
   "author": "CreminiAI",
   "license": "MIT",
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.75.5",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
     "@larksuiteoapi/node-sdk": "^1.66.1",
     "@sinclair/typebox": "^0.34.41",
     "@slack/bolt": "^4.6.0",
