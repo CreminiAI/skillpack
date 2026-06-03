@@ -9,6 +9,7 @@ import type {
   AdapterContext,
   AgentEvent,
   BotCommand,
+  ChannelAttachment,
   IPackAgent,
   IpcBroadcaster,
   MessageSender,
@@ -18,7 +19,9 @@ import {
   createResilientLarkChannel,
   type ResilientLarkChannel,
 } from "./resilient-lark-channel.js";
+import { isImageMime, saveAttachment } from "./attachment-utils.js";
 import { resolveCommand } from "../commands/index.js";
+import { detectMimeType } from "../files/metadata.js";
 
 export interface FeishuAdapterOptions {
   appId: string;
@@ -37,6 +40,9 @@ const UNSUPPORTED_MESSAGE_REPLY =
   "Only text messages are currently supported. Please send plain text.";
 const FILE_DELIVERY_FAILED_REPLY =
   "A file was generated, but Feishu could not deliver it.";
+const IMAGE_DOWNLOAD_FAILED_REPLY =
+  "The image could not be downloaded from Feishu.";
+const IMAGE_MESSAGE_TEXT = "(User sent an image)";
 
 export function normalizeFeishuDomain(
   domain: unknown,
@@ -65,18 +71,31 @@ export function parseFeishuChannelId(channelId: string): string {
 }
 
 export function normalizeFeishuMessage(
-  message: Pick<NormalizedMessage, "chatType" | "mentionedBot" | "rawContentType" | "content">,
+  message: Pick<
+    NormalizedMessage,
+    "chatType" | "mentionedBot" | "rawContentType" | "content" | "resources"
+  >,
 ): FeishuMessageHandlingDecision {
   if (message.chatType === "group" && !message.mentionedBot) {
     return { action: "ignore" };
   }
 
-  if (message.rawContentType !== "text") {
+  const hasImageResource = message.resources.some(
+    (resource) => resource.type === "image",
+  );
+
+  if (message.rawContentType !== "text" && !hasImageResource) {
     return { action: "unsupported" };
   }
 
-  const text = message.content.trim();
+  const text = message.rawContentType === "text" ? message.content.trim() : "";
   if (!text) {
+    if (hasImageResource) {
+      return {
+        action: "handle",
+        text: IMAGE_MESSAGE_TEXT,
+      };
+    }
     return { action: "ignore" };
   }
 
@@ -92,6 +111,7 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
   private channel: ResilientLarkChannel | null = null;
   private agent: IPackAgent | null = null;
   private ipcBroadcaster: IpcBroadcaster | null = null;
+  private rootDir = process.cwd();
   private readonly options: FeishuAdapterOptions;
 
   constructor(options: FeishuAdapterOptions) {
@@ -101,6 +121,7 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
   async start(ctx: AdapterContext): Promise<void> {
     this.agent = ctx.agent;
     this.ipcBroadcaster = ctx.ipcBroadcaster ?? null;
+    this.rootDir = ctx.rootDir;
     const domain = normalizeFeishuDomain(this.options.domain);
 
     this.channel = createResilientLarkChannel({
@@ -195,6 +216,16 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     }
 
     const userText = decision.text;
+    const attachments = await this.extractImageAttachments(message, channelId);
+    if (
+      userText === IMAGE_MESSAGE_TEXT &&
+      this.hasImageResources(message) &&
+      attachments.length === 0
+    ) {
+      await this.sendSafe(message.chatId, IMAGE_DOWNLOAD_FAILED_REPLY, message.messageId);
+      return;
+    }
+
     this.ipcBroadcaster?.broadcastInbound(
       channelId,
       "feishu",
@@ -242,6 +273,7 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
         channelId,
         userText,
         onEvent,
+        attachments.length > 0 ? attachments : undefined,
       );
 
       if (result.errorMessage) {
@@ -343,6 +375,50 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
     }
   }
 
+  private hasImageResources(message: NormalizedMessage): boolean {
+    return message.resources.some((resource) => resource.type === "image");
+  }
+
+  private async extractImageAttachments(
+    message: NormalizedMessage,
+    channelId: string,
+  ): Promise<ChannelAttachment[]> {
+    if (!this.channel) {
+      return [];
+    }
+
+    const imageResources = message.resources.filter(
+      (resource) => resource.type === "image",
+    );
+    const attachments: ChannelAttachment[] = [];
+
+    for (const [index, resource] of imageResources.entries()) {
+      try {
+        const buffer = await this.channel.downloadResource(
+          resource.fileKey,
+          "image",
+        );
+        const filename = resource.fileName?.trim() || `image-${index + 1}.png`;
+        attachments.push(
+          await saveAttachment(
+            this.rootDir,
+            channelId,
+            filename,
+            buffer,
+            detectMimeType(filename) || "image/png",
+          ),
+        );
+      } catch (error) {
+        console.error(
+          `[Feishu] Failed to download image ${resource.fileKey}:`,
+          error,
+        );
+      }
+    }
+
+    return attachments;
+  }
+
   private async sendFileSafe(
     chatId: string,
     filePath: string,
@@ -361,6 +437,20 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
 
       if (caption?.trim()) {
         await this.sendSafe(chatId, caption, replyTo);
+      }
+
+      const mimeType = detectMimeType(filePath);
+      if (isImageMime(mimeType)) {
+        await this.channel.send(
+          chatId,
+          {
+            image: {
+              source: filePath,
+            },
+          },
+          replyTo ? { replyTo } : undefined,
+        );
+        return true;
       }
 
       await this.channel.send(
