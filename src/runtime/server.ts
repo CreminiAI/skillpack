@@ -26,6 +26,31 @@ export interface ServerOptions {
   runtimeMode?: "standalone" | "embedded";
 }
 
+type DisconnectEmitter = {
+  on(event: "disconnect", listener: () => void): unknown;
+};
+
+export function registerEmbeddedParentDisconnectShutdown({
+  runtimeMode,
+  hasIpcChannel,
+  lifecycle,
+  proc = process,
+}: {
+  runtimeMode: "standalone" | "embedded";
+  hasIpcChannel: boolean;
+  lifecycle: Pick<Lifecycle, "requestShutdown">;
+  proc?: DisconnectEmitter;
+}): void {
+  if (runtimeMode !== "embedded" || !hasIpcChannel) {
+    return;
+  }
+
+  proc.on("disconnect", () => {
+    console.warn("[Runtime] Parent IPC disconnected; shutting down embedded runtime.");
+    void lifecycle.requestShutdown("parent_disconnect");
+  });
+}
+
 /**
  * Start the SkillPack runtime server.
  * Reads skillpack.json plus pack/runtime config files from rootDir, starts
@@ -323,6 +348,12 @@ export async function startServer(options: ServerOptions): Promise<void> {
   process.on("SIGTERM", () => {
     registryDeregister(canonicalRootDir, process.pid);
     void lifecycle.requestShutdown("signal");
+  });
+
+  registerEmbeddedParentDisconnectShutdown({
+    runtimeMode,
+    hasIpcChannel,
+    lifecycle,
   });
 
   if (webEnabled) {

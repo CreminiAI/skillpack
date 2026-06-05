@@ -23,7 +23,10 @@ export type RuntimePlatform =
 
 export type NotifyTargetPlatform = Exclude<RuntimePlatform, "scheduler">;
 
-export type LifecycleTrigger = Exclude<RuntimePlatform, "scheduler"> | "signal";
+export type LifecycleTrigger =
+  | Exclude<RuntimePlatform, "scheduler">
+  | "signal"
+  | "parent_disconnect";
 
 export function detectPlatformFromChannelId(channelId: string): RuntimePlatform {
   if (channelId.startsWith("telegram-")) return "telegram";
