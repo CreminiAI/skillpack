@@ -61,6 +61,7 @@ const PACK_AGENTS_FILE = "AGENTS.md";
 const PACK_SOUL_FILE = "SOUL.md";
 const BUILTIN_TOOL_NAMES = ["read", "bash", "edit", "write"];
 const FREVANA_SYSTEM_PROMPTS_ENV = "FREVANA_SYSTEM_PROMPTS";
+const SKILLPACK_ADDITIONAL_SKILL_PATHS_ENV = "SKILLPACK_ADDITIONAL_SKILL_PATHS";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -101,6 +102,53 @@ export function readFrevanaSystemPrompts(
 ): string | undefined {
   const content = env[FREVANA_SYSTEM_PROMPTS_ENV]?.trim();
   return content ? content : undefined;
+}
+
+export function readAdditionalSkillPaths(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const rawValue = env[SKILLPACK_ADDITIONAL_SKILL_PATHS_ENV];
+  if (!rawValue) {
+    return [];
+  }
+
+  const paths: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of rawValue.split(path.delimiter)) {
+    const trimmed = entry.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const resolvedPath = path.resolve(trimmed);
+    if (seen.has(resolvedPath)) {
+      continue;
+    }
+
+    try {
+      if (
+        !fs.existsSync(resolvedPath) ||
+        !fs.statSync(resolvedPath).isDirectory()
+      ) {
+        console.warn(
+          `[PackAgent] Warning: Ignoring missing additional skill path: ${resolvedPath}`,
+        );
+        continue;
+      }
+    } catch (error) {
+      console.warn(
+        `[PackAgent] Warning: Could not inspect additional skill path ${resolvedPath}:`,
+        error,
+      );
+      continue;
+    }
+
+    seen.add(resolvedPath);
+    paths.push(resolvedPath);
+  }
+
+  return paths;
 }
 
 export function buildSystemPromptOverrides(
@@ -467,6 +515,12 @@ export class PackAgent implements IPackAgent {
 
       const skillsPath = path.resolve(rootDir, "skills");
       log(`[PackAgent] Loading skills from: ${skillsPath}`);
+      const additionalSkillPaths = readAdditionalSkillPaths();
+      for (const additionalSkillPath of additionalSkillPaths) {
+        log(
+          `[PackAgent] Loading additional skills from: ${additionalSkillPath}`,
+        );
+      }
       const materializedSkillCreator = materializeBuiltinSkillCreator(
         rootDir,
         skillsPath,
@@ -507,7 +561,7 @@ export class PackAgent implements IPackAgent {
         cwd: rootDir,
         agentDir: getAgentDir(),
         noSkills: true,
-        additionalSkillPaths: [skillsPath],
+        additionalSkillPaths: [skillsPath, ...additionalSkillPaths],
         skillsOverride: (base) =>
           overrideBuiltinSkillCreator(base, materializedSkillCreator),
         agentsFilesOverride: () => ({ agentsFiles: [] }),

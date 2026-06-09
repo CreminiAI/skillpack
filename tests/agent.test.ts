@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
   buildActiveToolNames,
   buildSystemPromptOverrides,
   createCustomProviderModelConfig,
+  readAdditionalSkillPaths,
   readFrevanaSystemPrompts,
 } from "../src/runtime/agent.js";
 
@@ -60,6 +64,40 @@ test("Frevana system prompts trim outer whitespace and preserve internal newline
     readFrevanaSystemPrompts(env),
     "# Host Policy\n\nLine one\nLine two",
   );
+});
+
+test("additional skill paths are empty when env is unset", () => {
+  assert.deepEqual(readAdditionalSkillPaths({}), []);
+});
+
+test("additional skill paths parse valid directories and ignore invalid entries", () => {
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "skillpack-extra-skills-"),
+  );
+  const validDir = path.join(tempDir, "valid");
+  const duplicateDir = path.join(tempDir, "valid");
+  const filePath = path.join(tempDir, "file.txt");
+  const missingDir = path.join(tempDir, "missing");
+
+  fs.mkdirSync(validDir);
+  fs.writeFileSync(filePath, "not a directory", "utf-8");
+
+  try {
+    assert.deepEqual(
+      readAdditionalSkillPaths({
+        SKILLPACK_ADDITIONAL_SKILL_PATHS: [
+          validDir,
+          filePath,
+          missingDir,
+          duplicateDir,
+          "",
+        ].join(path.delimiter),
+      }),
+      [validDir],
+    );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("active tool allowlist includes SDK custom tools", () => {
