@@ -34,6 +34,7 @@ type IpcRequest =
   | { id: string; type: "command"; command: BotCommand; channelId: string }
   | { id: string; type: "get_config" }
   | { id: string; type: "update_config"; updates: Partial<DataConfig> }
+  | { id: string; type: "update_runtime_auth"; provider: string; token: string }
   | { id: string; type: "get_status" }
   | { id: string; type: "get_scheduled_jobs" }
   | { id: string; type: "add_scheduled_job"; job: ScheduledJobConfig }
@@ -60,6 +61,7 @@ const IPC_REQUEST_TYPES = new Set<IpcRequest["type"]>([
   "command",
   "get_config",
   "update_config",
+  "update_runtime_auth",
   "get_status",
   "get_scheduled_jobs",
   "add_scheduled_job",
@@ -293,6 +295,24 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           const provider = updated.provider || "openai";
           this.agent.updateAuth(provider, updated.apiKey);
           this.reply(request.id, updated);
+          return;
+        }
+
+        case "update_runtime_auth": {
+          if (typeof request.provider !== "string" || !request.provider.trim()) {
+            this.replyError(request.id, "provider is required");
+            return;
+          }
+          if (typeof request.token !== "string") {
+            this.replyError(request.id, "token is required");
+            return;
+          }
+          const provider = request.provider.trim();
+          process.env.FREVANA_TOKEN = request.token;
+          process.env.SKILLPACK_API_KEY = request.token;
+          process.env.SKILLPACK_PROVIDER = provider;
+          this.agent.updateAuth(provider, request.token);
+          this.reply(request.id, { success: true });
           return;
         }
 

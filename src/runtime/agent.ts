@@ -415,8 +415,8 @@ export class PackAgent implements IPackAgent {
     // Remove old runtime key
     this.authStorage.removeRuntimeApiKey(this.options.provider);
     this.options.provider = provider;
+    this.options.apiKey = apiKey ?? "";
     if (apiKey) {
-      this.options.apiKey = apiKey;
       this.authStorage.setRuntimeApiKey(provider, apiKey);
     }
   }
