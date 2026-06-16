@@ -14,6 +14,7 @@ import {
 
 test("custom provider model config enables reasoning when requested", () => {
   const customModel = createCustomProviderModelConfig({
+    provider: "openai",
     modelId: "gpt-5.4",
     apiProtocol: "openai-completions",
     reasoning: true,
@@ -22,6 +23,61 @@ test("custom provider model config enables reasoning when requested", () => {
   assert.equal(customModel.api, "openai-completions");
   assert.equal(customModel.reasoning, true);
   assert.deepEqual(customModel.input, ["text", "image"]);
+});
+
+test("custom provider model config reuses registry metadata except api", () => {
+  const customModel = createCustomProviderModelConfig(
+    {
+      provider: "anthropic",
+      modelId: "claude-opus-4-6",
+      apiProtocol: "openai-completions",
+    },
+    {
+      find(provider, modelId) {
+        assert.equal(provider, "anthropic");
+        assert.equal(modelId, "claude-opus-4-6");
+
+        return {
+          id: "claude-opus-4-6",
+          name: "Claude Opus 4.6",
+          api: "anthropic-messages",
+          provider: "anthropic",
+          baseUrl: "https://api.anthropic.com",
+          reasoning: true,
+          thinkingLevelMap: { off: null, medium: "enabled" },
+          input: ["text"],
+          cost: {
+            input: 15,
+            output: 75,
+            cacheRead: 1.5,
+            cacheWrite: 18.75,
+          },
+          contextWindow: 200000,
+          maxTokens: 32000,
+          headers: { "x-test": "1" },
+        };
+      },
+    },
+  );
+
+  assert.equal(customModel.api, "openai-completions");
+  assert.equal(customModel.name, "Claude Opus 4.6");
+  assert.equal(customModel.reasoning, true);
+  assert.deepEqual(customModel.thinkingLevelMap, {
+    off: null,
+    medium: "enabled",
+  });
+  assert.deepEqual(customModel.input, ["text"]);
+  assert.deepEqual(customModel.cost, {
+    input: 15,
+    output: 75,
+    cacheRead: 1.5,
+    cacheWrite: 18.75,
+  });
+  assert.equal(customModel.contextWindow, 200000);
+  assert.equal(customModel.maxTokens, 32000);
+  assert.deepEqual(customModel.headers, { "x-test": "1" });
+  assert.equal("baseUrl" in customModel, false);
 });
 
 test("system prompt overrides preserve existing behavior without Frevana prompts", () => {

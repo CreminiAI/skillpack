@@ -67,6 +67,10 @@ const SKILLPACK_ADDITIONAL_SKILL_PATHS_ENV = "SKILLPACK_ADDITIONAL_SKILL_PATHS";
 // Helpers
 // ---------------------------------------------------------------------------
 
+type CustomProviderModelConfig = NonNullable<
+  Parameters<ModelRegistry["registerProvider"]>[1]["models"]
+>[number];
+
 interface AssistantDiagnostics {
   stopReason: string;
   errorMessage: string;
@@ -83,12 +87,46 @@ interface PackPromptFiles {
 }
 
 export function createCustomProviderModelConfig(
-  options: Pick<PackAgentOptions, "modelId" | "apiProtocol" | "reasoning">,
-) {
+  options: Pick<
+    PackAgentOptions,
+    "provider" | "modelId" | "apiProtocol" | "reasoning"
+  >,
+  modelRegistry?: Pick<ModelRegistry, "find">,
+): CustomProviderModelConfig {
+  const api = (options.apiProtocol ??
+    "openai-completions") as CustomProviderModelConfig["api"];
+  const registryModel = modelRegistry?.find(options.provider, options.modelId);
+  if (registryModel) {
+    const customModel: CustomProviderModelConfig = {
+      id: registryModel.id,
+      name: registryModel.name,
+      api,
+      reasoning: api === "openai-completions" ? false : registryModel.reasoning,
+      input: [...registryModel.input],
+      cost: { ...registryModel.cost },
+      contextWindow: registryModel.contextWindow,
+      maxTokens: registryModel.maxTokens,
+    };
+
+    if (registryModel.thinkingLevelMap) {
+      customModel.thinkingLevelMap = { ...registryModel.thinkingLevelMap };
+    }
+    if (registryModel.headers) {
+      customModel.headers = { ...registryModel.headers };
+    }
+    if (registryModel.compat) {
+      customModel.compat = {
+        ...registryModel.compat,
+      } as CustomProviderModelConfig["compat"];
+    }
+
+    return customModel;
+  }
+
   return {
     id: options.modelId,
     name: options.modelId,
-    api: (options.apiProtocol ?? "openai-completions") as any,
+    api,
     reasoning: options.reasoning ?? false,
     input: ["text", "image"] as Array<"text" | "image">,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -477,9 +515,13 @@ export class PackAgent implements IPackAgent {
       // correct API protocol. Most proxies/local endpoints use the Completions API,
       // so default to "openai-completions" unless the user explicitly chose "openai-responses".
       if (baseUrl && modelId) {
-        const customModel = createCustomProviderModelConfig(this.options);
+        const customModel = createCustomProviderModelConfig(
+          this.options,
+          modelRegistry,
+        );
         log(
-          `[PackAgent] Registering custom model ${provider}/${modelId} api=${customModel.api} baseUrl=${baseUrl}`,
+          `[PackAgent] Registering custom model: `,
+          JSON.stringify(customModel),
         );
         modelRegistry.registerProvider(provider, {
           baseUrl,
