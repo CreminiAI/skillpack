@@ -133,6 +133,52 @@ Download [Company Deep Research](https://github.com/FinpeakInc/downloads/release
 
 Join our Discord at https://discord.gg/nj8Br4ePJc
 
+## ❓ FAQ
+
+### What is SkillPack?
+SkillPack is an open-source tool to package AI skills into reusable local agents that teams can run in their own environment and use directly from **Slack** and **Telegram**.
+
+### Key Features
+| Feature | Description |
+|---------|-------------|
+| Package AI Skills | Assemble skills into complete solutions |
+| Run Locally | Keep sensitive data in your own environment |
+| Slack Integration | Talk to agents from Slack in 5 minutes |
+| Telegram Integration | Talk to agents from Telegram in 1 minute |
+| One-Click Launch | start.sh / start.bat |
+| Scheduled Jobs | Optional job.json shipped with pack |
+
+### Quick Start
+| Step | Command |
+|------|---------|
+| Run skillpack | Download, unzip, ./start.sh or start.bat |
+| Create new | npx @cremini/skillpack create |
+| Package | npx @cremini/skillpack zip |
+
+### Skill Source Formats
+- GitHub shorthand: `vercel-labs/agent-skills --skill frontend-design`
+- Full URL: `https://github.com/JimLiu/baoyu-skills/tree/main/skills --skill baoyu-comic`
+- Local: `./skills/my-local-skill`
+
+### Zip Contents
+| File | Purpose |
+|------|---------|
+| skillpack.json | Pack configuration |
+| job.json | Optional scheduled jobs |
+| skills/ | Installed skills |
+| start.sh / start.bat | One-click launcher |
+
+### Is SkillPack Free?
+Yes, MIT License. Node.js 22.19.0+ required.
+
+### Help Resources
+| Channel | Link |
+|---------|------|
+| Discord | https://discord.gg/nj8Br4ePJc |
+| Website | https://skillpack.sh |
+
+---
+
 ## License
 
 MIT
