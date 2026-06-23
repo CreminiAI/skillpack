@@ -67,3 +67,82 @@ test("zipCommand skips job.json when it does not exist", async () => {
     assert.equal(zipText.includes("zip-pack/skillpack.json"), true);
   });
 });
+
+test("zipCommand includes app.html when it exists", async () => {
+  await withTempDir(async (dir) => {
+    createPack(dir);
+    fs.writeFileSync(path.join(dir, "app.html"), "<!doctype html>", "utf-8");
+
+    const zipPath = await zipCommand(dir);
+    const zipText = fs.readFileSync(zipPath, "utf-8");
+
+    assert.equal(zipText.includes("zip-pack/app.html"), true);
+  });
+});
+
+test("zipCommand skips app.html when it does not exist", async () => {
+  await withTempDir(async (dir) => {
+    createPack(dir);
+
+    const zipPath = await zipCommand(dir);
+    const zipText = fs.readFileSync(zipPath, "utf-8");
+
+    assert.equal(zipText.includes("zip-pack/app.html"), false);
+  });
+});
+
+test("zipCommand continues installing other skills after one fails", async () => {
+  await withTempDir(async (dir) => {
+    createPack(dir);
+    const binDir = path.join(dir, "bin");
+    const installLog = path.join(dir, "install.log");
+    fs.mkdirSync(binDir);
+    fs.writeFileSync(
+      path.join(binDir, "npx"),
+      [
+        "#!/bin/sh",
+        'printf "%s\\n" "$*" >> "$SKILLPACK_TEST_INSTALL_LOG"',
+        'case "$*" in',
+        "  *first-skill*) exit 1 ;;",
+        "esac",
+        "exit 0",
+        "",
+      ].join("\n"),
+      { encoding: "utf-8", mode: 0o755 },
+    );
+    saveConfig(dir, {
+      name: "Zip Pack",
+      description: "Pack used for zip tests",
+      version: "1.0.0",
+      prompts: [],
+      skills: [
+        {
+          name: "first-skill",
+          source: "first-source",
+          description: "",
+        },
+        {
+          name: "second-skill",
+          source: "second-source",
+          description: "",
+        },
+      ],
+    });
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = binDir;
+    process.env.SKILLPACK_TEST_INSTALL_LOG = installLog;
+    try {
+      const zipPath = await zipCommand(dir);
+      const zipText = fs.readFileSync(zipPath, "utf-8");
+      const installAttempts = fs.readFileSync(installLog, "utf-8");
+
+      assert.match(installAttempts, /--skill first-skill/);
+      assert.match(installAttempts, /--skill second-skill/);
+      assert.equal(zipText.includes("zip-pack/skillpack.json"), true);
+    } finally {
+      process.env.PATH = originalPath;
+      delete process.env.SKILLPACK_TEST_INSTALL_LOG;
+    }
+  });
+});

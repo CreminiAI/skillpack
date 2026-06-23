@@ -10,14 +10,14 @@ import {
 } from "../pack-config.js";
 import { getJobFilePath, JOB_FILE } from "../job-config.js";
 import {
-  installConfiguredSkills,
+  installSkills,
   syncSkillDescriptions,
 } from "../skill-manager.js";
 
 /**
  * Package the pack as a lightweight zip file.
- * Includes: skillpack.json, optional job.json, optional AGENTS.md / SOUL.md,
- * start.sh, start.bat, skills/
+ * Includes: skillpack.json, optional job.json, optional app.html,
+ * optional AGENTS.md / SOUL.md, start.sh, start.bat, skills/
  * Does NOT include server/, web/, or any other runtime files.
  */
 export async function zipCommand(workDir: string): Promise<string> {
@@ -26,8 +26,16 @@ export async function zipCommand(workDir: string): Promise<string> {
   const zipName = `${slug}.zip`;
   const zipPath = path.join(workDir, zipName);
 
-  // Reinstall and sync skills before packaging
-  installConfiguredSkills(workDir, config);
+  // Reinstall each skill independently so one failure does not block the rest.
+  for (const skill of config.skills) {
+    try {
+      installSkills(workDir, [skill]);
+    } catch (err) {
+      console.warn(
+        chalk.yellow(`Warning: Could not install skill "${skill.name}": ${err}`),
+      );
+    }
+  }
   syncSkillDescriptions(workDir, config);
   saveConfig(workDir, config);
 
@@ -62,7 +70,13 @@ export async function zipCommand(workDir: string): Promise<string> {
       archive.file(jobFilePath, { name: `${prefix}/${JOB_FILE}` });
     }
 
-    // 3. optional pack-level prompt files
+    // 3. optional custom app
+    const appHtmlPath = path.join(workDir, "app.html");
+    if (fs.existsSync(appHtmlPath)) {
+      archive.file(appHtmlPath, { name: `${prefix}/app.html` });
+    }
+
+    // 4. optional pack-level prompt files
     for (const file of ["AGENTS.md", "SOUL.md"]) {
       const filePath = path.join(workDir, file);
       if (fs.existsSync(filePath)) {
@@ -70,19 +84,19 @@ export async function zipCommand(workDir: string): Promise<string> {
       }
     }
 
-    // 4. skills directory
+    // 5. skills directory
     const skillsDir = path.join(workDir, "skills");
     if (fs.existsSync(skillsDir)) {
       archive.directory(skillsDir, `${prefix}/skills`);
     }
 
-    // 5. start.sh (with execute bit)
+    // 6. start.sh (with execute bit)
     const startSh = path.join(workDir, "start.sh");
     if (fs.existsSync(startSh)) {
       archive.file(startSh, { name: `${prefix}/start.sh`, mode: 0o755 });
     }
 
-    // 6. start.bat
+    // 7. start.bat
     const startBat = path.join(workDir, "start.bat");
     if (fs.existsSync(startBat)) {
       archive.file(startBat, { name: `${prefix}/start.bat` });
