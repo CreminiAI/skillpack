@@ -31,6 +31,7 @@ type IpcRequest =
       text: string;
       attachments?: ChannelAttachment[];
     }
+  | { id: string; type: "abort_run"; channelId: string }
   | { id: string; type: "command"; command: BotCommand; channelId: string }
   | { id: string; type: "get_config" }
   | { id: string; type: "update_config"; updates: Partial<DataConfig> }
@@ -58,6 +59,7 @@ const IPC_REQUEST_TYPES = new Set<IpcRequest["type"]>([
   "create_conversation",
   "get_messages",
   "send_message",
+  "abort_run",
   "command",
   "get_config",
   "update_config",
@@ -271,6 +273,21 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
           return;
         }
 
+        case "abort_run": {
+          if (!request.channelId || typeof request.channelId !== "string") {
+            this.replyError(request.id, "channelId is required");
+            return;
+          }
+
+          const wasRunning = this.agent.isRunning(request.channelId);
+          this.agent.abort(request.channelId);
+          this.reply(request.id, {
+            success: true,
+            aborted: wasRunning,
+          });
+          return;
+        }
+
         case "command": {
           if (!request.channelId || typeof request.channelId !== "string") {
             this.replyError(request.id, "channelId is required");
@@ -299,7 +316,10 @@ export class IpcAdapter implements PlatformAdapter, IpcBroadcaster {
         }
 
         case "update_runtime_auth": {
-          if (typeof request.provider !== "string" || !request.provider.trim()) {
+          if (
+            typeof request.provider !== "string" ||
+            !request.provider.trim()
+          ) {
             this.replyError(request.id, "provider is required");
             return;
           }

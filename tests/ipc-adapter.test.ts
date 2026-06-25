@@ -137,3 +137,39 @@ test("ipc send_message forwards validated attachments to the agent", async () =>
     fs.rmSync(rootDir, { recursive: true, force: true });
   }
 });
+
+test("ipc abort_run aborts the requested agent channel", async () => {
+  await withCapturedIpc(async (sent) => {
+    const calls: string[] = [];
+    const adapter = new IpcAdapter();
+
+    (adapter as any).agent = {
+      isRunning: (channelId: string) => {
+        calls.push(`isRunning:${channelId}`);
+        return true;
+      },
+      abort: (channelId: string) => {
+        calls.push(`abort:${channelId}`);
+      },
+    };
+    (adapter as any).conversationService = {};
+
+    await (adapter as any).handleRequest({
+      id: "req-abort",
+      type: "abort_run",
+      channelId: "web",
+    });
+
+    assert.deepEqual(calls, ["isRunning:web", "abort:web"]);
+    assert.deepEqual(sent, [
+      {
+        id: "req-abort",
+        type: "result",
+        data: {
+          success: true,
+          aborted: true,
+        },
+      },
+    ]);
+  });
+});

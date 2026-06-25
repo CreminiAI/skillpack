@@ -421,6 +421,7 @@ export class PackAgent implements IPackAgent {
   private options: PackAgentOptions;
   private channels = new Map<string, ChannelSession>();
   private pendingSessionCreations = new Map<string, Promise<ChannelSession>>();
+  private pendingAbortChannels = new Set<string>();
   private schedulerRef: { current: SchedulerAdapter | null } = {
     current: null,
   };
@@ -692,6 +693,10 @@ export class PackAgent implements IPackAgent {
       };
 
       try {
+        if (this.pendingAbortChannels.delete(channelId)) {
+          return { stopReason: "aborted" };
+        }
+
         const forwardAgentEvent = (event: AgentEvent): void => {
           if (event.type === "agent_start") {
             sawAgentStart = true;
@@ -941,6 +946,11 @@ export class PackAgent implements IPackAgent {
     const cs = this.channels.get(channelId);
     if (cs?.running) {
       cs.session.abort?.();
+      return;
+    }
+
+    if (cs || this.pendingSessionCreations.has(channelId)) {
+      this.pendingAbortChannels.add(channelId);
     }
   }
 
