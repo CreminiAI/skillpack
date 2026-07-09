@@ -124,6 +124,7 @@ test("skillpack runtime env overrides file config for pack agent options", () =>
       apiKey: "file-key",
       provider: "anthropic",
       baseUrl: "https://old.example.com",
+      modelId: "claude-file-model",
       apiProtocol: "openai-responses",
       reasoning: false,
     }),
@@ -135,6 +136,7 @@ test("skillpack runtime env overrides file config for pack agent options", () =>
       [SKILLPACK_RUNTIME_ENV.apiKey]: "frevana-token",
       [SKILLPACK_RUNTIME_ENV.provider]: "openai",
       [SKILLPACK_RUNTIME_ENV.baseUrl]: "http://localhost:8001/openai/v1",
+      [SKILLPACK_RUNTIME_ENV.modelId]: "gpt-env-model",
       [SKILLPACK_RUNTIME_ENV.apiProtocol]: "openai-completions",
       [SKILLPACK_RUNTIME_ENV.reasoning]: "true",
       OPENAI_API_KEY: undefined,
@@ -147,8 +149,39 @@ test("skillpack runtime env overrides file config for pack agent options", () =>
   assert.equal(loaded.apiKey, "frevana-token");
   assert.equal(loaded.provider, "openai");
   assert.equal(loaded.baseUrl, "http://localhost:8001/openai/v1");
+  assert.equal(loaded.modelId, "gpt-env-model");
   assert.equal(loaded.apiProtocol, "openai-completions");
   assert.equal(loaded.reasoning, true);
+});
+
+test("SKILLPACK_MODEL_ID overrides file model config only when explicitly set", () => {
+  const fileConfig = {
+    provider: "openai",
+    modelId: "gpt-file-model",
+  };
+
+  const inherited = withEnv(
+    {
+      [SKILLPACK_RUNTIME_ENV.modelId]: undefined,
+    },
+    () => resolveRuntimeConfig(fileConfig),
+  );
+  const overridden = withEnv(
+    {
+      [SKILLPACK_RUNTIME_ENV.modelId]: "  gpt-env-model  ",
+    },
+    () => resolveRuntimeConfig(fileConfig),
+  );
+  const cleared = withEnv(
+    {
+      [SKILLPACK_RUNTIME_ENV.modelId]: "",
+    },
+    () => resolveRuntimeConfig(fileConfig),
+  );
+
+  assert.equal(inherited.modelId, "gpt-file-model");
+  assert.equal(overridden.modelId, "gpt-env-model");
+  assert.equal(cleared.modelId, undefined);
 });
 
 test("explicit empty SKILLPACK_API_KEY overrides file config and provider env fallback", () => {
@@ -194,6 +227,7 @@ test("saving unrelated config does not persist skillpack runtime env overrides",
       [SKILLPACK_RUNTIME_ENV.apiKey]: "frevana-token",
       [SKILLPACK_RUNTIME_ENV.provider]: "openai",
       [SKILLPACK_RUNTIME_ENV.baseUrl]: "http://localhost:8001/openai/v1",
+      [SKILLPACK_RUNTIME_ENV.modelId]: "gpt-env-model",
       [SKILLPACK_RUNTIME_ENV.apiProtocol]: "openai-completions",
       [SKILLPACK_RUNTIME_ENV.reasoning]: "true",
     },

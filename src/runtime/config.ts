@@ -92,6 +92,7 @@ export const SKILLPACK_RUNTIME_ENV = {
   apiKey: "SKILLPACK_API_KEY",
   provider: "SKILLPACK_PROVIDER",
   baseUrl: "SKILLPACK_BASE_URL",
+  modelId: "SKILLPACK_MODEL_ID",
   apiProtocol: "SKILLPACK_API_PROTOCOL",
   reasoning: "SKILLPACK_REASONING",
 } as const;
@@ -194,7 +195,7 @@ export function resolveRuntimeConfig(
 ): DataConfig {
   const normalized = normalizeDataConfig(value);
   let { apiKey = "", provider = "openai", baseUrl = "" } = normalized;
-  let { apiProtocol, reasoning } = normalized;
+  let { apiProtocol, reasoning, modelId } = normalized;
 
   if (!apiKey) {
     if (env.OPENAI_API_KEY) {
@@ -224,6 +225,10 @@ export function resolveRuntimeConfig(
     baseUrl = env[SKILLPACK_RUNTIME_ENV.baseUrl] ?? "";
   }
 
+  if (hasEnvOverride(env, SKILLPACK_RUNTIME_ENV.modelId)) {
+    modelId = normalizeOptionalString(env[SKILLPACK_RUNTIME_ENV.modelId]);
+  }
+
   if (hasEnvOverride(env, SKILLPACK_RUNTIME_ENV.apiProtocol)) {
     const apiProtocolOverride = env[SKILLPACK_RUNTIME_ENV.apiProtocol];
     if (
@@ -248,6 +253,7 @@ export function resolveRuntimeConfig(
     apiKey,
     provider,
     baseUrl: baseUrl?.trim() || undefined,
+    modelId: modelId?.trim() || undefined,
     apiProtocol,
     reasoning,
   };

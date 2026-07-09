@@ -165,6 +165,7 @@ These variables are read by the runtime at startup and can override runtime fiel
 | `SKILLPACK_API_KEY` | Highest-priority runtime API key override | — |
 | `SKILLPACK_PROVIDER` | Highest-priority runtime provider override | — |
 | `SKILLPACK_BASE_URL` | Highest-priority runtime base URL override | — |
+| `SKILLPACK_MODEL_ID` | Highest-priority runtime model ID override | — |
 | `SKILLPACK_API_PROTOCOL` | Highest-priority runtime API protocol override | — |
 | `SKILLPACK_REASONING` | Highest-priority runtime reasoning flag override | — |
 | `OPENAI_API_KEY` | OpenAI API key fallback | — |
@@ -177,6 +178,7 @@ Priority order for PackAgent runtime auth/config is:
 3. Provider fallback env vars such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`
 
 In embedded hosts such as Frevana, prefer injecting `SKILLPACK_*` at process start instead of writing those values into `data/config.json`.
+`SKILLPACK_MODEL_ID` is optional; when it is not set, the runtime uses `data/config.json` `modelId` and then the provider default model.
 
 Example:
 
