@@ -7,7 +7,7 @@ import {
   ConversationService,
   DEFAULT_WEB_CHANNEL_ID,
 } from "../services/conversation.js";
-import type { SchedulerAdapter } from "./scheduler.js";
+import type { ScheduledJobUpdate, SchedulerAdapter } from "./scheduler.js";
 import type {
   AdapterContext,
   AgentEvent,
@@ -43,7 +43,7 @@ type IpcRequest =
       id: string;
       type: "update_scheduled_job";
       jobId: string;
-      updates: Omit<ScheduledJobConfig, "id" | "name">;
+      updates: ScheduledJobUpdate;
     }
   | {
       id: string;

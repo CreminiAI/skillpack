@@ -54,6 +54,10 @@ export interface JobStatus {
   notifyFailed: boolean;
 }
 
+export type ScheduledJobUpdate = Omit<ScheduledJobConfig, "id" | "name"> & {
+  name?: string;
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -405,7 +409,7 @@ export class SchedulerAdapter implements PlatformAdapter {
 
   updateJob(
     id: string,
-    updates: Omit<ScheduledJobConfig, "id" | "name">,
+    updates: ScheduledJobUpdate,
   ): { success: boolean; message: string } {
     const job = this.jobs.get(id);
     if (!job) {
@@ -414,7 +418,7 @@ export class SchedulerAdapter implements PlatformAdapter {
 
     const nextConfig: ScheduledJobConfig = {
       id: job.config.id,
-      name: job.config.name,
+      name: updates.name ?? job.config.name,
       cron: updates.cron,
       prompt: updates.prompt,
       promptExamples: updates.promptExamples,
@@ -431,7 +435,7 @@ export class SchedulerAdapter implements PlatformAdapter {
     this.persistJobs();
     return {
       success: true,
-      message: `Job "${job.config.name}" updated.`,
+      message: `Job "${nextConfig.name}" updated.`,
     };
   }
 

@@ -572,6 +572,38 @@ test("scheduler updates jobs between recurring and one-time modes", async () => 
       ],
     });
 
+    const renamed = scheduler.updateJob("mutable-job", {
+      name: "Renamed mutable job",
+      cron: "0 18 * * 5",
+      prompt: "Back to recurring",
+      promptExamples: ["Weekly wrap-up", "Highlight anomalies"],
+      notify: {
+        adapter: "web",
+        channelId: "web",
+      },
+      enabled: false,
+      timezone: "Asia/Shanghai",
+    });
+
+    assert.equal(renamed.success, true);
+    assert.deepEqual(loadJobFile(dir), {
+      jobs: [
+        {
+          id: "mutable-job",
+          name: "Renamed mutable job",
+          cron: "0 18 * * 5",
+          prompt: "Back to recurring",
+          promptExamples: ["Weekly wrap-up", "Highlight anomalies"],
+          notify: {
+            adapter: "web",
+            channelId: "web",
+          },
+          enabled: false,
+          timezone: "Asia/Shanghai",
+        },
+      ],
+    });
+
     await scheduler.stop();
   });
 });
