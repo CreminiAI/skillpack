@@ -48,6 +48,51 @@ test("manage_scheduled_task can create a scheduled job from web chat", async () 
   });
 });
 
+test("manage_scheduled_task can create a one-time job with an empty cron", async () => {
+  let capturedJob: any = null;
+  const tool = createManageScheduleTool(
+    {
+      current: {
+        addJob(job: unknown) {
+          capturedJob = job;
+          return { success: true, message: "created" };
+        },
+      } as any,
+    },
+    "web",
+    "web",
+    () => "generated-one-time-job-id",
+  );
+
+  const result = await tool.execute(
+    "call-one-time",
+    {
+      action: "add",
+      name: "one-time-brief",
+      cron: "",
+      prompt: "Send the brief",
+    },
+    {} as AbortSignal,
+    async () => {},
+    {} as any,
+  );
+
+  assert.equal(result.content[0]?.type, "text");
+  assert.equal((result.content[0] as any)?.text, "created");
+  assert.deepEqual(capturedJob, {
+    id: "generated-one-time-job-id",
+    name: "one-time-brief",
+    cron: "",
+    prompt: "Send the brief",
+    notify: {
+      adapter: "web",
+      channelId: "web",
+    },
+    enabled: true,
+    timezone: undefined,
+  });
+});
+
 test("manage_scheduled_task requires notify override fields as a pair", async () => {
   const tool = createManageScheduleTool(
     {

@@ -37,7 +37,7 @@ const ManageScheduleParams = Type.Object({
   cron: Type.Optional(
     Type.String({
       description:
-        "Cron expression (5 fields: minute hour day month weekday). Required for add.",
+        "Optional cron expression (5 fields: minute hour day month weekday). Omit or leave empty for a one-time task that runs only when manually triggered.",
     }),
   ),
   prompt: Type.Optional(
@@ -148,17 +148,17 @@ export function createManageScheduleTool(
     name: "manage_scheduled_task",
     label: "Manage Scheduled Task",
     description: [
-      "Manage scheduled tasks (cron jobs) that automatically execute prompts and push results to IM channels.",
+      "Manage scheduled and one-time tasks that execute prompts and push results to IM channels.",
       "",
       "Actions:",
-      "- add: Create a new scheduled task. Requires: name, cron, prompt. Notifications default to the current Telegram, Slack, Feishu, or Web chat. You can override the destination with notifyAdapter + notifyChannelId. The prompt must describe only the work for each run, not the schedule itself.",
+      "- add: Create a new task. Requires: name, prompt. Omit or leave cron empty for a one-time task that runs only when manually triggered. Notifications default to the current Telegram, Slack, Feishu, or Web chat. You can override the destination with notifyAdapter + notifyChannelId. The prompt must describe only the work for each run, not the schedule itself.",
       "- list: List all scheduled tasks with their status.",
       "- remove: Remove a scheduled task by display name.",
       "- trigger: Manually trigger a scheduled task by display name (runs immediately).",
       "- enable: Enable a disabled scheduled task by display name.",
       "- disable: Disable a scheduled task without removing it.",
       "",
-      "Cron expression format: '* * * * *' (minute hour day month weekday)",
+      "Cron expression format when provided: '* * * * *' (minute hour day month weekday)",
       "Examples:",
       "  '0 9 * * 1-5'  = every weekday at 9:00 AM",
       "  '0 18 * * 5'   = every Friday at 6:00 PM",
@@ -195,9 +195,9 @@ export function createManageScheduleTool(
         }
 
         case "add": {
-          if (!params.name || !params.cron || !params.prompt) {
+          if (!params.name || !params.prompt) {
             return textResult(
-              "Error: 'name', 'cron', and 'prompt' are required for adding a task.",
+              "Error: 'name' and 'prompt' are required for adding a task.",
             );
           }
 
