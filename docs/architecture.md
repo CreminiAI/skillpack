@@ -155,6 +155,10 @@ Packages only the essentials for distribution:
 - optional `AGENTS.md` / `SOUL.md`
 - `start.sh` / `start.bat`
 
+By default, the command refreshes configured skills before packaging. Pass
+`--skip-skill-install` to package the existing `skills/` snapshot without running
+`skills add`; description synchronization still runs against the local files.
+
 The runtime is no longer bundled inside the zip. The start scripts invoke `npx @cremini/skillpack run` so the runtime is resolved from npm at startup.
 
 ---

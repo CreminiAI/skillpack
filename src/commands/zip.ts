@@ -14,26 +14,35 @@ import {
   syncSkillDescriptions,
 } from "../skill-manager.js";
 
+export interface ZipCommandOptions {
+  skipSkillInstall?: boolean;
+}
+
 /**
  * Package the pack as a lightweight zip file.
  * Includes: skillpack.json, optional job.json, optional app.html,
  * optional AGENTS.md / SOUL.md, start.sh, start.bat, skills/
  * Does NOT include server/, web/, or any other runtime files.
  */
-export async function zipCommand(workDir: string): Promise<string> {
+export async function zipCommand(
+  workDir: string,
+  options: ZipCommandOptions = {},
+): Promise<string> {
   const config = loadConfig(workDir);
   const slug = config.name.toLowerCase().replace(/\s+/g, "-");
   const zipName = `${slug}.zip`;
   const zipPath = path.join(workDir, zipName);
 
-  // Reinstall each skill independently so one failure does not block the rest.
-  for (const skill of config.skills) {
-    try {
-      installSkills(workDir, [skill]);
-    } catch (err) {
-      console.warn(
-        chalk.yellow(`Warning: Could not install skill "${skill.name}": ${err}`),
-      );
+  if (!options.skipSkillInstall) {
+    // Reinstall each skill independently so one failure does not block the rest.
+    for (const skill of config.skills) {
+      try {
+        installSkills(workDir, [skill]);
+      } catch (err) {
+        console.warn(
+          chalk.yellow(`Warning: Could not install skill "${skill.name}": ${err}`),
+        );
+      }
     }
   }
   syncSkillDescriptions(workDir, config);

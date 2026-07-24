@@ -69,6 +69,14 @@ npx @cremini/skillpack zip
 
 Produces `<pack-name>.zip` in the current directory.
 
+To package the skills already present in `skills/` without reinstalling them:
+
+```bash
+npx @cremini/skillpack zip --skip-skill-install
+```
+
+This faster mode still syncs skill descriptions from the existing `SKILL.md` files before packaging.
+
 ---
 
 ## Skill Source URL Formats

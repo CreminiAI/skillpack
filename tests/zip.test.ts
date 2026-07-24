@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { saveJobFile } from "../src/job-config.js";
-import { saveConfig } from "../src/pack-config.js";
+import { loadConfig, saveConfig } from "../src/pack-config.js";
 import { zipCommand } from "../src/commands/zip.js";
 
 async function withTempDir(run: (dir: string) => Promise<void> | void): Promise<void> {
@@ -140,6 +140,73 @@ test("zipCommand continues installing other skills after one fails", async () =>
       assert.match(installAttempts, /--skill first-skill/);
       assert.match(installAttempts, /--skill second-skill/);
       assert.equal(zipText.includes("zip-pack/skillpack.json"), true);
+    } finally {
+      process.env.PATH = originalPath;
+      delete process.env.SKILLPACK_TEST_INSTALL_LOG;
+    }
+  });
+});
+
+test("zipCommand skips skill installation when requested and still syncs existing skills", async () => {
+  await withTempDir(async (dir) => {
+    createPack(dir);
+    const binDir = path.join(dir, "bin");
+    const installLog = path.join(dir, "install.log");
+    const skillDir = path.join(dir, "skills", "existing-skill");
+    fs.mkdirSync(binDir);
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(binDir, "npx"),
+      [
+        "#!/bin/sh",
+        'printf "%s\\n" "$*" >> "$SKILLPACK_TEST_INSTALL_LOG"',
+        "exit 1",
+        "",
+      ].join("\n"),
+      { encoding: "utf-8", mode: 0o755 },
+    );
+    fs.writeFileSync(
+      path.join(skillDir, "SKILL.md"),
+      [
+        "---",
+        "name: existing-skill",
+        "description: Synced from the existing local skill",
+        "---",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    saveConfig(dir, {
+      name: "Zip Pack",
+      description: "Pack used for zip tests",
+      version: "1.0.0",
+      prompts: [],
+      skills: [
+        {
+          name: "existing-skill",
+          source: "existing-source",
+          description: "",
+        },
+      ],
+    });
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = binDir;
+    process.env.SKILLPACK_TEST_INSTALL_LOG = installLog;
+    try {
+      const zipPath = await zipCommand(dir, { skipSkillInstall: true });
+      const zipText = fs.readFileSync(zipPath, "utf-8");
+      const config = loadConfig(dir);
+
+      assert.equal(fs.existsSync(installLog), false);
+      assert.equal(
+        config.skills[0]?.description,
+        "Synced from the existing local skill",
+      );
+      assert.equal(
+        zipText.includes("zip-pack/skills/existing-skill/SKILL.md"),
+        true,
+      );
     } finally {
       process.env.PATH = originalPath;
       delete process.env.SKILLPACK_TEST_INSTALL_LOG;

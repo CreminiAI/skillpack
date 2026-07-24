@@ -44,9 +44,15 @@ program
 program
   .command("zip")
   .description("Package the current pack as a zip file (skillpack.json + optional job.json + skills/ + start scripts)")
-  .action(async () => {
+  .option(
+    "--skip-skill-install",
+    "Package the existing skills without running skills add",
+  )
+  .action(async (options: { skipSkillInstall?: boolean }) => {
     try {
-      await zipCommand(process.cwd());
+      await zipCommand(process.cwd(), {
+        skipSkillInstall: options.skipSkillInstall,
+      });
     } catch (err) {
       console.error(chalk.red(`Packaging failed: ${err}`));
       process.exit(1);

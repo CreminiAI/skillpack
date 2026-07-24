@@ -126,9 +126,11 @@ Package the current pack as a distributable zip file.
 
 ```bash
 skillpack zip
+skillpack zip --skip-skill-install
 ```
 
-No options. Always runs in `cwd`.
+Always runs in `cwd`. Use `--skip-skill-install` to package the existing
+`skills/` directory without running `skills add`.
 
 **What gets packaged:**
 
@@ -144,7 +146,7 @@ No options. Always runs in `cwd`.
 
 **Behavior:**
 
-1. Reinstalls all configured skills.
+1. Reinstalls all configured skills unless `--skip-skill-install` is set.
 2. Scans `skills/` for `SKILL.md` frontmatter and syncs descriptions back into `skillpack.json`.
 3. Includes `job.json` when the file exists at the pack root.
 4. Produces `<config.name>.zip` in `cwd`.
