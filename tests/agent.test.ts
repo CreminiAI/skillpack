@@ -5,12 +5,79 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  PackAgent,
   buildActiveToolNames,
   buildSystemPromptOverrides,
   createCustomProviderModelConfig,
   readAdditionalSkillPaths,
   readFrevanaSystemPrompts,
 } from "../src/runtime/agent.js";
+
+test("handleMessage forwards the final agent_end after an automatic retry", async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "skillpack-agent-"));
+  const listeners = new Set<(event: { type: string }) => void>();
+  const session = {
+    _agentEventQueue: Promise.resolve(),
+    state: { messages: [] },
+    systemPrompt: "",
+    subscribe(listener: (event: { type: string }) => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    async prompt() {
+      for (const type of [
+        "agent_start",
+        "agent_end",
+        "agent_start",
+        "agent_end",
+      ]) {
+        for (const listener of listeners) {
+          listener({ type });
+        }
+      }
+    },
+  };
+  const channelSession = {
+    session,
+    running: false,
+    pending: Promise.resolve(),
+    fileOutputCallbackRef: { current: null },
+    delegatedToolRunContextRef: { current: null },
+  };
+  const agent = new PackAgent({
+    apiKey: "",
+    rootDir,
+    provider: "openai",
+    modelId: "gpt-5.4",
+    lifecycleHandler: {
+      requestRestart: async () => ({ success: true }),
+      requestShutdown: async () => ({ success: true }),
+    },
+  });
+  const events: string[] = [];
+
+  (agent as any).getOrCreateSession = async () => channelSession;
+
+  try {
+    await agent.handleMessage(
+      "scheduler",
+      "scheduler-video",
+      "render",
+      (event) => {
+        events.push(event.type);
+      },
+    );
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+
+  assert.deepEqual(events, [
+    "agent_start",
+    "agent_end",
+    "agent_start",
+    "agent_end",
+  ]);
+});
 
 test("custom provider model config enables reasoning when requested", () => {
   const customModel = createCustomProviderModelConfig({

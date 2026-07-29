@@ -671,8 +671,7 @@ export class PackAgent implements IPackAgent {
       cs.running = true;
 
       let turnHadVisibleOutput = false;
-      let sawAgentStart = false;
-      let sawAgentEnd = false;
+      let agentRunOpen = false;
       const runId = randomUUID();
       let unsubscribe = () => undefined;
       const waitForQueuedAgentEvents = async (): Promise<void> => {
@@ -699,12 +698,12 @@ export class PackAgent implements IPackAgent {
 
         const forwardAgentEvent = (event: AgentEvent): void => {
           if (event.type === "agent_start") {
-            sawAgentStart = true;
+            agentRunOpen = true;
           } else if (event.type === "agent_end") {
-            if (sawAgentEnd) {
+            if (!agentRunOpen) {
               return;
             }
-            sawAgentEnd = true;
+            agentRunOpen = false;
           }
 
           onEvent(event);
@@ -874,8 +873,8 @@ export class PackAgent implements IPackAgent {
         return { stopReason: diagnostics?.stopReason ?? "unknown" };
       } finally {
         await waitForQueuedAgentEvents();
-        if (sawAgentStart && !sawAgentEnd) {
-          sawAgentEnd = true;
+        if (agentRunOpen) {
+          agentRunOpen = false;
           log(`[PackAgent] Synthesizing terminal agent_end for ${channelId}`);
           onEvent({ type: "agent_end" });
         }
