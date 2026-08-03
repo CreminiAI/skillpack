@@ -9,6 +9,7 @@ import {
   getAgentDir,
   ModelRegistry,
   SessionManager,
+  SettingsManager,
   DefaultResourceLoader,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
@@ -62,6 +63,7 @@ const PACK_SOUL_FILE = "SOUL.md";
 const BUILTIN_TOOL_NAMES = ["read", "bash", "edit", "write"];
 const FREVANA_SYSTEM_PROMPTS_ENV = "FREVANA_SYSTEM_PROMPTS";
 const SKILLPACK_ADDITIONAL_SKILL_PATHS_ENV = "SKILLPACK_ADDITIONAL_SKILL_PATHS";
+const SKILLPACK_HTTP_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -556,6 +558,22 @@ export class PackAgent implements IPackAgent {
       fs.mkdirSync(workspaceDir, { recursive: true });
       log(`[PackAgent] Workspace dir: ${workspaceDir}`);
 
+      const settingsManager = SettingsManager.create(
+        workspaceDir,
+        getAgentDir(),
+      );
+      settingsManager.applyOverrides({
+        httpIdleTimeoutMs: SKILLPACK_HTTP_REQUEST_TIMEOUT_MS,
+        retry: {
+          provider: {
+            timeoutMs: SKILLPACK_HTTP_REQUEST_TIMEOUT_MS,
+          },
+        },
+      });
+      log(
+        `[PackAgent] HTTP request timeout: ${SKILLPACK_HTTP_REQUEST_TIMEOUT_MS}ms`,
+      );
+
       const skillsPath = path.resolve(rootDir, "skills");
       log(`[PackAgent] Loading skills from: ${skillsPath}`);
       const additionalSkillPaths = readAdditionalSkillPaths();
@@ -634,6 +652,7 @@ export class PackAgent implements IPackAgent {
         modelRegistry,
         sessionManager,
         resourceLoader,
+        settingsManager,
         model,
         tools: activeToolNames,
         customTools,
