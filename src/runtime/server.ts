@@ -125,6 +125,9 @@ export async function startServer(options: ServerOptions): Promise<void> {
     baseUrl,
     apiProtocol,
     reasoning,
+    hostRequestHeadersEnabled:
+      runtimeMode === "embedded" &&
+      process.env.SKILLPACK_HOST_REQUEST_HEADERS === "1",
     lifecycleHandler: lifecycle,
   });
 

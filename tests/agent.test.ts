@@ -6,12 +6,33 @@ import test from "node:test";
 
 import {
   PackAgent,
+  applyRequestHeadersToModel,
   buildActiveToolNames,
   buildSystemPromptOverrides,
   createCustomProviderModelConfig,
   readAdditionalSkillPaths,
   readFrevanaSystemPrompts,
+  sanitizeRequestHeaders,
 } from "../src/runtime/agent.js";
+
+test("request headers are sanitized and restored after a model call", () => {
+  const sanitized = sanitizeRequestHeaders({
+    "X-Agent-Run-Id": "run-1",
+    Authorization: "must-not-override-auth",
+    "Bad Header": "ignored",
+    "X-Injection": "one\r\ntwo",
+  });
+  assert.deepEqual(sanitized, { "X-Agent-Run-Id": "run-1" });
+
+  const model = { headers: { "X-Existing": "kept" } };
+  const restore = applyRequestHeadersToModel(model, sanitized);
+  assert.deepEqual(model.headers, {
+    "X-Existing": "kept",
+    "X-Agent-Run-Id": "run-1",
+  });
+  restore();
+  assert.deepEqual(model.headers, { "X-Existing": "kept" });
+});
 
 test("handleMessage forwards the final agent_end after an automatic retry", async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "skillpack-agent-"));
@@ -77,6 +98,106 @@ test("handleMessage forwards the final agent_end after an automatic retry", asyn
     "agent_start",
     "agent_end",
   ]);
+});
+
+test("handleMessage applies provider headers only for the current run", async () => {
+  const rootDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "skillpack-agent-headers-"),
+  );
+  const model = { headers: { "X-Base": "base" } };
+  let receivedContext:
+    | { runId: string; channelId: string; jobId?: string; triggerType: string }
+    | undefined;
+  const session = {
+    model,
+    _agentEventQueue: Promise.resolve(),
+    state: { messages: [] },
+    systemPrompt: "",
+    subscribe() {
+      return () => undefined;
+    },
+    async prompt() {
+      assert.equal(model.headers["X-Base"], "base");
+      assert.equal(
+        (model.headers as Record<string, string>)["X-Execution-Run"],
+        receivedContext?.runId,
+      );
+    },
+  };
+  const channelSession = {
+    session,
+    running: false,
+    pending: Promise.resolve(),
+    fileOutputCallbackRef: { current: null },
+    delegatedToolRunContextRef: { current: null },
+  };
+  const agent = new PackAgent({
+    apiKey: "",
+    rootDir,
+    provider: "openai",
+    modelId: "gpt-5.4",
+    requestHeadersProvider: async (context) => {
+      receivedContext = context;
+      return { "X-Execution-Run": context.runId };
+    },
+    lifecycleHandler: {
+      requestRestart: async () => ({ success: true }),
+      requestShutdown: async () => ({ success: true }),
+    },
+  });
+  (agent as any).getOrCreateSession = async () => channelSession;
+
+  try {
+    await agent.handleMessage(
+      "scheduler",
+      "scheduler-daily",
+      "run",
+      () => undefined,
+    );
+    assert.equal(receivedContext?.channelId, "scheduler-daily");
+    assert.equal(receivedContext?.jobId, "daily");
+    assert.equal(receivedContext?.triggerType, "scheduler");
+    assert.deepEqual(model.headers, { "X-Base": "base" });
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});
+
+test("PackAgent reuses its host IPC client for request headers", async () => {
+  const rootDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "skillpack-agent-host-headers-"),
+  );
+  const agent = new PackAgent({
+    apiKey: "",
+    rootDir,
+    provider: "openai",
+    modelId: "gpt-5.4",
+    hostRequestHeadersEnabled: true,
+    lifecycleHandler: {
+      requestRestart: async () => ({ success: true }),
+      requestShutdown: async () => ({ success: true }),
+    },
+  });
+  const context = {
+    runId: "run-1",
+    channelId: "web",
+    triggerType: "web" as const,
+  };
+  let receivedContext: typeof context | undefined;
+  const hostIpcClient = (agent as any).hostIpcClient;
+  hostIpcClient.getRequestHeaders = async (input: typeof context) => {
+    receivedContext = input;
+    return { "X-Host-Run-Id": input.runId };
+  };
+
+  try {
+    const headers = await (agent as any).resolveRequestHeaders(context);
+    assert.deepEqual(receivedContext, context);
+    assert.deepEqual(headers, { "X-Host-Run-Id": "run-1" });
+  } finally {
+    hostIpcClient.dispose();
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
 });
 
 test("custom provider model config enables reasoning when requested", () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-type HostIpcRequestType = "channel_session_cleared";
+type HostIpcRequestType = "channel_session_cleared" | "get_request_headers";
 
 type HostIpcResultMessage = {
   id: string;
@@ -37,6 +37,13 @@ export interface ChannelSessionClearedInput {
   channelId: string;
 }
 
+export interface RequestHeadersInput {
+  runId: string;
+  channelId: string;
+  jobId?: string;
+  triggerType: string;
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -69,6 +76,29 @@ export class HostIpcClient {
     }
 
     await this.sendRequest("channel_session_cleared", input);
+  }
+
+  async getRequestHeaders(
+    input: RequestHeadersInput,
+  ): Promise<Record<string, string>> {
+    if (!this.isAvailable()) {
+      return {};
+    }
+
+    const data = await this.sendRequest("get_request_headers", {
+      context: input,
+    });
+    if (!isObject(data)) {
+      return {};
+    }
+
+    const headers: Record<string, string> = {};
+    for (const [name, value] of Object.entries(data)) {
+      if (typeof value === "string") {
+        headers[name] = value;
+      }
+    }
+    return headers;
   }
 
   dispose(): void {

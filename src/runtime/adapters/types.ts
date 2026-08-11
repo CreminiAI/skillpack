@@ -107,6 +107,17 @@ export interface HandleResult {
   errorMessage?: string;
 }
 
+export interface AgentExecutionContext {
+  runId: string;
+  channelId: string;
+  jobId?: string;
+  triggerType: RuntimePlatform;
+}
+
+export type RequestHeadersProvider = (
+  context: AgentExecutionContext,
+) => Record<string, string> | Promise<Record<string, string>>;
+
 export interface PackAgentOptions {
   apiKey: string;
   rootDir: string;
@@ -115,6 +126,8 @@ export interface PackAgentOptions {
   baseUrl?: string;
   apiProtocol?: "openai-responses" | "openai-completions";
   reasoning?: boolean;
+  requestHeadersProvider?: RequestHeadersProvider;
+  hostRequestHeadersEnabled?: boolean;
   lifecycleHandler: LifecycleHandler;
 }
 
