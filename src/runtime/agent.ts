@@ -42,6 +42,7 @@ import type {
   BotCommand,
   CommandResult,
   ChannelAttachment,
+  AgentExecutionContext,
   LifecycleTrigger,
   RuntimePlatform,
   SessionInfo,
@@ -64,6 +65,18 @@ const BUILTIN_TOOL_NAMES = ["read", "bash", "edit", "write"];
 const FREVANA_SYSTEM_PROMPTS_ENV = "FREVANA_SYSTEM_PROMPTS";
 const SKILLPACK_ADDITIONAL_SKILL_PATHS_ENV = "SKILLPACK_ADDITIONAL_SKILL_PATHS";
 const SKILLPACK_HTTP_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_REQUEST_HEADER_COUNT = 20;
+const MAX_REQUEST_HEADER_BYTES = 8 * 1024;
+const FORBIDDEN_REQUEST_HEADERS = new Set([
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "host",
+  "content-length",
+  "content-type",
+  "connection",
+  "transfer-encoding",
+]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -86,6 +99,63 @@ interface PackPromptFiles {
   agentsContent?: string;
   soulContent?: string;
   promptBlock?: string;
+}
+
+export function sanitizeRequestHeaders(input: unknown): Record<string, string> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+
+  const output: Record<string, string> = {};
+  let totalBytes = 0;
+  for (const [name, value] of Object.entries(input)) {
+    if (Object.keys(output).length >= MAX_REQUEST_HEADER_COUNT) break;
+    const normalizedName = name.trim();
+    if (
+      !normalizedName ||
+      !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(normalizedName) ||
+      FORBIDDEN_REQUEST_HEADERS.has(normalizedName.toLowerCase()) ||
+      typeof value !== "string" ||
+      /[\r\n]/.test(value)
+    ) {
+      continue;
+    }
+    const bytes = Buffer.byteLength(normalizedName) + Buffer.byteLength(value);
+    if (totalBytes + bytes > MAX_REQUEST_HEADER_BYTES) continue;
+    output[normalizedName] = value;
+    totalBytes += bytes;
+  }
+  return output;
+}
+
+export function applyRequestHeadersToModel(
+  model: unknown,
+  headers: Record<string, string>,
+): () => void {
+  if (
+    !model ||
+    typeof model !== "object" ||
+    Object.keys(headers).length === 0
+  ) {
+    return () => undefined;
+  }
+
+  const target = model as { headers?: Record<string, string> };
+  const hadHeaders = Object.prototype.hasOwnProperty.call(target, "headers");
+  const previousHeaders = target.headers;
+  try {
+    target.headers = { ...(previousHeaders || {}), ...headers };
+  } catch (error) {
+    log("[PackAgent] Could not apply request headers:", error);
+    return () => undefined;
+  }
+
+  return () => {
+    try {
+      if (hadHeaders) target.headers = previousHeaders;
+      else delete target.headers;
+    } catch (error) {
+      log("[PackAgent] Could not restore model request headers:", error);
+    }
+  };
 }
 
 export function createCustomProviderModelConfig(
@@ -451,6 +521,18 @@ export class PackAgent implements IPackAgent {
     return this.authStorage;
   }
 
+  private async resolveRequestHeaders(
+    context: AgentExecutionContext,
+  ): Promise<Record<string, string>> {
+    if (this.options.requestHeadersProvider) {
+      return this.options.requestHeadersProvider(context);
+    }
+    if (this.options.hostRequestHeadersEnabled) {
+      return this.hostIpcClient.getRequestHeaders(context);
+    }
+    return {};
+  }
+
   /** Update runtime auth when provider/apiKey changes */
   updateAuth(provider: string, apiKey?: string): void {
     // Remove old runtime key
@@ -692,6 +774,15 @@ export class PackAgent implements IPackAgent {
       let turnHadVisibleOutput = false;
       let agentRunOpen = false;
       const runId = randomUUID();
+      const executionContext: AgentExecutionContext = {
+        runId,
+        channelId,
+        triggerType: adapter,
+        ...(adapter === "scheduler"
+          ? { jobId: channelId.replace(/^scheduler-/, "") }
+          : {}),
+      };
+      let restoreRequestHeaders: () => void = () => undefined;
       let unsubscribe = () => undefined;
       const waitForQueuedAgentEvents = async (): Promise<void> => {
         const maybeQueue = (cs.session as { _agentEventQueue?: unknown })
@@ -713,6 +804,23 @@ export class PackAgent implements IPackAgent {
       try {
         if (this.pendingAbortChannels.delete(channelId)) {
           return { stopReason: "aborted" };
+        }
+
+        if (
+          this.options.requestHeadersProvider ||
+          this.options.hostRequestHeadersEnabled
+        ) {
+          try {
+            const suppliedHeaders =
+              await this.resolveRequestHeaders(executionContext);
+            const requestHeaders = sanitizeRequestHeaders(suppliedHeaders);
+            restoreRequestHeaders = applyRequestHeadersToModel(
+              cs.session.model,
+              requestHeaders,
+            );
+          } catch (error) {
+            log("[PackAgent] Request headers provider failed:", error);
+          }
         }
 
         const forwardAgentEvent = (event: AgentEvent): void => {
@@ -900,6 +1008,7 @@ export class PackAgent implements IPackAgent {
         cs.running = false;
         cs.fileOutputCallbackRef.current = null;
         cs.delegatedToolRunContextRef.current = null;
+        restoreRequestHeaders();
         unsubscribe();
       }
     };
