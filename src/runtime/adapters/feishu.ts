@@ -22,6 +22,7 @@ import {
   type ResilientLarkChannel,
 } from "./resilient-lark-channel.js";
 import { isImageMime, saveAttachment } from "./attachment-utils.js";
+import { sanitizeAdapterErrorMessage } from "./error-utils.js";
 import { resolveCommand } from "../commands/index.js";
 import { detectMimeType } from "../files/metadata.js";
 
@@ -286,11 +287,13 @@ export class FeishuAdapter implements PlatformAdapter, MessageSender {
 
       if (result.errorMessage) {
         hasError = true;
-        errorMessage = result.errorMessage;
+        errorMessage = sanitizeAdapterErrorMessage(result.errorMessage);
       }
     } catch (error) {
       hasError = true;
-      errorMessage = error instanceof Error ? error.message : String(error);
+      errorMessage = sanitizeAdapterErrorMessage(
+        error instanceof Error ? error.message : String(error),
+      );
     }
 
     if (hasError) {

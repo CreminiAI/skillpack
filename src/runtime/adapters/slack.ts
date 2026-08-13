@@ -14,6 +14,7 @@ import type {
 } from "./types.js";
 import { formatSlackMessage } from "./markdown.js";
 import { downloadAndSaveAttachment } from "./attachment-utils.js";
+import { sanitizeAdapterErrorMessage } from "./error-utils.js";
 import { resolveCommand } from "../commands/index.js";
 
 // ---------------------------------------------------------------------------
@@ -327,7 +328,7 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
       );
       if (result.errorMessage) {
         hasError = true;
-        errorMessage = result.errorMessage;
+        errorMessage = sanitizeAdapterErrorMessage(result.errorMessage);
       }
     } catch (err) {
       hasError = true;
@@ -765,7 +766,9 @@ export class SlackAdapter implements PlatformAdapter, MessageSender {
   }
 
   private getErrorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
+    return sanitizeAdapterErrorMessage(
+      err instanceof Error ? err.message : String(err),
+    );
   }
 
   private escapeRegExp(value: string): string {

@@ -12,6 +12,7 @@ import type {
 } from "./types.js";
 import { formatTelegramMessage } from "./markdown.js";
 import { downloadAndSaveAttachment } from "./attachment-utils.js";
+import { sanitizeAdapterErrorMessage } from "./error-utils.js";
 import { resolveCommand, getTelegramBotCommands } from "../commands/index.js";
 
 // ---------------------------------------------------------------------------
@@ -169,11 +170,13 @@ export class TelegramAdapter implements PlatformAdapter, MessageSender {
 
       if (result.errorMessage) {
         hasError = true;
-        errorMessage = result.errorMessage;
+        errorMessage = sanitizeAdapterErrorMessage(result.errorMessage);
       }
     } catch (err) {
       hasError = true;
-      errorMessage = String(err);
+      errorMessage = sanitizeAdapterErrorMessage(
+        err instanceof Error ? err.message : String(err),
+      );
     }
 
     // --- Send response ---
