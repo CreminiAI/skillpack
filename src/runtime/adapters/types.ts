@@ -128,6 +128,7 @@ export interface PackAgentOptions {
   reasoning?: boolean;
   requestHeadersProvider?: RequestHeadersProvider;
   hostRequestHeadersEnabled?: boolean;
+  hostMcpToolsEnabled?: boolean;
   lifecycleHandler: LifecycleHandler;
 }
 

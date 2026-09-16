@@ -213,3 +213,17 @@ test("zipCommand skips skill installation when requested and still syncs existin
     }
   });
 });
+
+
+test("zipCommand includes MCP requirements without adding local credentials", async () => {
+  await withTempDir(async (dir) => {
+    createPack(dir);
+    fs.writeFileSync(path.join(dir, "agent-app-mcp.json"), JSON.stringify({ version: 1, requirements: [] }));
+    fs.writeFileSync(path.join(dir, "mcp-credentials.json"), "secret-value");
+    const zipPath = await zipCommand(dir);
+    const zipText = fs.readFileSync(zipPath, "utf-8");
+    assert.equal(zipText.includes("zip-pack/agent-app-mcp.json"), true);
+    assert.equal(zipText.includes("mcp-credentials.json"), false);
+    assert.equal(zipText.includes("secret-value"), false);
+  });
+});

@@ -128,6 +128,9 @@ export async function startServer(options: ServerOptions): Promise<void> {
     hostRequestHeadersEnabled:
       runtimeMode === "embedded" &&
       process.env.SKILLPACK_HOST_REQUEST_HEADERS === "1",
+    hostMcpToolsEnabled:
+      runtimeMode === "embedded" &&
+      process.env.SKILLPACK_HOST_MCP_TOOLS === "1",
     lifecycleHandler: lifecycle,
   });
 

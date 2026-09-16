@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
-
-type HostIpcRequestType = "channel_session_cleared" | "get_request_headers";
+export type HostIpcRequestType =
+  | "channel_session_cleared"
+  | "get_request_headers"
+  | "get_mcp_tool_definitions"
+  | "execute_mcp_tool";
 
 type HostIpcResultMessage = {
   id: string;
@@ -31,6 +34,17 @@ export interface HostIpcTransport {
 
 export interface HostIpcClientOptions {
   timeoutMs?: number;
+}
+
+export interface HostIpcRequestOptions {
+  timeoutMs?: number;
+}
+
+export class HostIpcRequestTimeoutError extends Error {
+  constructor(type: HostIpcRequestType) {
+    super(`Host IPC request timed out: ${type}`);
+    this.name = "HostIpcRequestTimeoutError";
+  }
 }
 
 export interface ChannelSessionClearedInput {
@@ -75,7 +89,7 @@ export class HostIpcClient {
       return;
     }
 
-    await this.sendRequest("channel_session_cleared", input);
+    await this.request("channel_session_cleared", input);
   }
 
   async getRequestHeaders(
@@ -85,7 +99,7 @@ export class HostIpcClient {
       return {};
     }
 
-    const data = await this.sendRequest("get_request_headers", {
+    const data = await this.request("get_request_headers", {
       context: input,
     });
     if (!isObject(data)) {
@@ -111,9 +125,10 @@ export class HostIpcClient {
     this.rejectAllPending(new Error("Host IPC client disposed"));
   }
 
-  private sendRequest(
+  request(
     type: HostIpcRequestType,
     payload?: object,
+    options: HostIpcRequestOptions = {},
   ): Promise<unknown> {
     if (!this.isAvailable()) {
       throw new Error("Host IPC channel is not available");
@@ -129,8 +144,8 @@ export class HostIpcClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingRequests.delete(id);
-        reject(new Error(`Host IPC request timed out: ${type}`));
-      }, this.timeoutMs);
+        reject(new HostIpcRequestTimeoutError(type));
+      }, options.timeoutMs ?? this.timeoutMs);
 
       this.pendingRequests.set(id, { resolve, reject, timer });
 

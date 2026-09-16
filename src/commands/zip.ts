@@ -79,7 +79,13 @@ export async function zipCommand(
       archive.file(jobFilePath, { name: `${prefix}/${JOB_FILE}` });
     }
 
-    // 3. optional custom app
+    // 3. optional Agent App MCP requirements (never contains credentials)
+    const mcpRequirementsPath = path.join(workDir, "agent-app-mcp.json");
+    if (fs.existsSync(mcpRequirementsPath)) {
+      archive.file(mcpRequirementsPath, { name: `${prefix}/agent-app-mcp.json` });
+    }
+
+    // 4. optional custom app
     const appHtmlPath = path.join(workDir, "app.html");
     if (fs.existsSync(appHtmlPath)) {
       archive.file(appHtmlPath, { name: `${prefix}/app.html` });

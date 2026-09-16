@@ -25,6 +25,7 @@ import {
   DelegatedCustomToolClient,
   type DelegatedToolRunContextRef,
 } from "./custom-tools/index.js";
+import { createDelegatedMcpTools, DelegatedMcpToolClient } from "./mcp-tools/index.js";
 import { HostIpcClient } from "./host-ipc/host-ipc-client.js";
 import {
   createSendFileTool,
@@ -500,9 +501,14 @@ export class PackAgent implements IPackAgent {
   private authStorage: AuthStorage;
   private readonly delegatedCustomToolClient = new DelegatedCustomToolClient();
   private readonly hostIpcClient = new HostIpcClient();
+  private readonly delegatedMcpToolClient: DelegatedMcpToolClient;
 
   constructor(options: PackAgentOptions) {
     this.options = options;
+    this.delegatedMcpToolClient = new DelegatedMcpToolClient(
+      this.hostIpcClient,
+      options.hostMcpToolsEnabled === true,
+    );
 
     // Use ConfigFileAuthBackend to persist OAuth credentials in config.json._auth
     const configPath = path.resolve(options.rootDir, "data", "config.json");
@@ -559,11 +565,22 @@ export class PackAgent implements IPackAgent {
   ): Promise<any[]> {
     const delegatedDefinitions =
       await this.delegatedCustomToolClient.listDefinitions();
+    const mcpDefinitions = await this.delegatedMcpToolClient
+      .listDefinitions()
+      .catch((error) => {
+        log("[PackAgent] Could not load delegated MCP tools:", error);
+        return [];
+      });
     const tools = [
       createSendFileTool(fileOutputCallbackRef) as any,
       ...createDelegatedCustomTools(
         delegatedDefinitions,
         this.delegatedCustomToolClient,
+        delegatedToolRunContextRef,
+      ),
+      ...createDelegatedMcpTools(
+        mcpDefinitions,
+        this.delegatedMcpToolClient,
         delegatedToolRunContextRef,
       ),
     ];
